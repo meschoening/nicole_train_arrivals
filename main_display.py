@@ -1,11 +1,46 @@
 from PyQt5.QtWidgets import QApplication, QMainWindow, QVBoxLayout, QHBoxLayout, QLabel, QWidget, QPushButton, QStackedWidget, QComboBox, QCheckBox
-from PyQt5.QtCore import QSize, Qt, QTimer
+from PyQt5.QtCore import QSize, Qt, QTimer, QEvent
 from PyQt5.QtGui import QFontDatabase, QColor, QPalette, QPixmap, QPainter, QIcon
 from MetroAPI import MetroAPI
 from data_handler import DataHandler
 import config_handler
 import os
+import socket
 from datetime import datetime
+
+class IPPopout(QWidget):
+    """A popout widget that displays the device IP address"""
+    def __init__(self, ip_address, parent=None):
+        super().__init__(parent)
+        self.setWindowFlags(Qt.ToolTip | Qt.FramelessWindowHint)
+        self.setAttribute(Qt.WA_TranslucentBackground, False)
+        
+        # Create layout
+        layout = QHBoxLayout()
+        layout.setContentsMargins(15, 10, 15, 10)
+        layout.setSpacing(10)
+        
+        # Create labels
+        label = QLabel("Device IP:")
+        label.setStyleSheet("font-family: Quicksand; font-size: 16px; font-weight: bold; color: #333;")
+        layout.addWidget(label)
+        
+        ip_label = QLabel(ip_address)
+        ip_label.setStyleSheet("font-family: Quicksand; font-size: 16px; color: #666;")
+        layout.addWidget(ip_label)
+        
+        self.setLayout(layout)
+        
+        # Style the popout
+        self.setStyleSheet("""
+            IPPopout {
+                background-color: white;
+                border: 2px solid #999;
+                border-radius: 5px;
+            }
+        """)
+        
+        self.adjustSize()
 
 class MainWindow(QMainWindow):
     # Metro line color mapping
@@ -56,6 +91,29 @@ class MainWindow(QMainWindow):
         self.countdown_timer = QTimer()
         self.countdown_timer.timeout.connect(self.update_countdown)
         self.countdown_timer.start(1000)  # 1000ms = 1 second
+    
+    def eventFilter(self, obj, event):
+        """Event filter to handle hover events on IP button"""
+        if obj == self.ip_button:
+            if event.type() == QEvent.Enter:
+                self.show_ip_popout()
+            elif event.type() == QEvent.Leave:
+                if hasattr(self, 'ip_popout'):
+                    self.ip_popout.hide()
+        return super().eventFilter(obj, event)
+    
+    def get_device_ip(self):
+        """Get the local IP address of the device"""
+        try:
+            # Create a socket to determine the local IP
+            s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+            # Connect to an external address (doesn't actually send data)
+            s.connect(("8.8.8.8", 80))
+            ip_address = s.getsockname()[0]
+            s.close()
+            return ip_address
+        except Exception:
+            return "Unable to detect"
     
     def create_colored_circle_icon(self, color_hex):
         """Create a colored circle icon for dropdown items"""
@@ -460,6 +518,25 @@ class MainWindow(QMainWindow):
             self.refresh_countdown_label.show()
         else:
             self.refresh_countdown_label.hide()
+    
+    def show_ip_popout(self):
+        """Show the IP popout near the IP button"""
+        if not hasattr(self, 'ip_popout'):
+            ip_address = self.get_device_ip()
+            self.ip_popout = IPPopout(ip_address, self.settings_page)
+        
+        # Position the popout above the IP button
+        button_pos = self.ip_button.mapTo(self.settings_page, self.ip_button.rect().topLeft())
+        popout_x = button_pos.x()
+        popout_y = button_pos.y() - self.ip_popout.height() - 10  # 10px gap above button
+        
+        self.ip_popout.move(popout_x, popout_y)
+        self.ip_popout.show()
+    
+    def on_ip_button_hover(self, event):
+        """Handle hover event on IP button"""
+        self.show_ip_popout()
+        return False  # Let the event propagate
     
     def create_title_bar(self, button_widget, countdown_label=None):
         """Create a title bar with the given button on the right"""
@@ -867,6 +944,36 @@ class MainWindow(QMainWindow):
         
         content_layout.addLayout(timestamp_layout)
         content_layout.addStretch()
+        
+        # Add IP button at bottom left
+        ip_button_layout = QHBoxLayout()
+        ip_button_layout.setContentsMargins(20, 10, 40, 20)
+        
+        self.ip_button = QPushButton("ⓘ")
+        self.ip_button.setStyleSheet("""
+            QPushButton {
+                font-family: Quicksand;
+                font-size: 20px;
+                font-weight: bold;
+                padding: 8px 12px;
+                background-color: #e0e0e0;
+                border: none;
+                border-radius: 5px;
+            }
+            QPushButton:hover {
+                background-color: #d0d0d0;
+            }
+            QPushButton:pressed {
+                background-color: #c0c0c0;
+                padding-bottom: 7px;
+            }
+        """)
+        # Install event filter to detect hover
+        self.ip_button.installEventFilter(self)
+        ip_button_layout.addWidget(self.ip_button)
+        ip_button_layout.addStretch()
+        
+        content_layout.addLayout(ip_button_layout)
         
         content_widget = QWidget()
         content_widget.setLayout(content_layout)
