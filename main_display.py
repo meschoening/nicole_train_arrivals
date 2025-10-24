@@ -1,10 +1,11 @@
-from PyQt5.QtWidgets import QApplication, QMainWindow, QVBoxLayout, QHBoxLayout, QLabel, QWidget, QPushButton, QStackedWidget, QComboBox, QCheckBox
-from PyQt5.QtCore import QSize, Qt, QTimer, QEvent
+from PyQt5.QtWidgets import QApplication, QMainWindow, QVBoxLayout, QHBoxLayout, QLabel, QWidget, QPushButton, QStackedWidget, QComboBox, QCheckBox, QPlainTextEdit
+from PyQt5.QtCore import QSize, Qt, QTimer, QEvent, QProcess
 from PyQt5.QtGui import QFontDatabase, QColor, QPalette, QPixmap, QPainter, QIcon
 from MetroAPI import MetroAPI
 from data_handler import DataHandler
 import config_handler
 import os
+import sys
 import socket
 from datetime import datetime
 
@@ -41,6 +42,103 @@ class IPPopout(QWidget):
         """)
         
         self.adjustSize()
+
+class UpdatePopout(QWidget):
+    """A popout widget that displays git pull terminal output"""
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setWindowFlags(Qt.ToolTip | Qt.FramelessWindowHint)
+        self.setAttribute(Qt.WA_TranslucentBackground, False)
+        
+        # Create content layout (will have header and output)
+        content_layout = QVBoxLayout()
+        content_layout.setContentsMargins(3, 3, 3, 3)  # Space for border
+        content_layout.setSpacing(0)
+        
+        # Create header with close button
+        header = QWidget()
+        header.setStyleSheet("background-color: #f0f0f0; border-bottom: 1px solid #999; border: none;")
+        header.setFixedHeight(30)
+        header_layout = QHBoxLayout()
+        header_layout.setContentsMargins(10, 5, 5, 5)
+        
+        header_label = QLabel("Update Status")
+        header_label.setStyleSheet("font-family: Quicksand; font-size: 14px; font-weight: bold; color: #333; border: none;")
+        header_layout.addWidget(header_label)
+        header_layout.addStretch()
+        
+        self.close_button = QPushButton("✕")
+        self.close_button.setStyleSheet("""
+            QPushButton {
+                font-family: Quicksand;
+                font-size: 16px;
+                font-weight: bold;
+                padding: 0px;
+                background-color: transparent;
+                border: none;
+                color: #666;
+            }
+            QPushButton:hover {
+                color: #000;
+                background-color: #e0e0e0;
+                border-radius: 3px;
+            }
+            QPushButton:pressed {
+                background-color: #d0d0d0;
+            }
+        """)
+        self.close_button.setFixedSize(20, 20)
+        header_layout.addWidget(self.close_button)
+        
+        header.setLayout(header_layout)
+        content_layout.addWidget(header)
+        
+        # Create text area for terminal output
+        self.output_text = QPlainTextEdit()
+        self.output_text.setReadOnly(True)
+        self.output_text.setStyleSheet("""
+            QPlainTextEdit {
+                font-family: Consolas, Monaco, monospace;
+                font-size: 12px;
+                background-color: #1e1e1e;
+                color: #d4d4d4;
+                border: none;
+                padding: 10px;
+            }
+        """)
+        content_layout.addWidget(self.output_text)
+        
+        # Create a container widget for the border
+        container = QWidget()
+        container.setLayout(content_layout)
+        container.setStyleSheet("""
+            QWidget {
+                background-color: white;
+                border: 3px solid #666;
+                border-radius: 5px;
+            }
+        """)
+        
+        # Main layout to hold the container
+        main_layout = QVBoxLayout()
+        main_layout.setContentsMargins(0, 0, 0, 0)
+        main_layout.addWidget(container)
+        self.setLayout(main_layout)
+        
+        # Set fixed size
+        self.setFixedSize(500, 300)
+    
+    def append_output(self, text):
+        """Append text to the output area"""
+        self.output_text.appendPlainText(text)
+        # Auto-scroll to bottom
+        self.output_text.verticalScrollBar().setValue(
+            self.output_text.verticalScrollBar().maximum()
+        )
+    
+    def clear_output(self):
+        """Clear the output area"""
+        self.output_text.clear()
 
 class MainWindow(QMainWindow):
     # Metro line color mapping
@@ -91,6 +189,13 @@ class MainWindow(QMainWindow):
         self.countdown_timer = QTimer()
         self.countdown_timer.timeout.connect(self.update_countdown)
         self.countdown_timer.start(1000)  # 1000ms = 1 second
+        
+        # Update button state management
+        self.git_process = None
+        self.git_output = ""
+        self.checking_animation_timer = QTimer()
+        self.checking_animation_timer.timeout.connect(self.update_checking_animation)
+        self.checking_animation_state = 0
     
     def eventFilter(self, obj, event):
         """Event filter to handle hover events on IP button"""
@@ -532,11 +637,266 @@ class MainWindow(QMainWindow):
         
         self.ip_popout.move(popout_x, popout_y)
         self.ip_popout.show()
+        # Raise IP popout above update popout
+        self.ip_popout.raise_()
     
     def on_ip_button_hover(self, event):
         """Handle hover event on IP button"""
         self.show_ip_popout()
         return False  # Let the event propagate
+    
+    def on_update_button_clicked(self):
+        """Handle Update button click"""
+        button_text = self.update_button.text()
+        
+        if button_text == "Update":
+            # Start the update process
+            self.show_update_popout()
+            self.run_git_pull()
+        elif button_text == "Restart":
+            # Restart the application
+            self.restart_application()
+        elif button_text.startswith("Checking"):
+            # Already checking, do nothing
+            pass
+        elif button_text == "Up to date!":
+            # Do nothing, user should close popout
+            pass
+        elif button_text == "Error Updating":
+            # Do nothing, user should close popout
+            pass
+    
+    def show_update_popout(self):
+        """Show the update popout near the Update button"""
+        if not hasattr(self, 'update_popout'):
+            self.update_popout = UpdatePopout(self.settings_page)
+            self.update_popout.close_button.clicked.connect(self.close_update_popout)
+        
+        # Clear previous output
+        self.update_popout.clear_output()
+        
+        # Position the popout above the Update button
+        button_pos = self.update_button.mapTo(self.settings_page, self.update_button.rect().topLeft())
+        popout_x = button_pos.x()
+        popout_y = button_pos.y() - self.update_popout.height() - 10  # 10px gap above button
+        
+        self.update_popout.move(popout_x, popout_y)
+        self.update_popout.show()
+    
+    def close_update_popout(self):
+        """Close the update popout and reset state"""
+        # Kill git process if still running
+        if self.git_process is not None and self.git_process.state() == QProcess.Running:
+            self.git_process.kill()
+            self.git_process.waitForFinished()
+        
+        # Stop animation timer
+        self.checking_animation_timer.stop()
+        
+        # Reset button text and color
+        self.update_button.setText("Update")
+        self.set_update_button_color("green")
+        
+        # Hide popout
+        if hasattr(self, 'update_popout'):
+            self.update_popout.hide()
+    
+    def set_update_button_color(self, color):
+        """Set the update button color"""
+        if color == "green":
+            self.update_button.setStyleSheet("""
+                QPushButton {
+                    font-family: Quicksand;
+                    font-size: 20px;
+                    font-weight: bold;
+                    padding: 8px 16px;
+                    background-color: #4CAF50;
+                    color: white;
+                    border: none;
+                    border-radius: 5px;
+                }
+                QPushButton:hover {
+                    background-color: #45a049;
+                }
+                QPushButton:pressed {
+                    background-color: #3d8b40;
+                    padding-bottom: 7px;
+                }
+            """)
+        elif color == "orange":
+            self.update_button.setStyleSheet("""
+                QPushButton {
+                    font-family: Quicksand;
+                    font-size: 20px;
+                    font-weight: bold;
+                    padding: 8px 16px;
+                    background-color: #FFC107;
+                    color: white;
+                    border: none;
+                    border-radius: 5px;
+                }
+                QPushButton:hover {
+                    background-color: #FFB300;
+                }
+                QPushButton:pressed {
+                    background-color: #FFA000;
+                    padding-bottom: 7px;
+                }
+            """)
+        elif color == "red":
+            self.update_button.setStyleSheet("""
+                QPushButton {
+                    font-family: Quicksand;
+                    font-size: 20px;
+                    font-weight: bold;
+                    padding: 8px 16px;
+                    background-color: #f44336;
+                    color: white;
+                    border: none;
+                    border-radius: 5px;
+                }
+                QPushButton:hover {
+                    background-color: #da190b;
+                }
+                QPushButton:pressed {
+                    background-color: #c1170a;
+                    padding-bottom: 7px;
+                }
+            """)
+    
+    def run_git_pull(self):
+        """Start the git pull process"""
+        # Change button text, color, and start animation
+        self.update_button.setText("Checking")
+        self.set_update_button_color("orange")
+        self.checking_animation_state = 0
+        self.checking_animation_timer.start(500)  # Update every 500ms
+        
+        # Clear git output
+        self.git_output = ""
+        
+        # Create and configure QProcess
+        self.git_process = QProcess()
+        self.git_process.setWorkingDirectory(os.path.dirname(os.path.abspath(__file__)))
+        
+        # Connect signals
+        self.git_process.readyReadStandardOutput.connect(self.on_git_output_ready)
+        self.git_process.readyReadStandardError.connect(self.on_git_output_ready)
+        self.git_process.finished.connect(self.on_git_finished)
+        
+        # Start git pull
+        self.update_popout.append_output("Running git pull...\n")
+        self.git_process.start("git", ["pull"])
+    
+    def on_git_output_ready(self):
+        """Handle output from git process"""
+        if self.git_process is None:
+            return
+        
+        # Read stdout
+        stdout = self.git_process.readAllStandardOutput().data().decode('utf-8', errors='replace')
+        if stdout:
+            self.git_output += stdout
+            # Remove trailing newline for display to avoid double spacing
+            self.update_popout.append_output(stdout.rstrip('\n'))
+        
+        # Read stderr
+        stderr = self.git_process.readAllStandardError().data().decode('utf-8', errors='replace')
+        if stderr:
+            self.git_output += stderr
+            self.update_popout.append_output(stderr.rstrip('\n'))
+    
+    def on_git_finished(self, exit_code, exit_status):
+        """Handle git process completion"""
+        # Stop animation timer
+        self.checking_animation_timer.stop()
+        
+        # Append completion message
+        self.update_popout.append_output(f"\nProcess finished with exit code: {exit_code}")
+        
+        # Check for errors
+        if exit_code != 0 or self.has_git_error():
+            self.update_button.setText("Error Updating")
+            self.set_update_button_color("red")
+        else:
+            # Check if updates were found
+            has_updates = self.parse_git_output()
+            
+            if has_updates:
+                self.update_button.setText("Restart")
+                self.set_update_button_color("green")
+            else:
+                self.update_button.setText("Up to date!")
+                self.set_update_button_color("green")
+    
+    def has_git_error(self):
+        """Check if git output contains error indicators"""
+        output_lower = self.git_output.lower()
+        error_indicators = [
+            "error:",
+            "fatal:",
+            "could not",
+            "failed to",
+            "permission denied",
+            "cannot"
+        ]
+        
+        for indicator in error_indicators:
+            if indicator in output_lower:
+                return True
+        
+        return False
+    
+    def parse_git_output(self):
+        """Parse git output to determine if updates occurred"""
+        output_lower = self.git_output.lower()
+        
+        # Check for "already up to date" or "already up-to-date"
+        if "already up to date" in output_lower or "already up-to-date" in output_lower:
+            return False
+        
+        # Check for indicators of updates
+        update_indicators = [
+            "updating",
+            "fast-forward",
+            "files changed",
+            "file changed",
+            "insertions",
+            "deletions"
+        ]
+        
+        for indicator in update_indicators:
+            if indicator in output_lower:
+                return True
+        
+        # If exit code was 0 and we have output but no "already up to date", assume updates
+        if self.git_output and "error" not in output_lower and "fatal" not in output_lower:
+            # Check if there's actual content beyond just "From" lines
+            lines = [line.strip() for line in self.git_output.split('\n') if line.strip()]
+            substantial_lines = [line for line in lines if not line.startswith('From') and not line.startswith('remote:')]
+            if len(substantial_lines) > 1:  # More than just the git pull command echo
+                return True
+        
+        return False
+    
+    def update_checking_animation(self):
+        """Update the button text for checking animation"""
+        animations = ["Checking", "Checking.", "Checking..", "Checking..."]
+        self.update_button.setText(animations[self.checking_animation_state])
+        self.checking_animation_state = (self.checking_animation_state + 1) % len(animations)
+    
+    def restart_application(self):
+        """Restart the application"""
+        # Close the update popout
+        if hasattr(self, 'update_popout'):
+            self.update_popout.hide()
+        
+        # Get the current script path
+        script_path = os.path.abspath(__file__)
+        
+        # Restart using os.execv (replaces current process)
+        python = sys.executable
+        os.execv(python, [python, script_path])
     
     def create_title_bar(self, button_widget, countdown_label=None):
         """Create a title bar with the given button on the right"""
@@ -945,7 +1305,7 @@ class MainWindow(QMainWindow):
         content_layout.addLayout(timestamp_layout)
         content_layout.addStretch()
         
-        # Add IP button at bottom left
+        # Add IP and Update buttons at bottom left
         ip_button_layout = QHBoxLayout()
         ip_button_layout.setContentsMargins(20, 10, 40, 20)
         
@@ -971,6 +1331,31 @@ class MainWindow(QMainWindow):
         # Install event filter to detect hover
         self.ip_button.installEventFilter(self)
         ip_button_layout.addWidget(self.ip_button)
+        
+        # Add Update button
+        self.update_button = QPushButton("Update")
+        self.update_button.setStyleSheet("""
+            QPushButton {
+                font-family: Quicksand;
+                font-size: 20px;
+                font-weight: bold;
+                padding: 8px 16px;
+                background-color: #4CAF50;
+                color: white;
+                border: none;
+                border-radius: 5px;
+            }
+            QPushButton:hover {
+                background-color: #45a049;
+            }
+            QPushButton:pressed {
+                background-color: #3d8b40;
+                padding-bottom: 7px;
+            }
+        """)
+        self.update_button.clicked.connect(self.on_update_button_clicked)
+        ip_button_layout.addWidget(self.update_button)
+        
         ip_button_layout.addStretch()
         
         content_layout.addLayout(ip_button_layout)
