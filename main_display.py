@@ -1307,7 +1307,7 @@ class MainWindow(QMainWindow):
         
         # Add IP and Update buttons at bottom left
         ip_button_layout = QHBoxLayout()
-        ip_button_layout.setContentsMargins(20, 10, 40, 20)
+        ip_button_layout.setContentsMargins(20, 10, 40, 10)
         
         self.ip_button = QPushButton("ⓘ")
         self.ip_button.setStyleSheet("""
