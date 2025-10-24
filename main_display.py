@@ -1304,10 +1304,11 @@ class MainWindow(QMainWindow):
         
         content_layout.addLayout(timestamp_layout)
         content_layout.addStretch()
+        content_layout.addSpacing(-30)  # Move buttons up
         
         # Add IP and Update buttons at bottom left
         ip_button_layout = QHBoxLayout()
-        ip_button_layout.setContentsMargins(20, 10, 40, 10)
+        ip_button_layout.setContentsMargins(20, 10, 40, 20)
         
         self.ip_button = QPushButton("ⓘ")
         self.ip_button.setStyleSheet("""
