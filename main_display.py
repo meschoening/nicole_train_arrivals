@@ -24,7 +24,7 @@ class MainWindow(QMainWindow):
         # Load custom font
         QFontDatabase.addApplicationFont("assets/Quicksand-Bold.ttf")
 
-        self.setFixedSize(QSize(1024,600))
+        # self.setFixedSize(QSize(1024,600))  # Commented out for fullscreen mode
         self.setWindowTitle("Test")
 
         # Create main widget with stacked layout
@@ -523,8 +523,41 @@ class MainWindow(QMainWindow):
         settings_button.setFixedHeight(45)
         settings_button.clicked.connect(self.open_settings_page)
         
+        # Create close button
+        close_button = QPushButton("✕")
+        close_button.setStyleSheet("""
+            QPushButton {
+                font-family: Quicksand;
+                font-size: 22px;
+                font-weight: bold;
+                padding: 5px 20px;
+                background-color: lightgray;
+                border: none;
+                border-radius: 5px;
+            }
+            QPushButton:hover {
+                background-color: #b0b0b0;
+            }
+            QPushButton:pressed {
+                background-color: #909090;
+                padding-bottom: 4px;
+            }
+        """)
+        close_button.setFixedHeight(45)
+        close_button.clicked.connect(QApplication.instance().quit)
+        
+        # Create container widget for both buttons
+        buttons_container = QWidget()
+        buttons_container.setStyleSheet("background-color: lightgray;")
+        buttons_layout = QHBoxLayout()
+        buttons_layout.setContentsMargins(0, 0, 0, 0)
+        buttons_layout.setSpacing(10)
+        buttons_layout.addWidget(settings_button)
+        buttons_layout.addWidget(close_button)
+        buttons_container.setLayout(buttons_layout)
+        
         # Add title bar
-        layout.addWidget(self.create_title_bar(settings_button, self.refresh_countdown_label))
+        layout.addWidget(self.create_title_bar(buttons_container, self.refresh_countdown_label))
         
         # Add content
         content_layout = QVBoxLayout()
@@ -855,6 +888,6 @@ data_handler.fetch_lines()
 app = QApplication([])
 
 window = MainWindow()
-window.show()
+window.showFullScreen()
 
 app.exec()
