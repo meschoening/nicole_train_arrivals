@@ -866,7 +866,7 @@ class MainWindow(QMainWindow):
             
             if has_updates:
                 self.update_button.setText("Restart")
-                self.set_update_button_color("green")
+                self.set_update_button_color("orange")  # Stay orange to indicate action needed
             else:
                 self.update_button.setText("Up to date!")
                 self.set_update_button_color("green")
@@ -978,6 +978,8 @@ class MainWindow(QMainWindow):
         # Create countdown label
         self.refresh_countdown_label = QLabel("Refresh in 30s")
         self.refresh_countdown_label.setStyleSheet("font-family: Quicksand; font-size: 14px; color: #666;")
+        self.refresh_countdown_label.setMaximumWidth(500)  # Prevent overlap with title and buttons
+        self.refresh_countdown_label.setWordWrap(True)  # Allow text to wrap to multiple lines
         
         # Create settings button
         settings_button = QPushButton("⚙")
