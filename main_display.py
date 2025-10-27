@@ -203,14 +203,6 @@ class MainWindow(QMainWindow):
         self.checking_animation_timer = QTimer()
         self.checking_animation_timer.timeout.connect(self.update_checking_animation)
         self.checking_animation_state = 0
-        
-        # Error message scrolling state
-        self.error_scroll_timer = QTimer()
-        self.error_scroll_timer.timeout.connect(self.scroll_error_message)
-        self.error_scroll_position = 0
-        self.full_error_message = ""
-        self.error_scroll_direction = 1  # 1 for down, -1 for up
-        self.error_scroll_pause_counter = 0
     
     def eventFilter(self, obj, event):
         """Event filter to handle hover events on IP button"""
@@ -655,112 +647,17 @@ class MainWindow(QMainWindow):
         
         # Update the label text and styling based on error state
         if self.refresh_error_message:
-            # Store full error message
-            self.full_error_message = f"Error Refreshing: {self.refresh_error_message} Trying again in {self.seconds_until_refresh}s"
-            
-            # Apply error styling
+            # Display error message with red background
+            self.refresh_countdown_label.setText(
+                f"Error Refreshing: {self.refresh_error_message} Trying again in {self.seconds_until_refresh}s"
+            )
             self.refresh_countdown_label.setStyleSheet(
                 "font-family: Quicksand; font-size: 14px; color: white; background-color: #e74c3c; padding: 5px; border-radius: 3px;"
             )
-            
-            # Check if message needs scrolling
-            # Create a temporary label to calculate text dimensions
-            from PyQt5.QtGui import QFontMetrics
-            font_metrics = self.refresh_countdown_label.fontMetrics()
-            
-            # Calculate text rectangle with word wrap
-            text_rect = font_metrics.boundingRect(
-                0, 0, self.refresh_countdown_label.maximumWidth() - 10,  # Account for padding
-                1000,  # Large height for calculation
-                Qt.TextWordWrap | Qt.AlignLeft,
-                self.full_error_message
-            )
-            
-            # Check if text height exceeds label height (allow for 2 lines)
-            max_visible_height = 50  # Approximate height for 2 lines with padding
-            
-            if text_rect.height() > max_visible_height:
-                # Message is too long, start scrolling
-                if not self.error_scroll_timer.isActive():
-                    self.error_scroll_position = 0
-                    self.error_scroll_direction = 1
-                    self.error_scroll_pause_counter = 0
-                    self.error_scroll_timer.start(1000)  # Update every second
-                # Initial display will be set by scroll_error_message
-                self.scroll_error_message()
-            else:
-                # Message fits, display normally
-                self.error_scroll_timer.stop()
-                self.refresh_countdown_label.setText(self.full_error_message)
         else:
             # Normal countdown display
-            self.error_scroll_timer.stop()
             self.refresh_countdown_label.setText(f"Refresh in {self.seconds_until_refresh}s")
             self.refresh_countdown_label.setStyleSheet("font-family: Quicksand; font-size: 14px; color: #666;")
-    
-    def scroll_error_message(self):
-        """Scroll the error message vertically if it's too long to fit"""
-        if not self.full_error_message:
-            return
-        
-        # Handle pause at boundaries
-        if self.error_scroll_pause_counter > 0:
-            self.error_scroll_pause_counter -= 1
-            return
-        
-        # Get font metrics for line height calculation
-        font_metrics = self.refresh_countdown_label.fontMetrics()
-        line_height = font_metrics.lineSpacing()
-        
-        # Split message into wrapped lines
-        max_width = self.refresh_countdown_label.maximumWidth() - 10  # Account for padding
-        lines = []
-        words = self.full_error_message.split(' ')
-        current_line = ""
-        
-        for word in words:
-            test_line = current_line + (" " if current_line else "") + word
-            if font_metrics.boundingRect(test_line).width() <= max_width:
-                current_line = test_line
-            else:
-                if current_line:
-                    lines.append(current_line)
-                current_line = word
-        if current_line:
-            lines.append(current_line)
-        
-        # Calculate how many lines fit in the visible area
-        visible_lines = 2  # Show 2 lines at a time
-        
-        if len(lines) <= visible_lines:
-            # No scrolling needed
-            self.error_scroll_timer.stop()
-            self.refresh_countdown_label.setText(self.full_error_message)
-            return
-        
-        # Calculate scroll boundaries
-        max_scroll = len(lines) - visible_lines
-        
-        # Check if we're at a boundary
-        if self.error_scroll_position >= max_scroll:
-            # At bottom, pause and reverse
-            self.error_scroll_direction = -1
-            self.error_scroll_pause_counter = 2  # Pause for 2 seconds
-        elif self.error_scroll_position <= 0:
-            # At top, pause and reverse
-            self.error_scroll_direction = 1
-            self.error_scroll_pause_counter = 2  # Pause for 2 seconds
-        else:
-            # Update scroll position
-            self.error_scroll_position += self.error_scroll_direction
-        
-        # Get visible lines
-        start_line = max(0, min(self.error_scroll_position, max_scroll))
-        end_line = start_line + visible_lines
-        visible_text = '\n'.join(lines[start_line:end_line])
-        
-        # Update label
-        self.refresh_countdown_label.setText(visible_text)
     
     def toggle_countdown_visibility(self):
         """Toggle the visibility of the countdown label"""
@@ -768,8 +665,6 @@ class MainWindow(QMainWindow):
             self.refresh_countdown_label.show()
         else:
             self.refresh_countdown_label.hide()
-            # Stop scrolling timer when hidden
-            self.error_scroll_timer.stop()
     
     def show_ip_popout(self):
         """Show the IP popout near the IP button"""
