@@ -2,6 +2,11 @@ import requests
 import pandas as pd
 
 
+class MetroAPIError(Exception):
+    """Custom exception for Metro API errors"""
+    pass
+
+
 class MetroAPI:
     """
     A class to interact with Metro transit data.
@@ -21,15 +26,21 @@ class MetroAPI:
         
         Returns:
             pandas DataFrame containing metro lines data.
+        
+        Raises:
+            MetroAPIError: If the API request fails.
         """
-        url = f"{self.base_url}/jLines"
-        headers = {
-            "api_key": self.api_key
-        }
-        response = requests.get(url, headers=headers)
-        response.raise_for_status()  # Raise an exception for bad status codes
-        data = response.json()
-        return pd.DataFrame(data['Lines'])
+        try:
+            url = f"{self.base_url}/jLines"
+            headers = {
+                "api_key": self.api_key
+            }
+            response = requests.get(url, headers=headers)
+            response.raise_for_status()  # Raise an exception for bad status codes
+            data = response.json()
+            return pd.DataFrame(data['Lines'])
+        except Exception as e:
+            raise MetroAPIError(f"Failed to fetch lines: {str(e)}")
     
     def get_stations(self, LineCode):
         """
@@ -40,18 +51,24 @@ class MetroAPI:
         
         Returns:
             pandas DataFrame containing metro stations data.
+        
+        Raises:
+            MetroAPIError: If the API request fails.
         """
-        url = f"{self.base_url}/jStations"
-        headers = {
-            "api_key": self.api_key
-        }
-        params = {
-            "LineCode": LineCode
-        }
-        response = requests.get(url, headers=headers, params=params)
-        response.raise_for_status()  # Raise an exception for bad status codes
-        data = response.json()
-        return pd.DataFrame(data['Stations'])
+        try:
+            url = f"{self.base_url}/jStations"
+            headers = {
+                "api_key": self.api_key
+            }
+            params = {
+                "LineCode": LineCode
+            }
+            response = requests.get(url, headers=headers, params=params)
+            response.raise_for_status()  # Raise an exception for bad status codes
+            data = response.json()
+            return pd.DataFrame(data['Stations'])
+        except Exception as e:
+            raise MetroAPIError(f"Failed to fetch stations: {str(e)}")
     
     def station_arrivals(self, station_id):
         """
@@ -62,13 +79,19 @@ class MetroAPI:
             
         Returns:
             pandas DataFrame containing upcoming arrivals data.
+        
+        Raises:
+            MetroAPIError: If the API request fails.
         """
-        url = f"{self.predictions_url}/GetPrediction/{station_id}"
-        headers = {
-            "api_key": self.api_key
-        }
-        response = requests.get(url, headers=headers)
-        response.raise_for_status()  # Raise an exception for bad status codes
-        data = response.json()
-        return pd.DataFrame(data['Trains'])
+        try:
+            url = f"{self.predictions_url}/GetPrediction/{station_id}"
+            headers = {
+                "api_key": self.api_key
+            }
+            response = requests.get(url, headers=headers)
+            response.raise_for_status()  # Raise an exception for bad status codes
+            data = response.json()
+            return pd.DataFrame(data['Trains'])
+        except Exception as e:
+            raise MetroAPIError(f"Failed to fetch arrivals: {str(e)}")
 

@@ -1,7 +1,7 @@
 from PyQt5.QtWidgets import QApplication, QMainWindow, QVBoxLayout, QHBoxLayout, QLabel, QWidget, QPushButton, QStackedWidget, QComboBox, QCheckBox, QPlainTextEdit
 from PyQt5.QtCore import QSize, Qt, QTimer, QEvent, QProcess
 from PyQt5.QtGui import QFontDatabase, QColor, QPalette, QPixmap, QPainter, QIcon
-from MetroAPI import MetroAPI
+from MetroAPI import MetroAPI, MetroAPIError
 from data_handler import DataHandler
 import config_handler
 import os
@@ -196,6 +196,9 @@ class MainWindow(QMainWindow):
         self.checking_animation_timer = QTimer()
         self.checking_animation_timer.timeout.connect(self.update_checking_animation)
         self.checking_animation_state = 0
+        
+        # Error state tracking for refresh countdown
+        self.refresh_error_message = None
     
     def eventFilter(self, obj, event):
         """Event filter to handle hover events on IP button"""
@@ -598,8 +601,14 @@ class MainWindow(QMainWindow):
         station_id = config.get('selected_station')
         
         if station_id:
-            # Fetch fresh predictions from API
-            data_handler.fetch_predictions(station_id)
+            try:
+                # Fetch fresh predictions from API
+                data_handler.fetch_predictions(station_id)
+                # Clear error message on success
+                self.refresh_error_message = None
+            except MetroAPIError as e:
+                # Store error message for display
+                self.refresh_error_message = str(e)
         
         # Update the display
         self.update_arrivals_display()
@@ -614,8 +623,19 @@ class MainWindow(QMainWindow):
         if self.seconds_until_refresh <= 0:
             self.seconds_until_refresh = 30
         
-        # Update the label text
-        self.refresh_countdown_label.setText(f"Refresh in {self.seconds_until_refresh}s")
+        # Update the label text and styling based on error state
+        if self.refresh_error_message:
+            # Display error message with red background
+            self.refresh_countdown_label.setText(
+                f"Error Refreshing: {self.refresh_error_message} Trying again in {self.seconds_until_refresh}s"
+            )
+            self.refresh_countdown_label.setStyleSheet(
+                "font-family: Quicksand; font-size: 14px; color: white; background-color: #e74c3c; padding: 5px; border-radius: 3px;"
+            )
+        else:
+            # Normal countdown display
+            self.refresh_countdown_label.setText(f"Refresh in {self.seconds_until_refresh}s")
+            self.refresh_countdown_label.setStyleSheet("font-family: Quicksand; font-size: 14px; color: #666;")
     
     def toggle_countdown_visibility(self):
         """Toggle the visibility of the countdown label"""
