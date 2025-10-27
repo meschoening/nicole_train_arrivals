@@ -173,11 +173,18 @@ class MainWindow(QMainWindow):
         
         self.setCentralWidget(self.stack)
         
+        # Error state tracking for refresh countdown (must be initialized before first data load)
+        self.refresh_error_message = None
+        
         # Initialize settings with config values
         self.initialize_settings_from_config()
         
         # Initial load of arrivals data
-        self.update_arrivals_display()
+        try:
+            self.update_arrivals_display()
+        except MetroAPIError as e:
+            # Store error for display in countdown
+            self.refresh_error_message = str(e)
         
         # Set up auto-refresh timer (30 seconds)
         self.refresh_timer = QTimer()
@@ -196,9 +203,6 @@ class MainWindow(QMainWindow):
         self.checking_animation_timer = QTimer()
         self.checking_animation_timer.timeout.connect(self.update_checking_animation)
         self.checking_animation_state = 0
-        
-        # Error state tracking for refresh countdown
-        self.refresh_error_message = None
     
     def eventFilter(self, obj, event):
         """Event filter to handle hover events on IP button"""
@@ -307,13 +311,17 @@ class MainWindow(QMainWindow):
             return
         
         # Get stations for the selected line (uses cache, auto-fetches if needed)
-        stations_data = data_handler.get_cached_stations(line_code)
-        if stations_data is not None and not stations_data.empty:
-            # Add stations to combo box
-            for _, station in stations_data.iterrows():
-                station_name = station.get('Name', '')
-                station_code = station.get('Code', '')
-                self.station_combo.addItem(station_name, station_code)
+        try:
+            stations_data = data_handler.get_cached_stations(line_code)
+            if stations_data is not None and not stations_data.empty:
+                # Add stations to combo box
+                for _, station in stations_data.iterrows():
+                    station_name = station.get('Name', '')
+                    station_code = station.get('Code', '')
+                    self.station_combo.addItem(station_name, station_code)
+        except MetroAPIError as e:
+            # Store error for display in countdown
+            self.refresh_error_message = str(e)
     
     def populate_directions(self, station_code):
         """Populate direction dropdown with unique destinations from station predictions"""
@@ -324,36 +332,40 @@ class MainWindow(QMainWindow):
             return
         
         # Get predictions for the selected station (uses cache, auto-fetches if needed)
-        predictions_data = data_handler.get_cached_predictions(station_code)
-        if predictions_data is not None and not predictions_data.empty:
-            # Create a dictionary to map destinations to lists of their line codes
-            destination_lines = {}
-            for _, row in predictions_data.iterrows():
-                dest = row.get('DestinationName')
-                line = row.get('Line')
-                if dest and line:
-                    if dest not in destination_lines:
-                        destination_lines[dest] = []
-                    # Add line code if not already in the list (avoid duplicates)
-                    if line not in destination_lines[dest]:
-                        destination_lines[dest].append(line)
-            
-            # Sort destinations alphabetically
-            destinations = sorted(destination_lines.keys())
-            
-            # Add destinations to combo box with colored icons
-            for destination in destinations:
-                line_codes = destination_lines[destination]
-                # Get colors for all line codes
-                colors = [self.LINE_COLORS.get(code, '#808080') for code in line_codes]
+        try:
+            predictions_data = data_handler.get_cached_predictions(station_code)
+            if predictions_data is not None and not predictions_data.empty:
+                # Create a dictionary to map destinations to lists of their line codes
+                destination_lines = {}
+                for _, row in predictions_data.iterrows():
+                    dest = row.get('DestinationName')
+                    line = row.get('Line')
+                    if dest and line:
+                        if dest not in destination_lines:
+                            destination_lines[dest] = []
+                        # Add line code if not already in the list (avoid duplicates)
+                        if line not in destination_lines[dest]:
+                            destination_lines[dest].append(line)
                 
-                # Use appropriate icon based on number of lines
-                if len(colors) == 1:
-                    icon = self.create_colored_circle_icon(colors[0])
-                else:
-                    icon = self.create_multi_colored_circle_icon(colors)
+                # Sort destinations alphabetically
+                destinations = sorted(destination_lines.keys())
                 
-                self.direction_combo.addItem(icon, destination)
+                # Add destinations to combo box with colored icons
+                for destination in destinations:
+                    line_codes = destination_lines[destination]
+                    # Get colors for all line codes
+                    colors = [self.LINE_COLORS.get(code, '#808080') for code in line_codes]
+                    
+                    # Use appropriate icon based on number of lines
+                    if len(colors) == 1:
+                        icon = self.create_colored_circle_icon(colors[0])
+                    else:
+                        icon = self.create_multi_colored_circle_icon(colors)
+                    
+                    self.direction_combo.addItem(icon, destination)
+        except MetroAPIError as e:
+            # Store error for display in countdown
+            self.refresh_error_message = str(e)
     
     def get_config_last_saved(self):
         """Get the last modified timestamp of the config file"""
@@ -520,7 +532,17 @@ class MainWindow(QMainWindow):
             return
         
         # Get predictions for the selected station
-        predictions_data = data_handler.get_cached_predictions(station_id)
+        try:
+            predictions_data = data_handler.get_cached_predictions(station_id)
+        except MetroAPIError as e:
+            # Store error for display in countdown
+            self.refresh_error_message = str(e)
+            # Show empty rows when error occurs
+            for row in self.arrival_rows:
+                row.circle_label.setStyleSheet("background-color: #cccccc; border-radius: 10px;")
+                row.destination_label.setText("—")
+                row.time_label.setText("—")
+            return
         
         if predictions_data is None or predictions_data.empty:
             # No data available, show empty rows
@@ -1396,7 +1418,11 @@ metro_api = MetroAPI(config['api_key'])
 data_handler = DataHandler(metro_api)
 
 # Fetch lines data on startup
-data_handler.fetch_lines()
+try:
+    data_handler.fetch_lines()
+except MetroAPIError:
+    # Suppress error during startup - will be shown in UI if needed
+    pass
 
 app = QApplication([])
 
