@@ -1178,7 +1178,7 @@ class MainWindow(QMainWindow):
         # Close the popout
         self.close_shutdown_popout()
         
-        # Execute shutdown command for Windows
+        # Execute shutdown command for RasPi
         os.system("sudo shutdown now")
     
     def create_title_bar(self, button_widget, countdown_label=None):
@@ -1365,6 +1365,26 @@ class MainWindow(QMainWindow):
             QComboBox:hover {
                 border: 1px solid #999;
             }
+            QComboBox QAbstractItemView {
+                font-family: Quicksand;
+                font-size: 18px;
+                background-color: white;
+                selection-background-color: #e0e0e0;
+                selection-color: #000;
+                color: #000;
+            }
+            QComboBox QAbstractItemView::item {
+                color: #000;
+                padding: 5px;
+            }
+            QComboBox QAbstractItemView::item:selected {
+                background-color: #e0e0e0;
+                color: #000;
+            }
+            QComboBox QAbstractItemView::item:hover {
+                background-color: #e0e0e0;
+                color: #000;
+            }
         """)
         self.line_combo.setMinimumWidth(265)
         
@@ -1406,6 +1426,26 @@ class MainWindow(QMainWindow):
             QComboBox:hover {
                 border: 1px solid #999;
             }
+            QComboBox QAbstractItemView {
+                font-family: Quicksand;
+                font-size: 18px;
+                background-color: white;
+                selection-background-color: #e0e0e0;
+                selection-color: #000;
+                color: #000;
+            }
+            QComboBox QAbstractItemView::item {
+                color: #000;
+                padding: 5px;
+            }
+            QComboBox QAbstractItemView::item:selected {
+                background-color: #e0e0e0;
+                color: #000;
+            }
+            QComboBox QAbstractItemView::item:hover {
+                background-color: #e0e0e0;
+                color: #000;
+            }
         """)
         self.station_combo.setMinimumWidth(265)
         
@@ -1440,6 +1480,26 @@ class MainWindow(QMainWindow):
             }
             QComboBox:hover {
                 border: 1px solid #999;
+            }
+            QComboBox QAbstractItemView {
+                font-family: Quicksand;
+                font-size: 18px;
+                background-color: white;
+                selection-background-color: #e0e0e0;
+                selection-color: #000;
+                color: #000;
+            }
+            QComboBox QAbstractItemView::item {
+                color: #000;
+                padding: 5px;
+            }
+            QComboBox QAbstractItemView::item:selected {
+                background-color: #e0e0e0;
+                color: #000;
+            }
+            QComboBox QAbstractItemView::item:hover {
+                background-color: #e0e0e0;
+                color: #000;
             }
         """)
         self.direction_combo.setMinimumWidth(265)
