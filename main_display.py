@@ -140,6 +140,129 @@ class UpdatePopout(QWidget):
         """Clear the output area"""
         self.output_text.clear()
 
+class ShutdownPopout(QWidget):
+    """A popout widget that displays shutdown and exit options"""
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setWindowFlags(Qt.ToolTip | Qt.FramelessWindowHint)
+        self.setAttribute(Qt.WA_TranslucentBackground, False)
+        
+        # Track shutdown confirmation state
+        self.shutdown_confirmed = False
+        
+        # Create layout
+        layout = QVBoxLayout()
+        layout.setContentsMargins(15, 10, 15, 10)
+        layout.setSpacing(10)
+        
+        # Create Exit to Desktop button
+        self.exit_button = QPushButton("Exit to Desktop")
+        self.exit_button.setMinimumWidth(200)
+        self.exit_button.setStyleSheet("""
+            QPushButton {
+                font-family: Quicksand;
+                font-size: 18px;
+                font-weight: bold;
+                padding: 10px 20px;
+                background-color: #e0e0e0;
+                border: none;
+                border-radius: 5px;
+            }
+            QPushButton:hover {
+                background-color: #d0d0d0;
+            }
+            QPushButton:pressed {
+                background-color: #c0c0c0;
+                padding-bottom: 9px;
+            }
+        """)
+        layout.addWidget(self.exit_button)
+        
+        # Create Shutdown button
+        self.shutdown_button = QPushButton("Shutdown")
+        self.shutdown_button.setMinimumWidth(200)
+        self.shutdown_button.setStyleSheet("""
+            QPushButton {
+                font-family: Quicksand;
+                font-size: 18px;
+                font-weight: bold;
+                padding: 10px 20px;
+                background-color: #e0e0e0;
+                border: none;
+                border-radius: 5px;
+            }
+            QPushButton:hover {
+                background-color: #d0d0d0;
+            }
+            QPushButton:pressed {
+                background-color: #c0c0c0;
+                padding-bottom: 9px;
+            }
+        """)
+        layout.addWidget(self.shutdown_button)
+        
+        self.setLayout(layout)
+        
+        # Style the popout
+        self.setStyleSheet("""
+            ShutdownPopout {
+                background-color: white;
+                border: 2px solid #999;
+                border-radius: 5px;
+            }
+        """)
+        
+        self.adjustSize()
+    
+    def reset_shutdown_state(self):
+        """Reset the shutdown button to its initial state"""
+        self.shutdown_confirmed = False
+        self.shutdown_button.setText("Shutdown")
+        self.shutdown_button.setMinimumWidth(200)
+        self.shutdown_button.setStyleSheet("""
+            QPushButton {
+                font-family: Quicksand;
+                font-size: 18px;
+                font-weight: bold;
+                padding: 10px 20px;
+                background-color: #e0e0e0;
+                border: none;
+                border-radius: 5px;
+            }
+            QPushButton:hover {
+                background-color: #d0d0d0;
+            }
+            QPushButton:pressed {
+                background-color: #c0c0c0;
+                padding-bottom: 9px;
+            }
+        """)
+    
+    def set_shutdown_confirm_state(self):
+        """Set the shutdown button to confirmation state (red)"""
+        self.shutdown_confirmed = True
+        self.shutdown_button.setText("Confirm Shutdown")
+        self.shutdown_button.setMinimumWidth(200)
+        self.shutdown_button.setStyleSheet("""
+            QPushButton {
+                font-family: Quicksand;
+                font-size: 18px;
+                font-weight: bold;
+                padding: 10px 20px;
+                background-color: #f44336;
+                color: white;
+                border: none;
+                border-radius: 5px;
+            }
+            QPushButton:hover {
+                background-color: #da190b;
+            }
+            QPushButton:pressed {
+                background-color: #c1170a;
+                padding-bottom: 9px;
+            }
+        """)
+
 class MainWindow(QMainWindow):
     # Metro line color mapping
     LINE_COLORS = {
@@ -205,13 +328,28 @@ class MainWindow(QMainWindow):
         self.checking_animation_state = 0
     
     def eventFilter(self, obj, event):
-        """Event filter to handle hover events on IP button"""
+        """Event filter to handle hover events on IP button and clicks outside shutdown popout"""
         if obj == self.ip_button:
             if event.type() == QEvent.Enter:
                 self.show_ip_popout()
             elif event.type() == QEvent.Leave:
                 if hasattr(self, 'ip_popout'):
                     self.ip_popout.hide()
+        
+        # Handle clicks outside the shutdown popout
+        if event.type() == QEvent.MouseButtonPress:
+            if hasattr(self, 'shutdown_popout') and self.shutdown_popout.isVisible():
+                # Check if click is outside both the popout and the button
+                click_pos = event.globalPos()
+                popout_rect = self.shutdown_popout.geometry()
+                popout_rect.moveTopLeft(self.shutdown_popout.mapToGlobal(self.shutdown_popout.rect().topLeft()))
+                
+                button_rect = self.shutdown_exit_button.geometry()
+                button_rect.moveTopLeft(self.shutdown_exit_button.mapToGlobal(self.shutdown_exit_button.rect().topLeft()))
+                
+                if not popout_rect.contains(click_pos) and not button_rect.contains(click_pos):
+                    self.close_shutdown_popout()
+        
         return super().eventFilter(obj, event)
     
     def get_device_ip(self):
@@ -940,6 +1078,109 @@ class MainWindow(QMainWindow):
         python = sys.executable
         os.execv(python, [python, script_path])
     
+    def on_shutdown_exit_button_clicked(self):
+        """Handle Shutdown/Exit button click"""
+        # Show the popout and change button color to slightly darker
+        self.show_shutdown_popout()
+        self.set_shutdown_exit_button_color("active")
+    
+    def show_shutdown_popout(self):
+        """Show the shutdown popout near the Shutdown/Exit button"""
+        if not hasattr(self, 'shutdown_popout'):
+            self.shutdown_popout = ShutdownPopout(self.settings_page)
+            # Connect button signals
+            self.shutdown_popout.exit_button.clicked.connect(self.exit_to_desktop)
+            self.shutdown_popout.shutdown_button.clicked.connect(self.on_shutdown_button_clicked)
+        
+        # Reset shutdown state when showing popout
+        self.shutdown_popout.reset_shutdown_state()
+        
+        # Position the popout above the Shutdown/Exit button
+        button_pos = self.shutdown_exit_button.mapTo(self.settings_page, self.shutdown_exit_button.rect().topLeft())
+        popout_x = button_pos.x() + self.shutdown_exit_button.width() - self.shutdown_popout.width()  # Align to right edge
+        popout_y = button_pos.y() - self.shutdown_popout.height() - 10  # 10px gap above button
+        
+        self.shutdown_popout.move(popout_x, popout_y)
+        self.shutdown_popout.show()
+        self.shutdown_popout.raise_()
+        
+        # Install event filter to detect clicks outside the popout
+        QApplication.instance().installEventFilter(self)
+    
+    def close_shutdown_popout(self):
+        """Close the shutdown popout and reset button state"""
+        if hasattr(self, 'shutdown_popout'):
+            self.shutdown_popout.hide()
+            self.shutdown_popout.reset_shutdown_state()
+        
+        # Reset button color to neutral
+        self.set_shutdown_exit_button_color("neutral")
+        
+        # Remove event filter
+        QApplication.instance().removeEventFilter(self)
+    
+    def set_shutdown_exit_button_color(self, color):
+        """Set the shutdown/exit button color"""
+        if color == "neutral":
+            self.shutdown_exit_button.setStyleSheet("""
+                QPushButton {
+                    font-family: Quicksand;
+                    font-size: 20px;
+                    font-weight: bold;
+                    padding: 8px 16px;
+                    background-color: #e0e0e0;
+                    border: none;
+                    border-radius: 5px;
+                }
+                QPushButton:hover {
+                    background-color: #d0d0d0;
+                }
+                QPushButton:pressed {
+                    background-color: #c0c0c0;
+                    padding-bottom: 7px;
+                }
+            """)
+        elif color == "active":
+            self.shutdown_exit_button.setStyleSheet("""
+                QPushButton {
+                    font-family: Quicksand;
+                    font-size: 20px;
+                    font-weight: bold;
+                    padding: 8px 16px;
+                    background-color: #c8c8c8;
+                    border: none;
+                    border-radius: 5px;
+                }
+                QPushButton:hover {
+                    background-color: #b8b8b8;
+                }
+                QPushButton:pressed {
+                    background-color: #a8a8a8;
+                    padding-bottom: 7px;
+                }
+            """)
+    
+    def exit_to_desktop(self):
+        """Exit the application to desktop"""
+        QApplication.instance().quit()
+    
+    def on_shutdown_button_clicked(self):
+        """Handle shutdown button click with two-stage confirmation"""
+        if not self.shutdown_popout.shutdown_confirmed:
+            # First click: set to confirmation state (red)
+            self.shutdown_popout.set_shutdown_confirm_state()
+        else:
+            # Second click: actually perform shutdown
+            self.perform_system_shutdown()
+    
+    def perform_system_shutdown(self):
+        """Perform system shutdown"""
+        # Close the popout
+        self.close_shutdown_popout()
+        
+        # Execute shutdown command for Windows
+        os.system("shutdown /s /t 0")
+    
     def create_title_bar(self, button_widget, countdown_label=None):
         """Create a title bar with the given button on the right"""
         title_bar = QWidget()
@@ -1350,7 +1591,7 @@ class MainWindow(QMainWindow):
         content_layout.addStretch()
         content_layout.addSpacing(-30)  # Move buttons up
         
-        # Add IP and Update buttons at bottom left
+        # Add IP and Update buttons at bottom left, Shutdown/Exit button at bottom right
         ip_button_layout = QHBoxLayout()
         ip_button_layout.setContentsMargins(20, 10, 40, 20)
         
@@ -1402,6 +1643,29 @@ class MainWindow(QMainWindow):
         ip_button_layout.addWidget(self.update_button)
         
         ip_button_layout.addStretch()
+        
+        # Add Shutdown/Exit button at bottom right
+        self.shutdown_exit_button = QPushButton("Shutdown / Exit")
+        self.shutdown_exit_button.setStyleSheet("""
+            QPushButton {
+                font-family: Quicksand;
+                font-size: 20px;
+                font-weight: bold;
+                padding: 8px 16px;
+                background-color: #e0e0e0;
+                border: none;
+                border-radius: 5px;
+            }
+            QPushButton:hover {
+                background-color: #d0d0d0;
+            }
+            QPushButton:pressed {
+                background-color: #c0c0c0;
+                padding-bottom: 7px;
+            }
+        """)
+        self.shutdown_exit_button.clicked.connect(self.on_shutdown_exit_button_clicked)
+        ip_button_layout.addWidget(self.shutdown_exit_button)
         
         content_layout.addLayout(ip_button_layout)
         
