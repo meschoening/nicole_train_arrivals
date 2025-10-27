@@ -1179,7 +1179,7 @@ class MainWindow(QMainWindow):
         self.close_shutdown_popout()
         
         # Execute shutdown command for Windows
-        os.system("shutdown /s /t 0")
+        os.system("sudo shutdown now")
     
     def create_title_bar(self, button_widget, countdown_label=None):
         """Create a title bar with the given button on the right"""
