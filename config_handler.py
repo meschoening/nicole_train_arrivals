@@ -4,7 +4,8 @@ import os
 CONFIG_FILE = "config.json"
 
 DEFAULT_CONFIG = {
-    "api_key": ""
+    "api_key": "",
+    "show_clock": True
 }
 
 

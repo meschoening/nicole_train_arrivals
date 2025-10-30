@@ -1,4 +1,4 @@
-from PyQt5.QtWidgets import QApplication, QMainWindow, QVBoxLayout, QHBoxLayout, QLabel, QWidget, QPushButton, QStackedWidget, QComboBox, QCheckBox, QPlainTextEdit
+from PyQt5.QtWidgets import QApplication, QMainWindow, QVBoxLayout, QHBoxLayout, QGridLayout, QLabel, QWidget, QPushButton, QStackedWidget, QComboBox, QCheckBox, QPlainTextEdit, QSizePolicy
 from PyQt5.QtCore import QSize, Qt, QTimer, QEvent, QProcess
 from PyQt5.QtGui import QFontDatabase, QColor, QPalette, QPixmap, QPainter, QIcon
 from MetroAPI import MetroAPI, MetroAPIError
@@ -281,7 +281,19 @@ class MainWindow(QMainWindow):
         QFontDatabase.addApplicationFont("assets/Quicksand-Bold.ttf")
 
         # self.setFixedSize(QSize(1024,600))  # Commented out for fullscreen mode
-        self.setWindowTitle("Test")
+        self.setWindowTitle("Nicole's Train Tables")
+
+        # Set window icon to train emoji
+        pixmap = QPixmap(128, 128)
+        pixmap.fill(Qt.transparent)
+        painter = QPainter(pixmap)
+        painter.setFont(QFontDatabase.systemFont(QFontDatabase.GeneralFont))
+        font = painter.font()
+        font.setPointSize(96)
+        painter.setFont(font)
+        painter.drawText(pixmap.rect(), Qt.AlignCenter, "🚆")
+        painter.end()
+        self.setWindowIcon(QIcon(pixmap))
 
         # Create main widget with stacked layout
         self.stack = QStackedWidget()
@@ -543,6 +555,9 @@ class MainWindow(QMainWindow):
         # Save countdown visibility setting
         config_handler.save_config('show_countdown', self.show_countdown_checkbox.isChecked())
         
+        # Save clock visibility setting
+        config_handler.save_config('show_clock', self.show_clock_checkbox.isChecked())
+        
         # Save filter by direction setting
         config_handler.save_config('filter_by_direction', self.filter_by_direction_checkbox.isChecked())
         
@@ -573,6 +588,12 @@ class MainWindow(QMainWindow):
             self.refresh_countdown_label.show()
         else:
             self.refresh_countdown_label.hide()
+        
+        # Load and apply clock visibility setting
+        show_clock = config.get('show_clock', True)  # Default to True
+        self.show_clock_checkbox.setChecked(show_clock)
+        if hasattr(self, 'clock_label'):
+            self.clock_label.setVisible(show_clock)
         
         # Load and apply filter by direction setting
         filter_by_direction = config.get('filter_by_direction', False)  # Default to False (show all)
@@ -803,6 +824,18 @@ class MainWindow(QMainWindow):
             self.refresh_countdown_label.show()
         else:
             self.refresh_countdown_label.hide()
+
+    def update_clock(self):
+        """Update the centered clock label with current time"""
+        now = datetime.now()
+        # 12-hour format with AM/PM, remove leading zero on hour
+        if hasattr(self, 'clock_label'):
+            self.clock_label.setText(now.strftime("%I:%M %p").lstrip('0'))
+
+    def toggle_clock_visibility(self):
+        """Toggle the visibility of the centered clock label"""
+        if hasattr(self, 'clock_label') and hasattr(self, 'show_clock_checkbox'):
+            self.clock_label.setVisible(self.show_clock_checkbox.isChecked())
     
     def show_ip_popout(self):
         """Show the IP popout near the IP button"""
@@ -1181,32 +1214,56 @@ class MainWindow(QMainWindow):
         # Execute shutdown command for RasPi
         os.system("sudo shutdown now")
     
-    def create_title_bar(self, button_widget, countdown_label=None):
-        """Create a title bar with the given button on the right"""
+    def create_title_bar(self, button_widget, countdown_label=None, center_widget=None):
+        """Create a title bar with fixed center widget regardless of left/right widths"""
         title_bar = QWidget()
         title_bar.setStyleSheet("background-color: lightgray;")
         title_bar.setFixedHeight(75)
-        
-        title_bar_layout = QHBoxLayout()
-        title_bar_layout.setContentsMargins(20, 0, 20, 0)
-        
-        # Add title label
+
+        grid = QGridLayout()
+        grid.setContentsMargins(20, 0, 20, 0)
+        grid.setHorizontalSpacing(0)
+
+        # Left: Title label
+        left_container = QWidget()
+        left_layout = QHBoxLayout()
+        left_layout.setContentsMargins(0, 0, 0, 0)
+        left_layout.setSpacing(0)
         title_label = QLabel("Nicole's Train Tables")
         title_label.setStyleSheet("font-family: Quicksand; font-size: 30px; font-weight: bold;")
-        title_bar_layout.addWidget(title_label, alignment=Qt.AlignVCenter)
-        
-        # Add stretch to push items to the right
-        title_bar_layout.addStretch()
-        
-        # Add countdown label if provided
+        left_layout.addWidget(title_label, alignment=Qt.AlignVCenter | Qt.AlignLeft)
+        left_container.setLayout(left_layout)
+
+        # Center: Optional center widget (clock)
+        center_container = QWidget()
+        center_layout = QHBoxLayout()
+        center_layout.setContentsMargins(0, 0, 0, 0)
+        center_layout.setSpacing(0)
+        if center_widget:
+            center_layout.addWidget(center_widget, alignment=Qt.AlignCenter)
+        center_container.setLayout(center_layout)
+
+        # Right: Countdown (optional) + button
+        right_container = QWidget()
+        right_layout = QHBoxLayout()
+        right_layout.setContentsMargins(0, 0, 0, 0)
+        right_layout.setSpacing(10)
+        right_layout.addStretch()
         if countdown_label:
-            title_bar_layout.addWidget(countdown_label, alignment=Qt.AlignVCenter)
-            title_bar_layout.addSpacing(15)
-        
-        # Add button
-        title_bar_layout.addWidget(button_widget, alignment=Qt.AlignVCenter)
-        
-        title_bar.setLayout(title_bar_layout)
+            right_layout.addWidget(countdown_label, alignment=Qt.AlignVCenter | Qt.AlignRight)
+        right_layout.addWidget(button_widget, alignment=Qt.AlignVCenter | Qt.AlignRight)
+        right_container.setLayout(right_layout)
+
+        grid.addWidget(left_container, 0, 0)
+        grid.addWidget(center_container, 0, 1)
+        grid.addWidget(right_container, 0, 2)
+
+        # Equal stretch on left and right, center fixed to its size
+        grid.setColumnStretch(0, 1)
+        grid.setColumnStretch(1, 0)
+        grid.setColumnStretch(2, 1)
+
+        title_bar.setLayout(grid)
         return title_bar
     
     def create_home_page(self):
@@ -1218,9 +1275,21 @@ class MainWindow(QMainWindow):
         
         # Create countdown label
         self.refresh_countdown_label = QLabel("Refresh in 30s")
-        self.refresh_countdown_label.setStyleSheet("font-family: Quicksand; font-size: 14px; color: #666;")
+        self.refresh_countdown_label.setStyleSheet("font-family: Quicksand; font-size: 14px; color: #666; padding: 0px;")
         self.refresh_countdown_label.setMaximumWidth(500)  # Prevent overlap with title and buttons
-        self.refresh_countdown_label.setWordWrap(True)  # Allow text to wrap to multiple lines
+        self.refresh_countdown_label.setWordWrap(False)
+        self.refresh_countdown_label.setSizePolicy(QSizePolicy.Maximum, QSizePolicy.Preferred)
+        self.refresh_countdown_label.setContentsMargins(0, 0, 0, 0)
+        self.refresh_countdown_label.setMargin(0)
+        self.refresh_countdown_label.setIndent(0)
+        
+        # Create clock label and timer
+        self.clock_label = QLabel()
+        self.clock_label.setStyleSheet("font-family: Quicksand; font-size: 30px; font-weight: bold;")
+        self.update_clock()
+        self.clock_timer = QTimer()
+        self.clock_timer.timeout.connect(self.update_clock)
+        self.clock_timer.start(1000)
         
         # Create settings button
         settings_button = QPushButton("⚙")
@@ -1278,8 +1347,8 @@ class MainWindow(QMainWindow):
         buttons_layout.addWidget(close_button)
         buttons_container.setLayout(buttons_layout)
         
-        # Add title bar
-        layout.addWidget(self.create_title_bar(buttons_container, self.refresh_countdown_label))
+        # Add title bar with centered clock
+        layout.addWidget(self.create_title_bar(buttons_container, self.refresh_countdown_label, self.clock_label))
         
         # Add content
         content_layout = QVBoxLayout()
@@ -1554,6 +1623,28 @@ class MainWindow(QMainWindow):
         
         content_layout.addLayout(countdown_checkbox_layout)
         
+        # Add clock visibility checkbox
+        clock_checkbox_layout = QHBoxLayout()
+        clock_checkbox_layout.setContentsMargins(40, 20, 40, 0)
+        
+        clock_checkbox_layout.addStretch()
+        
+        clock_label = QLabel("Show Clock in Top Bar:")
+        clock_label.setStyleSheet("font-family: Quicksand; font-size: 21px; font-weight: bold;")
+        clock_checkbox_layout.addWidget(clock_label)
+        
+        self.show_clock_checkbox = QCheckBox()
+        self.show_clock_checkbox.setStyleSheet(self.show_countdown_checkbox.styleSheet())
+        # Default checked; real value loaded in initialize_settings_from_config
+        self.show_clock_checkbox.setChecked(True)
+        self.show_clock_checkbox.stateChanged.connect(self.toggle_clock_visibility)
+        self.show_clock_checkbox.stateChanged.connect(self.mark_settings_changed)
+        clock_checkbox_layout.addWidget(self.show_clock_checkbox)
+        
+        clock_checkbox_layout.addStretch()
+        
+        content_layout.addLayout(clock_checkbox_layout)
+        
         # Add filter by direction checkbox
         filter_checkbox_layout = QHBoxLayout()
         filter_checkbox_layout.setContentsMargins(40, 20, 40, 0)
@@ -1753,6 +1844,11 @@ except MetroAPIError:
 app = QApplication([])
 
 window = MainWindow()
-window.showFullScreen()
+screen_size = app.primaryScreen().size()
+if screen_size.width() == 1024 and screen_size.height() == 600:
+    window.showFullScreen()
+else:
+    window.setFixedSize(1024, 600)
+    window.show()
 
 app.exec()
