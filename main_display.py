@@ -1410,15 +1410,30 @@ class MainWindow(QMainWindow):
         settings_label.setStyleSheet("font-family: Quicksand; font-size: 28px; font-weight: bold;")
         settings_label.setAlignment(Qt.AlignCenter)
         content_layout.addWidget(settings_label)
-        
+        content_layout.addSpacing(10)
+
+        controls_layout = QHBoxLayout()
+        controls_layout.setContentsMargins(40, 20, 40, 0)
+        controls_layout.setSpacing(80)
+
+        selectors_column_layout = QVBoxLayout()
+        selectors_column_layout.setSpacing(20)
+        selectors_column_layout.setAlignment(Qt.AlignTop)
+
+        checkboxes_column_layout = QVBoxLayout()
+        checkboxes_column_layout.setSpacing(20)
+        checkboxes_column_layout.setAlignment(Qt.AlignTop)
+
+        selectors_label_width = 180
+        checkboxes_label_width = 300
+
         # Add line selector
         line_selector_layout = QHBoxLayout()
-        line_selector_layout.setContentsMargins(40, 20, 40, 0)
-        
-        line_selector_layout.addStretch()
+        line_selector_layout.setContentsMargins(0, 0, 0, 0)
         
         line_label = QLabel("Select Line:")
         line_label.setStyleSheet("font-family: Quicksand; font-size: 21px; font-weight: bold;")
+        line_label.setFixedWidth(selectors_label_width)
         line_selector_layout.addWidget(line_label)
         
         self.line_combo = QComboBox()
@@ -1462,24 +1477,16 @@ class MainWindow(QMainWindow):
         self.line_combo.currentIndexChanged.connect(self.mark_settings_changed)
         
         line_selector_layout.addWidget(self.line_combo)
-        
-        # Add disclaimer label
-        line_disclaimer_label = QLabel("(for finding station only)")
-        line_disclaimer_label.setStyleSheet("font-family: Quicksand; font-size: 14px; color: #666;")
-        line_selector_layout.addWidget(line_disclaimer_label)
-        
         line_selector_layout.addStretch()
-        
-        content_layout.addLayout(line_selector_layout)
+        selectors_column_layout.addLayout(line_selector_layout)
         
         # Add station selector
         station_selector_layout = QHBoxLayout()
-        station_selector_layout.setContentsMargins(40, 20, 40, 0)
-        
-        station_selector_layout.addStretch()
+        station_selector_layout.setContentsMargins(0, 0, 0, 0)
         
         station_label = QLabel("Select Station:")
         station_label.setStyleSheet("font-family: Quicksand; font-size: 21px; font-weight: bold;")
+        station_label.setFixedWidth(selectors_label_width)
         station_selector_layout.addWidget(station_label)
         
         self.station_combo = QComboBox()
@@ -1524,17 +1531,15 @@ class MainWindow(QMainWindow):
         
         station_selector_layout.addWidget(self.station_combo)
         station_selector_layout.addStretch()
-        
-        content_layout.addLayout(station_selector_layout)
+        selectors_column_layout.addLayout(station_selector_layout)
         
         # Add direction selector
         direction_selector_layout = QHBoxLayout()
-        direction_selector_layout.setContentsMargins(40, 20, 40, 0)
-        
-        direction_selector_layout.addStretch()
+        direction_selector_layout.setContentsMargins(0, 0, 0, 0)
         
         direction_label = QLabel("Select Direction:")
         direction_label.setStyleSheet("font-family: Quicksand; font-size: 21px; font-weight: bold;")
+        direction_label.setFixedWidth(selectors_label_width)
         direction_selector_layout.addWidget(direction_label)
         
         self.direction_combo = QComboBox()
@@ -1579,17 +1584,15 @@ class MainWindow(QMainWindow):
         
         direction_selector_layout.addWidget(self.direction_combo)
         direction_selector_layout.addStretch()
-        
-        content_layout.addLayout(direction_selector_layout)
+        selectors_column_layout.addLayout(direction_selector_layout)
         
         # Add countdown visibility checkbox
         countdown_checkbox_layout = QHBoxLayout()
-        countdown_checkbox_layout.setContentsMargins(40, 20, 40, 0)
-        
-        countdown_checkbox_layout.addStretch()
+        countdown_checkbox_layout.setContentsMargins(0, 0, 0, 0)
         
         countdown_label = QLabel("Show Time to Refresh:")
         countdown_label.setStyleSheet("font-family: Quicksand; font-size: 21px; font-weight: bold;")
+        countdown_label.setFixedWidth(checkboxes_label_width)
         countdown_checkbox_layout.addWidget(countdown_label)
         
         self.show_countdown_checkbox = QCheckBox()
@@ -1620,17 +1623,15 @@ class MainWindow(QMainWindow):
         
         countdown_checkbox_layout.addWidget(self.show_countdown_checkbox)
         countdown_checkbox_layout.addStretch()
-        
-        content_layout.addLayout(countdown_checkbox_layout)
+        checkboxes_column_layout.addLayout(countdown_checkbox_layout)
         
         # Add clock visibility checkbox
         clock_checkbox_layout = QHBoxLayout()
-        clock_checkbox_layout.setContentsMargins(40, 20, 40, 0)
-        
-        clock_checkbox_layout.addStretch()
+        clock_checkbox_layout.setContentsMargins(0, 0, 0, 0)
         
         clock_label = QLabel("Show Clock in Top Bar:")
         clock_label.setStyleSheet("font-family: Quicksand; font-size: 21px; font-weight: bold;")
+        clock_label.setFixedWidth(checkboxes_label_width)
         clock_checkbox_layout.addWidget(clock_label)
         
         self.show_clock_checkbox = QCheckBox()
@@ -1640,19 +1641,16 @@ class MainWindow(QMainWindow):
         self.show_clock_checkbox.stateChanged.connect(self.toggle_clock_visibility)
         self.show_clock_checkbox.stateChanged.connect(self.mark_settings_changed)
         clock_checkbox_layout.addWidget(self.show_clock_checkbox)
-        
         clock_checkbox_layout.addStretch()
-        
-        content_layout.addLayout(clock_checkbox_layout)
+        checkboxes_column_layout.addLayout(clock_checkbox_layout)
         
         # Add filter by direction checkbox
         filter_checkbox_layout = QHBoxLayout()
-        filter_checkbox_layout.setContentsMargins(40, 20, 40, 0)
-        
-        filter_checkbox_layout.addStretch()
+        filter_checkbox_layout.setContentsMargins(0, 0, 0, 0)
         
         filter_label = QLabel("Filter by Selected Direction:")
         filter_label.setStyleSheet("font-family: Quicksand; font-size: 21px; font-weight: bold;")
+        filter_label.setFixedWidth(checkboxes_label_width)
         filter_checkbox_layout.addWidget(filter_label)
         
         self.filter_by_direction_checkbox = QCheckBox()
@@ -1683,13 +1681,77 @@ class MainWindow(QMainWindow):
         
         filter_checkbox_layout.addWidget(self.filter_by_direction_checkbox)
         filter_checkbox_layout.addStretch()
+        checkboxes_column_layout.addLayout(filter_checkbox_layout)
         
-        content_layout.addLayout(filter_checkbox_layout)
+        controls_layout.addLayout(selectors_column_layout)
+        controls_layout.addStretch()
+        controls_layout.addLayout(checkboxes_column_layout)
+        content_layout.addLayout(controls_layout)
         
-        # Add save button
-        save_button_layout = QHBoxLayout()
-        save_button_layout.setContentsMargins(40, 20, 40, 0)
-        save_button_layout.addStretch()
+        # Add stretch to push bottom elements down
+        content_layout.addStretch()
+        
+        # Bottom row with all buttons
+        bottom_row_layout = QHBoxLayout()
+        bottom_row_layout.setContentsMargins(20, 0, 20, 20)
+        bottom_row_layout.setSpacing(10)
+        
+        # Left section: IP and Update buttons
+        left_buttons_layout = QHBoxLayout()
+        left_buttons_layout.setSpacing(10)
+        
+        self.ip_button = QPushButton("ⓘ")
+        self.ip_button.setStyleSheet("""
+            QPushButton {
+                font-family: Quicksand;
+                font-size: 20px;
+                font-weight: bold;
+                padding: 8px 12px;
+                background-color: #e0e0e0;
+                border: none;
+                border-radius: 5px;
+            }
+            QPushButton:hover {
+                background-color: #d0d0d0;
+            }
+            QPushButton:pressed {
+                background-color: #c0c0c0;
+                padding-bottom: 7px;
+            }
+        """)
+        self.ip_button.installEventFilter(self)
+        left_buttons_layout.addWidget(self.ip_button, alignment=Qt.AlignBottom)
+        
+        self.update_button = QPushButton("Update")
+        self.update_button.setStyleSheet("""
+            QPushButton {
+                font-family: Quicksand;
+                font-size: 20px;
+                font-weight: bold;
+                padding: 8px 16px;
+                background-color: #4CAF50;
+                color: white;
+                border: none;
+                border-radius: 5px;
+            }
+            QPushButton:hover {
+                background-color: #45a049;
+            }
+            QPushButton:pressed {
+                background-color: #3d8b40;
+                padding-bottom: 7px;
+            }
+        """)
+        self.update_button.clicked.connect(self.on_update_button_clicked)
+        left_buttons_layout.addWidget(self.update_button, alignment=Qt.AlignBottom)
+        
+        bottom_row_layout.addLayout(left_buttons_layout)
+        bottom_row_layout.addStretch()
+        
+        # Center section: Save Settings button with timestamp label below it
+        center_section_layout = QVBoxLayout()
+        center_section_layout.setSpacing(5)
+        center_section_layout.setAlignment(Qt.AlignCenter)
         
         save_button = QPushButton("Save Settings")
         save_button.setStyleSheet("""
@@ -1712,90 +1774,29 @@ class MainWindow(QMainWindow):
             }
         """)
         save_button.clicked.connect(self.save_settings)
+        center_section_layout.addWidget(save_button, alignment=Qt.AlignCenter)
         
-        save_button_layout.addWidget(save_button)
-        save_button_layout.addStretch()
-        
-        content_layout.addLayout(save_button_layout)
-        
-        # Add timestamp label below the save button
-        timestamp_layout = QHBoxLayout()
-        timestamp_layout.setContentsMargins(40, 10, 40, 0)
-        timestamp_layout.addStretch()
+        # Add timestamp/warning labels container below save button
+        labels_container = QHBoxLayout()
+        labels_container.setSpacing(10)
         
         self.timestamp_label = QLabel()
         self.timestamp_label.setStyleSheet("font-family: Quicksand; font-size: 14px; color: #666;")
         self.timestamp_label.setAlignment(Qt.AlignCenter)
         self.update_timestamp_label()
-        timestamp_layout.addWidget(self.timestamp_label)
+        labels_container.addWidget(self.timestamp_label)
         
-        # Add unsaved changes warning label
         self.unsaved_warning_label = QLabel("Changes not yet saved!")
         self.unsaved_warning_label.setStyleSheet("font-family: Quicksand; font-size: 14px; color: #e74c3c;")
         self.unsaved_warning_label.setAlignment(Qt.AlignCenter)
         self.unsaved_warning_label.hide()  # Initially hidden
-        timestamp_layout.addWidget(self.unsaved_warning_label)
+        labels_container.addWidget(self.unsaved_warning_label)
         
-        timestamp_layout.addStretch()
+        center_section_layout.addLayout(labels_container)
+        bottom_row_layout.addLayout(center_section_layout)
+        bottom_row_layout.addStretch()
         
-        content_layout.addLayout(timestamp_layout)
-        content_layout.addStretch()
-        content_layout.addSpacing(-30)  # Move buttons up
-        
-        # Add IP and Update buttons at bottom left, Shutdown/Exit button at bottom right
-        ip_button_layout = QHBoxLayout()
-        ip_button_layout.setContentsMargins(20, 10, 40, 20)
-        
-        self.ip_button = QPushButton("ⓘ")
-        self.ip_button.setStyleSheet("""
-            QPushButton {
-                font-family: Quicksand;
-                font-size: 20px;
-                font-weight: bold;
-                padding: 8px 12px;
-                background-color: #e0e0e0;
-                border: none;
-                border-radius: 5px;
-            }
-            QPushButton:hover {
-                background-color: #d0d0d0;
-            }
-            QPushButton:pressed {
-                background-color: #c0c0c0;
-                padding-bottom: 7px;
-            }
-        """)
-        # Install event filter to detect hover
-        self.ip_button.installEventFilter(self)
-        ip_button_layout.addWidget(self.ip_button)
-        
-        # Add Update button
-        self.update_button = QPushButton("Update")
-        self.update_button.setStyleSheet("""
-            QPushButton {
-                font-family: Quicksand;
-                font-size: 20px;
-                font-weight: bold;
-                padding: 8px 16px;
-                background-color: #4CAF50;
-                color: white;
-                border: none;
-                border-radius: 5px;
-            }
-            QPushButton:hover {
-                background-color: #45a049;
-            }
-            QPushButton:pressed {
-                background-color: #3d8b40;
-                padding-bottom: 7px;
-            }
-        """)
-        self.update_button.clicked.connect(self.on_update_button_clicked)
-        ip_button_layout.addWidget(self.update_button)
-        
-        ip_button_layout.addStretch()
-        
-        # Add Shutdown/Exit button at bottom right
+        # Right section: Shutdown/Exit button
         self.shutdown_exit_button = QPushButton("Shutdown / Exit")
         self.shutdown_exit_button.setStyleSheet("""
             QPushButton {
@@ -1816,9 +1817,9 @@ class MainWindow(QMainWindow):
             }
         """)
         self.shutdown_exit_button.clicked.connect(self.on_shutdown_exit_button_clicked)
-        ip_button_layout.addWidget(self.shutdown_exit_button)
+        bottom_row_layout.addWidget(self.shutdown_exit_button, alignment=Qt.AlignBottom)
         
-        content_layout.addLayout(ip_button_layout)
+        content_layout.addLayout(bottom_row_layout)
         
         content_widget = QWidget()
         content_widget.setLayout(content_layout)
