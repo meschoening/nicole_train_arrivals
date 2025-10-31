@@ -1414,7 +1414,7 @@ class MainWindow(QMainWindow):
 
         controls_layout = QHBoxLayout()
         controls_layout.setContentsMargins(40, 20, 40, 0)
-        controls_layout.setSpacing(80)
+        controls_layout.setSpacing(0)  # Set to 0, will manually add spacing for separator
 
         selectors_column_layout = QVBoxLayout()
         selectors_column_layout.setSpacing(20)
@@ -1684,7 +1684,19 @@ class MainWindow(QMainWindow):
         checkboxes_column_layout.addLayout(filter_checkbox_layout)
         
         controls_layout.addLayout(selectors_column_layout)
-        controls_layout.addStretch()
+        
+        # Add spacing before separator (half of the gap minus half of separator width)
+        controls_layout.addSpacing(40)  # Half of the 80px spacing
+        
+        # Add vertical separator line between columns
+        separator_line = QWidget()
+        separator_line.setStyleSheet("background-color: #d0d0d0;")
+        separator_line.setFixedWidth(1)
+        controls_layout.addWidget(separator_line)
+        
+        # Add spacing after separator (half of the gap minus half of separator width)
+        controls_layout.addSpacing(39)  # 40 - 1px for separator width = 39 to total 80px
+        
         controls_layout.addLayout(checkboxes_column_layout)
         content_layout.addLayout(controls_layout)
         
