@@ -1,0 +1,32 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Device Home</title>
+    <style>
+      body { font-family: sans-serif; margin: 0; padding: 0; }
+      .container { max-width: 720px; margin: 0 auto; padding: 24px; }
+      h2 { margin: 16px 0 24px; }
+      .buttons { display: flex; flex-direction: column; gap: 16px; }
+      .buttons a { text-decoration: none; }
+      .btn {
+        display: inline-block; padding: 12px 18px; border-radius: 6px;
+        background: #f0f0f0; color: #000; font-weight: 700; border: 1px solid #ddd;
+      }
+      .btn:hover { background: #e6e6e6; }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <h2>Nicole's Train Tracker: Remote Control Dashboard</h2>
+      <div style="color:#666;margin:8px 0 16px;">Device IP: {{ device_ip }}</div>
+      <div class="buttons">
+        <a href="{{ url_for('get_settings') }}" class="btn">Open Settings</a>
+        <a href="{{ url_for('get_update') }}" class="btn">Update Software</a>
+      </div>
+    </div>
+  </body>
+  </html>
+
+
