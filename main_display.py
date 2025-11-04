@@ -1,4 +1,4 @@
-from PyQt5.QtWidgets import QApplication, QMainWindow, QVBoxLayout, QHBoxLayout, QGridLayout, QLabel, QWidget, QPushButton, QStackedWidget, QComboBox, QCheckBox, QPlainTextEdit, QSizePolicy
+from PyQt5.QtWidgets import QApplication, QMainWindow, QVBoxLayout, QHBoxLayout, QGridLayout, QLabel, QWidget, QPushButton, QStackedWidget, QComboBox, QCheckBox, QPlainTextEdit, QSizePolicy, QSlider
 from PyQt5.QtCore import QSize, Qt, QTimer, QEvent, QProcess
 from PyQt5.QtGui import QFontDatabase, QColor, QPalette, QPixmap, QPainter, QIcon
 from MetroAPI import MetroAPI, MetroAPIError
@@ -139,6 +139,100 @@ class UpdatePopout(QWidget):
     def clear_output(self):
         """Clear the output area"""
         self.output_text.clear()
+
+class RebootWarningOverlay(QWidget):
+    """A fullscreen modal overlay that displays reboot countdown warning"""
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setWindowFlags(Qt.Window | Qt.FramelessWindowHint | Qt.WindowStaysOnTopHint)
+        self.setAttribute(Qt.WA_TranslucentBackground, True)
+        
+        # Main layout
+        main_layout = QVBoxLayout()
+        main_layout.setContentsMargins(0, 0, 0, 0)
+        
+        # Semi-transparent background
+        self.setStyleSheet("background-color: rgba(0, 0, 0, 180);")
+        
+        # Center container
+        center_container = QWidget()
+        center_container.setStyleSheet("""
+            QWidget {
+                background-color: #f44336;
+                border: 3px solid #c62828;
+                border-radius: 15px;
+            }
+        """)
+        center_container.setFixedSize(600, 300)
+        
+        center_layout = QVBoxLayout()
+        center_layout.setContentsMargins(40, 40, 40, 40)
+        center_layout.setSpacing(20)
+        
+        # Warning icon/text
+        warning_label = QLabel("⚠ REBOOT WARNING ⚠")
+        warning_label.setStyleSheet("""
+            font-family: Quicksand;
+            font-size: 32px;
+            font-weight: bold;
+            color: white;
+        """)
+        warning_label.setAlignment(Qt.AlignCenter)
+        center_layout.addWidget(warning_label)
+        
+        # Countdown message
+        self.countdown_label = QLabel("System will reboot in 60 seconds")
+        self.countdown_label.setStyleSheet("""
+            font-family: Quicksand;
+            font-size: 24px;
+            font-weight: bold;
+            color: white;
+        """)
+        self.countdown_label.setAlignment(Qt.AlignCenter)
+        self.countdown_label.setWordWrap(True)
+        center_layout.addWidget(self.countdown_label)
+        
+        center_layout.addSpacing(10)
+        
+        # Cancel button
+        self.cancel_button = QPushButton("Cancel Reboot")
+        self.cancel_button.setStyleSheet("""
+            QPushButton {
+                font-family: Quicksand;
+                font-size: 22px;
+                font-weight: bold;
+                padding: 15px 40px;
+                background-color: white;
+                color: #f44336;
+                border: none;
+                border-radius: 8px;
+            }
+            QPushButton:hover {
+                background-color: #f0f0f0;
+            }
+            QPushButton:pressed {
+                background-color: #e0e0e0;
+                padding-bottom: 14px;
+            }
+        """)
+        center_layout.addWidget(self.cancel_button, alignment=Qt.AlignCenter)
+        
+        center_container.setLayout(center_layout)
+        
+        # Add center container to main layout with centering
+        main_layout.addStretch()
+        container_holder = QHBoxLayout()
+        container_holder.addStretch()
+        container_holder.addWidget(center_container)
+        container_holder.addStretch()
+        main_layout.addLayout(container_holder)
+        main_layout.addStretch()
+        
+        self.setLayout(main_layout)
+    
+    def update_countdown(self, seconds):
+        """Update the countdown display"""
+        self.countdown_label.setText(f"System will reboot in {seconds} seconds")
 
 class ShutdownPopout(QWidget):
     """A popout widget that displays shutdown and exit options"""
@@ -281,7 +375,7 @@ class MainWindow(QMainWindow):
         QFontDatabase.addApplicationFont("assets/Quicksand-Bold.ttf")
 
         # self.setFixedSize(QSize(1024,600))  # Commented out for fullscreen mode
-        self.setWindowTitle("Nicole's Train Tables")
+        self.setWindowTitle("Nicole's Train Tracker!")
 
         # Set window icon to train emoji
         pixmap = QPixmap(128, 128)
@@ -338,6 +432,16 @@ class MainWindow(QMainWindow):
         self.checking_animation_timer = QTimer()
         self.checking_animation_timer.timeout.connect(self.update_checking_animation)
         self.checking_animation_state = 0
+        
+        # Reboot scheduling
+        self.reboot_check_timer = QTimer()
+        self.reboot_check_timer.timeout.connect(self.check_reboot_schedule)
+        self.reboot_check_timer.start(1000)  # Check every second
+        
+        self.reboot_countdown_timer = None
+        self.reboot_countdown_seconds = 0
+        self.reboot_warning_overlay = None
+        self.reboot_scheduled_for_today = False  # Track if we already triggered reboot today
     
     def eventFilter(self, obj, event):
         """Event filter to handle hover events on IP button and clicks outside shutdown popout"""
@@ -561,6 +665,23 @@ class MainWindow(QMainWindow):
         # Save filter by direction setting
         config_handler.save_config('filter_by_direction', self.filter_by_direction_checkbox.isChecked())
         
+        # Save reboot settings
+        config_handler.save_config('reboot_enabled', self.reboot_enabled_checkbox.isChecked())
+        
+        # Build time string from dropdowns (format: "h:mm AP")
+        hour = self.reboot_hour_combo.currentText()
+        minute = self.reboot_minute_combo.currentText()
+        ampm = self.reboot_ampm_combo.currentText()
+        time_str = f"{hour}:{minute} {ampm}"
+        config_handler.save_config('reboot_time', time_str)
+        
+        # Save screen sleep settings
+        config_handler.save_config('screen_sleep_enabled', self.screen_sleep_enabled_checkbox.isChecked())
+        config_handler.save_config('screen_sleep_minutes', self.screen_sleep_slider.value())
+        
+        # Apply screen sleep settings to system
+        self.apply_screen_sleep_settings()
+        
         # Update the timestamp label
         self.update_timestamp_label()
         
@@ -598,6 +719,52 @@ class MainWindow(QMainWindow):
         # Load and apply filter by direction setting
         filter_by_direction = config.get('filter_by_direction', False)  # Default to False (show all)
         self.filter_by_direction_checkbox.setChecked(filter_by_direction)
+        
+        # Load and apply reboot settings
+        reboot_enabled = config.get('reboot_enabled', False)
+        self.reboot_enabled_checkbox.setChecked(reboot_enabled)
+        
+        # Parse reboot time and set dropdowns
+        reboot_time_str = config.get('reboot_time', '12:00 AM')
+        try:
+            # Parse time string (format: "h:mm AP")
+            reboot_time = datetime.strptime(reboot_time_str, '%I:%M %p')
+            
+            # Set hour dropdown (1-12)
+            hour = reboot_time.hour
+            if hour == 0:
+                hour = 12
+            elif hour > 12:
+                hour = hour - 12
+            hour_index = self.reboot_hour_combo.findText(str(hour))
+            if hour_index >= 0:
+                self.reboot_hour_combo.setCurrentIndex(hour_index)
+            
+            # Set minute dropdown (00-59)
+            minute_str = f"{reboot_time.minute:02d}"
+            minute_index = self.reboot_minute_combo.findText(minute_str)
+            if minute_index >= 0:
+                self.reboot_minute_combo.setCurrentIndex(minute_index)
+            
+            # Set AM/PM dropdown
+            ampm = reboot_time.strftime('%p')
+            ampm_index = self.reboot_ampm_combo.findText(ampm)
+            if ampm_index >= 0:
+                self.reboot_ampm_combo.setCurrentIndex(ampm_index)
+        except ValueError:
+            # If parsing fails, use defaults (already set)
+            pass
+        
+        # Load and apply screen sleep settings
+        screen_sleep_enabled = config.get('screen_sleep_enabled', False)
+        self.screen_sleep_enabled_checkbox.setChecked(screen_sleep_enabled)
+        
+        screen_sleep_minutes = config.get('screen_sleep_minutes', 5)
+        self.screen_sleep_slider.setValue(screen_sleep_minutes)
+        self.update_screen_sleep_label()
+        
+        # Apply screen sleep settings to system on startup
+        self.apply_screen_sleep_settings()
 
         # Populate lines
         lines_data = data_handler.get_cached_lines()
@@ -836,6 +1003,12 @@ class MainWindow(QMainWindow):
         """Toggle the visibility of the centered clock label"""
         if hasattr(self, 'clock_label') and hasattr(self, 'show_clock_checkbox'):
             self.clock_label.setVisible(self.show_clock_checkbox.isChecked())
+    
+    def update_screen_sleep_label(self):
+        """Update the screen sleep label to show current slider value"""
+        if hasattr(self, 'screen_sleep_slider') and hasattr(self, 'screen_sleep_value_label'):
+            minutes = self.screen_sleep_slider.value()
+            self.screen_sleep_value_label.setText(f"Screen Sleep Timeout: {minutes} min")
     
     def show_ip_popout(self):
         """Show the IP popout near the IP button"""
@@ -1214,6 +1387,131 @@ class MainWindow(QMainWindow):
         # Execute shutdown command for RasPi
         os.system("sudo shutdown now")
     
+    def check_reboot_schedule(self):
+        """Check if it's time to trigger the reboot countdown"""
+        config = config_handler.load_config()
+        reboot_enabled = config.get('reboot_enabled', False)
+        
+        if not reboot_enabled:
+            # Reset the flag when reboot is disabled
+            self.reboot_scheduled_for_today = False
+            return
+        
+        reboot_time_str = config.get('reboot_time', '12:00 AM')
+        
+        try:
+            # Parse the scheduled reboot time
+            reboot_time = datetime.strptime(reboot_time_str, '%I:%M %p').time()
+            
+            # Get current time
+            now = datetime.now()
+            current_time = now.time()
+            
+            # Calculate the time when warning should appear (60 seconds before reboot)
+            warning_datetime = datetime.combine(now.date(), reboot_time)
+            warning_datetime = warning_datetime.replace(second=0, microsecond=0)
+            warning_time = (warning_datetime - datetime.timedelta(seconds=60)).time()
+            
+            # Create time objects for comparison (ignore seconds)
+            current_minute = current_time.replace(second=0, microsecond=0)
+            warning_minute = warning_time.replace(second=0, microsecond=0)
+            
+            # Check if current time matches warning time and we haven't triggered yet today
+            if current_minute == warning_minute and not self.reboot_scheduled_for_today:
+                self.reboot_scheduled_for_today = True
+                self.start_reboot_countdown()
+            
+            # Reset flag at a different hour (to allow next day's reboot)
+            # Reset when we're not within 2 minutes of the scheduled time
+            reboot_minute = reboot_time.replace(second=0, microsecond=0)
+            time_diff = abs((datetime.combine(now.date(), current_minute) - 
+                           datetime.combine(now.date(), reboot_minute)).total_seconds())
+            if time_diff > 120:  # More than 2 minutes away
+                self.reboot_scheduled_for_today = False
+                
+        except (ValueError, AttributeError):
+            # If parsing fails, do nothing
+            pass
+    
+    def start_reboot_countdown(self):
+        """Start the 60-second reboot countdown"""
+        self.reboot_countdown_seconds = 60
+        
+        # Create and show overlay
+        if self.reboot_warning_overlay is None:
+            self.reboot_warning_overlay = RebootWarningOverlay(self)
+            self.reboot_warning_overlay.cancel_button.clicked.connect(self.cancel_reboot)
+        
+        # Set overlay to cover the entire window
+        self.reboot_warning_overlay.setGeometry(self.geometry())
+        self.reboot_warning_overlay.show()
+        self.reboot_warning_overlay.raise_()
+        
+        # Start countdown timer
+        if self.reboot_countdown_timer is None:
+            self.reboot_countdown_timer = QTimer()
+            self.reboot_countdown_timer.timeout.connect(self.update_reboot_countdown)
+        
+        self.reboot_countdown_timer.start(1000)  # Update every second
+    
+    def update_reboot_countdown(self):
+        """Update the reboot countdown each second"""
+        self.reboot_countdown_seconds -= 1
+        
+        if self.reboot_countdown_seconds <= 0:
+            # Time's up, perform reboot
+            self.reboot_countdown_timer.stop()
+            if self.reboot_warning_overlay:
+                self.reboot_warning_overlay.hide()
+            self.perform_system_reboot()
+        else:
+            # Update the overlay display
+            if self.reboot_warning_overlay:
+                self.reboot_warning_overlay.update_countdown(self.reboot_countdown_seconds)
+    
+    def cancel_reboot(self):
+        """Cancel the scheduled reboot"""
+        if self.reboot_countdown_timer:
+            self.reboot_countdown_timer.stop()
+        
+        if self.reboot_warning_overlay:
+            self.reboot_warning_overlay.hide()
+        
+        self.reboot_countdown_seconds = 0
+        # Don't reset reboot_scheduled_for_today so it won't trigger again today
+    
+    def perform_system_reboot(self):
+        """Perform system reboot"""
+        # Execute reboot command for RasPi
+        os.system("sudo shutdown -r now")
+    
+    def apply_screen_sleep_settings(self):
+        """Apply screen sleep settings to the system using xset commands"""
+        config = config_handler.load_config()
+        screen_sleep_enabled = config.get('screen_sleep_enabled', False)
+        screen_sleep_minutes = config.get('screen_sleep_minutes', 5)
+        
+        if screen_sleep_enabled:
+            # Convert minutes to seconds
+            timeout_seconds = screen_sleep_minutes * 60
+            
+            # Enable screen saver with timeout
+            os.system(f"xset s {timeout_seconds}")
+            
+            # Enable DPMS (Display Power Management Signaling) with the same timeout
+            # Format: xset dpms standby suspend off (all in seconds)
+            # We'll use the same timeout for all three stages
+            os.system(f"xset dpms {timeout_seconds} {timeout_seconds} {timeout_seconds}")
+            
+            # Make sure DPMS is enabled
+            os.system("xset +dpms")
+        else:
+            # Disable screen saver
+            os.system("xset s off")
+            
+            # Disable DPMS
+            os.system("xset -dpms")
+    
     def create_title_bar(self, button_widget, countdown_label=None, center_widget=None):
         """Create a title bar with fixed center widget regardless of left/right widths"""
         title_bar = QWidget()
@@ -1229,7 +1527,7 @@ class MainWindow(QMainWindow):
         left_layout = QHBoxLayout()
         left_layout.setContentsMargins(0, 0, 0, 0)
         left_layout.setSpacing(0)
-        title_label = QLabel("Nicole's Train Tables")
+        title_label = QLabel("Nicole's Train Tracker!")
         title_label.setStyleSheet("font-family: Quicksand; font-size: 30px; font-weight: bold;")
         left_layout.addWidget(title_label, alignment=Qt.AlignVCenter | Qt.AlignLeft)
         left_container.setLayout(left_layout)
@@ -1699,6 +1997,233 @@ class MainWindow(QMainWindow):
         
         controls_layout.addLayout(checkboxes_column_layout)
         content_layout.addLayout(controls_layout)
+        
+        # Add horizontal separator line between top settings and reboot section
+        content_layout.addSpacing(10)
+        separator_container = QHBoxLayout()
+        separator_container.setContentsMargins(40, 0, 40, 0)
+        horizontal_separator = QWidget()
+        horizontal_separator.setStyleSheet("background-color: #d0d0d0;")
+        horizontal_separator.setFixedHeight(1)
+        separator_container.addWidget(horizontal_separator)
+        content_layout.addLayout(separator_container)
+        content_layout.addSpacing(10)
+        
+        # Add automatic reboot and screen sleep section below the two-column layout
+        
+        # Main section container with two columns
+        system_settings_layout = QHBoxLayout()
+        system_settings_layout.setContentsMargins(40, 0, 40, 0)
+        system_settings_layout.setSpacing(40)
+        
+        # Left column: Reboot settings
+        reboot_column_layout = QVBoxLayout()
+        reboot_column_layout.setSpacing(15)
+        
+        # First row - Enable reboot checkbox
+        reboot_enable_layout = QHBoxLayout()
+        reboot_enable_layout.setContentsMargins(0, 0, 0, 0)
+        
+        reboot_enable_label = QLabel("Enable Automatic Reboot:")
+        reboot_enable_label.setStyleSheet("font-family: Quicksand; font-size: 21px; font-weight: bold;")
+        reboot_enable_layout.addWidget(reboot_enable_label)
+        
+        self.reboot_enabled_checkbox = QCheckBox()
+        self.reboot_enabled_checkbox.setStyleSheet("""
+            QCheckBox {
+                spacing: 5px;
+            }
+            QCheckBox::indicator {
+                width: 25px;
+                height: 25px;
+                border: 2px solid #ccc;
+                border-radius: 3px;
+                background-color: white;
+            }
+            QCheckBox::indicator:hover {
+                border: 2px solid #999;
+            }
+            QCheckBox::indicator:checked {
+                background-color: #4CAF50;
+                border: 2px solid #4CAF50;
+            }
+        """)
+        self.reboot_enabled_checkbox.setChecked(False)
+        self.reboot_enabled_checkbox.stateChanged.connect(self.mark_settings_changed)
+        reboot_enable_layout.addWidget(self.reboot_enabled_checkbox)
+        reboot_enable_layout.addStretch()
+        
+        reboot_column_layout.addLayout(reboot_enable_layout)
+        
+        # Second row - Reboot time selection
+        reboot_time_layout = QHBoxLayout()
+        reboot_time_layout.setContentsMargins(0, 0, 0, 0)
+        reboot_time_layout.setSpacing(10)
+        
+        reboot_time_label = QLabel("Reboot Time:")
+        reboot_time_label.setStyleSheet("font-family: Quicksand; font-size: 21px; font-weight: bold;")
+        reboot_time_layout.addWidget(reboot_time_label)
+        
+        # Hour dropdown (1-12)
+        self.reboot_hour_combo = QComboBox()
+        self.reboot_hour_combo.setStyleSheet("""
+            QComboBox {
+                font-family: Quicksand;
+                font-size: 18px;
+                padding: 7px;
+                border: 1px solid #ccc;
+                border-radius: 3px;
+                background-color: white;
+            }
+            QComboBox:hover {
+                border: 1px solid #999;
+            }
+            QComboBox QAbstractItemView {
+                font-family: Quicksand;
+                font-size: 18px;
+                background-color: white;
+                selection-background-color: #e0e0e0;
+                selection-color: #000;
+                color: #000;
+            }
+            QComboBox QAbstractItemView::item {
+                color: #000;
+                padding: 5px;
+            }
+            QComboBox QAbstractItemView::item:selected {
+                background-color: #e0e0e0;
+                color: #000;
+            }
+            QComboBox QAbstractItemView::item:hover {
+                background-color: #e0e0e0;
+                color: #000;
+            }
+        """)
+        for hour in range(1, 13):
+            self.reboot_hour_combo.addItem(str(hour))
+        self.reboot_hour_combo.setCurrentIndex(11)  # Default to 12
+        self.reboot_hour_combo.currentIndexChanged.connect(self.mark_settings_changed)
+        reboot_time_layout.addWidget(self.reboot_hour_combo)
+        
+        # Colon separator
+        colon_label = QLabel(":")
+        colon_label.setStyleSheet("font-family: Quicksand; font-size: 21px; font-weight: bold;")
+        reboot_time_layout.addWidget(colon_label)
+        
+        # Minute dropdown (00-59)
+        self.reboot_minute_combo = QComboBox()
+        self.reboot_minute_combo.setStyleSheet(self.reboot_hour_combo.styleSheet())
+        for minute in range(60):
+            self.reboot_minute_combo.addItem(f"{minute:02d}")
+        self.reboot_minute_combo.setCurrentIndex(0)  # Default to 00
+        self.reboot_minute_combo.currentIndexChanged.connect(self.mark_settings_changed)
+        reboot_time_layout.addWidget(self.reboot_minute_combo)
+        
+        # AM/PM dropdown
+        self.reboot_ampm_combo = QComboBox()
+        self.reboot_ampm_combo.setStyleSheet(self.reboot_hour_combo.styleSheet())
+        self.reboot_ampm_combo.addItem("AM")
+        self.reboot_ampm_combo.addItem("PM")
+        self.reboot_ampm_combo.setCurrentIndex(0)  # Default to AM
+        self.reboot_ampm_combo.currentIndexChanged.connect(self.mark_settings_changed)
+        reboot_time_layout.addWidget(self.reboot_ampm_combo)
+        
+        reboot_time_layout.addStretch()
+        reboot_column_layout.addLayout(reboot_time_layout)
+        
+        system_settings_layout.addLayout(reboot_column_layout)
+        
+        # Right column: Screen sleep settings
+        screen_sleep_column_layout = QVBoxLayout()
+        screen_sleep_column_layout.setSpacing(15)
+        
+        # First row - Enable screen sleep checkbox
+        screen_sleep_enable_layout = QHBoxLayout()
+        screen_sleep_enable_layout.setContentsMargins(0, 0, 0, 0)
+        
+        screen_sleep_enable_label = QLabel("Enable Screen Sleep:")
+        screen_sleep_enable_label.setStyleSheet("font-family: Quicksand; font-size: 21px; font-weight: bold;")
+        screen_sleep_enable_layout.addWidget(screen_sleep_enable_label)
+        
+        self.screen_sleep_enabled_checkbox = QCheckBox()
+        self.screen_sleep_enabled_checkbox.setStyleSheet("""
+            QCheckBox {
+                spacing: 5px;
+            }
+            QCheckBox::indicator {
+                width: 25px;
+                height: 25px;
+                border: 2px solid #ccc;
+                border-radius: 3px;
+                background-color: white;
+            }
+            QCheckBox::indicator:hover {
+                border: 2px solid #999;
+            }
+            QCheckBox::indicator:checked {
+                background-color: #4CAF50;
+                border: 2px solid #4CAF50;
+            }
+        """)
+        self.screen_sleep_enabled_checkbox.setChecked(False)
+        self.screen_sleep_enabled_checkbox.stateChanged.connect(self.mark_settings_changed)
+        screen_sleep_enable_layout.addWidget(self.screen_sleep_enabled_checkbox)
+        screen_sleep_enable_layout.addStretch()
+        
+        screen_sleep_column_layout.addLayout(screen_sleep_enable_layout)
+        
+        # Second row - Screen sleep slider
+        screen_sleep_slider_layout = QVBoxLayout()
+        screen_sleep_slider_layout.setContentsMargins(0, 0, 0, 0)
+        screen_sleep_slider_layout.setSpacing(5)
+        
+        # Label showing current value
+        self.screen_sleep_value_label = QLabel("Screen Sleep Timeout: 5 min")
+        self.screen_sleep_value_label.setStyleSheet("font-family: Quicksand; font-size: 21px; font-weight: bold;")
+        screen_sleep_slider_layout.addWidget(self.screen_sleep_value_label)
+        
+        # Slider
+        self.screen_sleep_slider = QSlider(Qt.Horizontal)
+        self.screen_sleep_slider.setMinimum(1)
+        self.screen_sleep_slider.setMaximum(30)
+        self.screen_sleep_slider.setValue(5)
+        self.screen_sleep_slider.setTickPosition(QSlider.TicksBelow)
+        self.screen_sleep_slider.setTickInterval(5)
+        self.screen_sleep_slider.setStyleSheet("""
+            QSlider::groove:horizontal {
+                border: 1px solid #ccc;
+                height: 8px;
+                background: white;
+                margin: 2px 0;
+                border-radius: 4px;
+            }
+            QSlider::handle:horizontal {
+                background: #4CAF50;
+                border: 1px solid #4CAF50;
+                width: 20px;
+                margin: -7px 0;
+                border-radius: 10px;
+            }
+            QSlider::handle:horizontal:hover {
+                background: #45a049;
+                border: 1px solid #45a049;
+            }
+            QSlider::sub-page:horizontal {
+                background: #4CAF50;
+                border: 1px solid #4CAF50;
+                height: 8px;
+                border-radius: 4px;
+            }
+        """)
+        self.screen_sleep_slider.valueChanged.connect(self.update_screen_sleep_label)
+        self.screen_sleep_slider.valueChanged.connect(self.mark_settings_changed)
+        screen_sleep_slider_layout.addWidget(self.screen_sleep_slider)
+        
+        screen_sleep_column_layout.addLayout(screen_sleep_slider_layout)
+        
+        system_settings_layout.addLayout(screen_sleep_column_layout)
+        
+        content_layout.addLayout(system_settings_layout)
         
         # Add stretch to push bottom elements down
         content_layout.addStretch()

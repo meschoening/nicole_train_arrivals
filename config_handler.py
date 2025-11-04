@@ -5,7 +5,11 @@ CONFIG_FILE = "config.json"
 
 DEFAULT_CONFIG = {
     "api_key": "",
-    "show_clock": True
+    "show_clock": True,
+    "reboot_enabled": False,
+    "reboot_time": "12:00 AM",
+    "screen_sleep_enabled": False,
+    "screen_sleep_minutes": 5
 }
 
 
