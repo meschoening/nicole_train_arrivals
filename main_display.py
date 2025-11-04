@@ -8,6 +8,7 @@ import os
 import sys
 import socket
 from datetime import datetime
+from web_settings_server import start_web_settings_server
 
 class IPPopout(QWidget):
     """A popout widget that displays the device IP address"""
@@ -878,8 +879,8 @@ class MainWindow(QMainWindow):
                 row.time_label.setText("—")
             return
         
-        # Apply filtering if enabled
-        if self.filter_by_direction_checkbox.isChecked():
+        # Apply filtering if enabled (use config flag to reflect remote changes)
+        if config.get('filter_by_direction', False):
             selected_destination = config.get('selected_destination')
             if selected_destination:
                 # Filter to only show arrivals matching the selected destination
@@ -944,6 +945,8 @@ class MainWindow(QMainWindow):
     
     def refresh_arrivals(self):
         """Refresh arrivals data from API and update display"""
+        # Sync settings from config so web changes apply promptly
+        self.sync_settings_from_config()
         # Get selected station from config
         config = config_handler.load_config()
         station_id = config.get('selected_station')
@@ -1003,6 +1006,44 @@ class MainWindow(QMainWindow):
         """Toggle the visibility of the centered clock label"""
         if hasattr(self, 'clock_label') and hasattr(self, 'show_clock_checkbox'):
             self.clock_label.setVisible(self.show_clock_checkbox.isChecked())
+    
+    def sync_settings_from_config(self):
+        """Sync checkbox and screen sleep settings from config file"""
+        config = config_handler.load_config()
+        # Show countdown
+        if hasattr(self, 'show_countdown_checkbox'):
+            self.show_countdown_checkbox.blockSignals(True)
+            self.show_countdown_checkbox.setChecked(config.get('show_countdown', True))
+            self.show_countdown_checkbox.blockSignals(False)
+            self.toggle_countdown_visibility()
+        # Show clock
+        if hasattr(self, 'show_clock_checkbox'):
+            self.show_clock_checkbox.blockSignals(True)
+            self.show_clock_checkbox.setChecked(config.get('show_clock', True))
+            self.show_clock_checkbox.blockSignals(False)
+            self.toggle_clock_visibility()
+        # Filter by direction
+        if hasattr(self, 'filter_by_direction_checkbox'):
+            self.filter_by_direction_checkbox.blockSignals(True)
+            self.filter_by_direction_checkbox.setChecked(config.get('filter_by_direction', False))
+            self.filter_by_direction_checkbox.blockSignals(False)
+        # Reboot enabled
+        if hasattr(self, 'reboot_enabled_checkbox'):
+            self.reboot_enabled_checkbox.blockSignals(True)
+            self.reboot_enabled_checkbox.setChecked(config.get('reboot_enabled', False))
+            self.reboot_enabled_checkbox.blockSignals(False)
+        # Screen sleep
+        if hasattr(self, 'screen_sleep_enabled_checkbox'):
+            self.screen_sleep_enabled_checkbox.blockSignals(True)
+            self.screen_sleep_enabled_checkbox.setChecked(config.get('screen_sleep_enabled', False))
+            self.screen_sleep_enabled_checkbox.blockSignals(False)
+        if hasattr(self, 'screen_sleep_slider') and 'screen_sleep_minutes' in config:
+            self.screen_sleep_slider.blockSignals(True)
+            self.screen_sleep_slider.setValue(int(config.get('screen_sleep_minutes', 5)))
+            self.screen_sleep_slider.blockSignals(False)
+            self.update_screen_sleep_label()
+        # Apply to system if needed
+        self.apply_screen_sleep_settings()
     
     def update_screen_sleep_label(self):
         """Update the screen sleep label to show current slider value"""
@@ -2388,5 +2429,8 @@ if screen_size.width() == 1024 and screen_size.height() == 600:
 else:
     window.setFixedSize(1024, 600)
     window.show()
+
+# Start embedded web settings server
+start_web_settings_server(data_handler)
 
 app.exec()
