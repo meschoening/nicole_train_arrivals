@@ -154,9 +154,10 @@ def start_web_settings_server(data_handler, host="0.0.0.0", port=80):
     def api_update_run():
         def generate():
             cwd = os.path.dirname(os.path.abspath(__file__))
-            # Run `git pull` with combined stdout/stderr, line-buffered
+            # Run `git pull` as user 'max' to avoid ownership issues
+            # Use sudo -u max to run git commands under the max user
             process = subprocess.Popen(
-                ["git", "pull"],
+                ["sudo", "-u", "max", "git", "pull"],
                 cwd=cwd,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.STDOUT,
