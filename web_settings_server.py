@@ -113,6 +113,17 @@ def start_web_settings_server(data_handler, host="0.0.0.0", port=80):
         # Simple page render; live behavior wired via JS
         return render_template("update.html")
 
+    @app.get("/api-key")
+    def get_api_key():
+        config = config_handler.load_config()
+        return render_template("api_key.html", api_key=config.get("api_key", ""), last_saved=_get_config_last_saved())
+
+    @app.post("/api-key")
+    def post_api_key():
+        api_key = request.form.get("api_key", "")
+        config_handler.save_config("api_key", api_key)
+        return redirect(url_for("index"))
+
     def _has_git_error(output_text):
         if not output_text:
             return False

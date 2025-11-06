@@ -1,0 +1,50 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Edit API Key</title>
+    <style>
+      body { font-family: sans-serif; margin: 0; padding: 0; }
+      .container { max-width: 720px; margin: 0 auto; padding: 24px; }
+      .row { margin-bottom: 12px; }
+      label { display: inline-block; min-width: 220px; font-weight: bold; }
+      input[type="text"] { padding: 6px; font-size: 14px; width: 300px; }
+      button { padding: 8px 14px; font-weight: bold; }
+      a.btn { text-decoration: none; display: inline-block; padding: 8px 14px; border-radius: 6px; background: #f0f0f0; color: #000; font-weight: 700; border: 1px solid #ddd; }
+      a.btn:hover { background: #e6e6e6; }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <div class="row">
+        <a href="{{ url_for('index') }}" class="btn">← Back</a>
+      </div>
+      <h2>Edit API Key</h2>
+
+      <form method="post" action="/api-key" id="apiKeyForm">
+      <div class="row">
+        <label for="api_key">API Key</label>
+        <input type="text" id="api_key" name="api_key" value="{{ api_key }}" placeholder="Enter your API key">
+      </div>
+
+      <div class="row" style="display: flex; align-items: center; gap: 16px;">
+        <button type="submit">Save</button>
+        <span id="lastSaved" style="color:#666;">Last saved: {{ last_saved }}</span>
+      </div>
+      </form>
+    </div>
+
+    <script>
+      const apiKeyForm = document.getElementById('apiKeyForm');
+      const lastSaved = document.getElementById('lastSaved');
+      function markUnsaved() {
+        if (lastSaved) lastSaved.style.color = '#cc6666';
+      }
+      // Mark unsaved when API key field changes
+      apiKeyForm.addEventListener('change', markUnsaved);
+      apiKeyForm.addEventListener('input', markUnsaved);
+    </script>
+  </body>
+  </html>
+
