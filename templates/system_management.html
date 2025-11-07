@@ -1,0 +1,163 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>System Management</title>
+    <style>
+      body { font-family: sans-serif; margin: 0; padding: 0; }
+      .container { max-width: 720px; margin: 0 auto; padding: 24px; }
+      .row { margin-bottom: 12px; }
+      button { 
+        padding: 12px 18px; 
+        font-weight: bold; 
+        font-size: 16px;
+        border-radius: 6px;
+        border: 1px solid #ddd;
+        cursor: pointer;
+        min-width: 200px;
+      }
+      button.normal {
+        background: #f0f0f0;
+        color: #000;
+      }
+      button.normal:hover {
+        background: #e6e6e6;
+      }
+      button.confirm {
+        background: #f44336;
+        color: white;
+        border: 1px solid #c62828;
+      }
+      button.confirm:hover {
+        background: #d32f2f;
+      }
+      button:disabled {
+        opacity: 0.6;
+        cursor: not-allowed;
+      }
+      a.btn { 
+        text-decoration: none; 
+        display: inline-block; 
+        padding: 8px 14px; 
+        border-radius: 6px; 
+        background: #f0f0f0; 
+        color: #000; 
+        font-weight: 700; 
+        border: 1px solid #ddd; 
+      }
+      a.btn:hover { background: #e6e6e6; }
+      .buttons-container {
+        display: flex;
+        flex-direction: column;
+        gap: 16px;
+        margin-top: 24px;
+      }
+      #status {
+        margin-top: 16px;
+        color: #666;
+        font-weight: bold;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <div class="row">
+        <a href="{{ url_for('index') }}" class="btn">← Back</a>
+      </div>
+      <h2>System Management</h2>
+      <div class="buttons-container">
+        <button id="rebootBtn" class="normal">Reboot</button>
+        <button id="shutdownBtn" class="normal">Shutdown</button>
+      </div>
+      <div id="status" class="row"></div>
+    </div>
+
+    <script>
+      const rebootBtn = document.getElementById('rebootBtn');
+      const shutdownBtn = document.getElementById('shutdownBtn');
+      const statusEl = document.getElementById('status');
+
+      let rebootConfirmed = false;
+      let shutdownConfirmed = false;
+
+      function setStatus(text, color = '#666') {
+        statusEl.textContent = text;
+        statusEl.style.color = color;
+      }
+
+      function resetRebootButton() {
+        rebootBtn.textContent = 'Reboot';
+        rebootBtn.className = 'normal';
+        rebootBtn.disabled = false;
+        rebootConfirmed = false;
+      }
+
+      function resetShutdownButton() {
+        shutdownBtn.textContent = 'Shutdown';
+        shutdownBtn.className = 'normal';
+        shutdownBtn.disabled = false;
+        shutdownConfirmed = false;
+      }
+
+      rebootBtn.addEventListener('click', async () => {
+        if (!rebootConfirmed) {
+          // First click: confirmation state
+          rebootBtn.textContent = 'Click again to confirm reboot';
+          rebootBtn.className = 'confirm';
+          rebootConfirmed = true;
+          setStatus('Click the button again to confirm reboot', '#d49200');
+          
+          // Reset after 5 seconds if not clicked again
+          setTimeout(() => {
+            if (rebootConfirmed) {
+              resetRebootButton();
+              setStatus('');
+            }
+          }, 5000);
+        } else {
+          // Second click: perform reboot
+          rebootBtn.disabled = true;
+          setStatus('Rebooting system...', '#d49200');
+          try {
+            await fetch('/api/reboot', { method: 'POST' });
+            setStatus('System is rebooting... this page may become unreachable.', '#d49200');
+          } catch (e) {
+            setStatus('Failed to trigger reboot.', '#cc3333');
+            resetRebootButton();
+          }
+        }
+      });
+
+      shutdownBtn.addEventListener('click', async () => {
+        if (!shutdownConfirmed) {
+          // First click: confirmation state
+          shutdownBtn.textContent = 'Click again to confirm shutdown';
+          shutdownBtn.className = 'confirm';
+          shutdownConfirmed = true;
+          setStatus('Click the button again to confirm shutdown', '#d49200');
+          
+          // Reset after 5 seconds if not clicked again
+          setTimeout(() => {
+            if (shutdownConfirmed) {
+              resetShutdownButton();
+              setStatus('');
+            }
+          }, 5000);
+        } else {
+          // Second click: perform shutdown
+          shutdownBtn.disabled = true;
+          setStatus('Shutting down system...', '#d49200');
+          try {
+            await fetch('/api/shutdown', { method: 'POST' });
+            setStatus('System is shutting down... this page may become unreachable.', '#d49200');
+          } catch (e) {
+            setStatus('Failed to trigger shutdown.', '#cc3333');
+            resetShutdownButton();
+          }
+        }
+      });
+    </script>
+  </body>
+</html>
+

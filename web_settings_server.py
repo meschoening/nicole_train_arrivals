@@ -205,6 +205,36 @@ def start_web_settings_server(data_handler, host="0.0.0.0", port=80):
         threading.Thread(target=_do_restart, daemon=True).start()
         return jsonify({"status": "restarting"})
 
+    @app.get("/system-management")
+    def get_system_management():
+        return render_template("system_management.html")
+
+    @app.post("/api/reboot")
+    def api_reboot():
+        # Execute reboot command matching main_display.py implementation
+        def _do_reboot():
+            try:
+                time.sleep(0.25)
+                os.system("sudo shutdown -r now")
+            except Exception:
+                raise
+
+        threading.Thread(target=_do_reboot, daemon=True).start()
+        return jsonify({"status": "rebooting"})
+
+    @app.post("/api/shutdown")
+    def api_shutdown():
+        # Execute shutdown command matching main_display.py implementation
+        def _do_shutdown():
+            try:
+                time.sleep(0.25)
+                os.system("sudo shutdown now")
+            except Exception:
+                raise
+
+        threading.Thread(target=_do_shutdown, daemon=True).start()
+        return jsonify({"status": "shutting down"})
+
     @app.post("/settings")
     def post_settings():
         form = request.form
