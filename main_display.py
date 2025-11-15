@@ -244,6 +244,8 @@ class ShutdownPopout(QWidget):
         
         # Track shutdown confirmation state
         self.shutdown_confirmed = False
+        # Track reboot confirmation state
+        self.reboot_confirmed = False
         
         # Create layout
         layout = QVBoxLayout()
@@ -272,6 +274,29 @@ class ShutdownPopout(QWidget):
             }
         """)
         layout.addWidget(self.exit_button)
+        
+        # Create Reboot button
+        self.reboot_button = QPushButton("Reboot")
+        self.reboot_button.setMinimumWidth(200)
+        self.reboot_button.setStyleSheet("""
+            QPushButton {
+                font-family: Quicksand;
+                font-size: 18px;
+                font-weight: bold;
+                padding: 10px 20px;
+                background-color: #e0e0e0;
+                border: none;
+                border-radius: 5px;
+            }
+            QPushButton:hover {
+                background-color: #d0d0d0;
+            }
+            QPushButton:pressed {
+                background-color: #c0c0c0;
+                padding-bottom: 9px;
+            }
+        """)
+        layout.addWidget(self.reboot_button)
         
         # Create Shutdown button
         self.shutdown_button = QPushButton("Shutdown")
@@ -329,6 +354,55 @@ class ShutdownPopout(QWidget):
             }
             QPushButton:pressed {
                 background-color: #c0c0c0;
+                padding-bottom: 9px;
+            }
+        """)
+    
+    def reset_reboot_state(self):
+        """Reset the reboot button to its initial state"""
+        self.reboot_confirmed = False
+        self.reboot_button.setText("Reboot")
+        self.reboot_button.setMinimumWidth(200)
+        self.reboot_button.setStyleSheet("""
+            QPushButton {
+                font-family: Quicksand;
+                font-size: 18px;
+                font-weight: bold;
+                padding: 10px 20px;
+                background-color: #e0e0e0;
+                border: none;
+                border-radius: 5px;
+            }
+            QPushButton:hover {
+                background-color: #d0d0d0;
+            }
+            QPushButton:pressed {
+                background-color: #c0c0c0;
+                padding-bottom: 9px;
+            }
+        """)
+    
+    def set_reboot_confirm_state(self):
+        """Set the reboot button to confirmation state (red)"""
+        self.reboot_confirmed = True
+        self.reboot_button.setText("Confirm Reboot")
+        self.reboot_button.setMinimumWidth(200)
+        self.reboot_button.setStyleSheet("""
+            QPushButton {
+                font-family: Quicksand;
+                font-size: 18px;
+                font-weight: bold;
+                padding: 10px 20px;
+                background-color: #f44336;
+                color: white;
+                border: none;
+                border-radius: 5px;
+            }
+            QPushButton:hover {
+                background-color: #da190b;
+            }
+            QPushButton:pressed {
+                background-color: #c1170a;
                 padding-bottom: 9px;
             }
         """)
@@ -1287,10 +1361,12 @@ class MainWindow(QMainWindow):
             self.shutdown_popout = ShutdownPopout(self.settings_page)
             # Connect button signals
             self.shutdown_popout.exit_button.clicked.connect(self.exit_to_desktop)
+            self.shutdown_popout.reboot_button.clicked.connect(self.on_reboot_button_clicked)
             self.shutdown_popout.shutdown_button.clicked.connect(self.on_shutdown_button_clicked)
         
-        # Reset shutdown state when showing popout
+        # Reset shutdown and reboot state when showing popout
         self.shutdown_popout.reset_shutdown_state()
+        self.shutdown_popout.reset_reboot_state()
         
         # Position the popout above the Shutdown/Exit button
         button_pos = self.shutdown_exit_button.mapTo(self.settings_page, self.shutdown_exit_button.rect().topLeft())
@@ -1309,6 +1385,7 @@ class MainWindow(QMainWindow):
         if hasattr(self, 'shutdown_popout'):
             self.shutdown_popout.hide()
             self.shutdown_popout.reset_shutdown_state()
+            self.shutdown_popout.reset_reboot_state()
         
         # Reset button color to neutral
         self.set_shutdown_exit_button_color("neutral")
@@ -1360,6 +1437,15 @@ class MainWindow(QMainWindow):
     def exit_to_desktop(self):
         """Exit the application to desktop"""
         QApplication.instance().quit()
+    
+    def on_reboot_button_clicked(self):
+        """Handle reboot button click with two-stage confirmation"""
+        if not self.shutdown_popout.reboot_confirmed:
+            # First click: set to confirmation state (red)
+            self.shutdown_popout.set_reboot_confirm_state()
+        else:
+            # Second click: actually perform reboot
+            self.perform_system_reboot()
     
     def on_shutdown_button_clicked(self):
         """Handle shutdown button click with two-stage confirmation"""
@@ -1473,6 +1559,9 @@ class MainWindow(QMainWindow):
     
     def perform_system_reboot(self):
         """Perform system reboot"""
+        # Close the popout
+        self.close_shutdown_popout()
+        
         # Execute reboot command for RasPi
         os.system("sudo shutdown -r now")
     
