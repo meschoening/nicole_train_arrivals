@@ -666,16 +666,6 @@ class MainWindow(QMainWindow):
         # Save filter by direction setting
         config_handler.save_config('filter_by_direction', self.filter_by_direction_checkbox.isChecked())
         
-        # Save reboot settings
-        config_handler.save_config('reboot_enabled', self.reboot_enabled_checkbox.isChecked())
-        
-        # Build time string from dropdowns (format: "h:mm AP")
-        hour = self.reboot_hour_combo.currentText()
-        minute = self.reboot_minute_combo.currentText()
-        ampm = self.reboot_ampm_combo.currentText()
-        time_str = f"{hour}:{minute} {ampm}"
-        config_handler.save_config('reboot_time', time_str)
-        
         # Save screen sleep settings
         config_handler.save_config('screen_sleep_enabled', self.screen_sleep_enabled_checkbox.isChecked())
         config_handler.save_config('screen_sleep_minutes', self.screen_sleep_slider.value())
@@ -720,41 +710,6 @@ class MainWindow(QMainWindow):
         # Load and apply filter by direction setting
         filter_by_direction = config.get('filter_by_direction', False)  # Default to False (show all)
         self.filter_by_direction_checkbox.setChecked(filter_by_direction)
-        
-        # Load and apply reboot settings
-        reboot_enabled = config.get('reboot_enabled', False)
-        self.reboot_enabled_checkbox.setChecked(reboot_enabled)
-        
-        # Parse reboot time and set dropdowns
-        reboot_time_str = config.get('reboot_time', '12:00 AM')
-        try:
-            # Parse time string (format: "h:mm AP")
-            reboot_time = datetime.strptime(reboot_time_str, '%I:%M %p')
-            
-            # Set hour dropdown (1-12)
-            hour = reboot_time.hour
-            if hour == 0:
-                hour = 12
-            elif hour > 12:
-                hour = hour - 12
-            hour_index = self.reboot_hour_combo.findText(str(hour))
-            if hour_index >= 0:
-                self.reboot_hour_combo.setCurrentIndex(hour_index)
-            
-            # Set minute dropdown (00-59)
-            minute_str = f"{reboot_time.minute:02d}"
-            minute_index = self.reboot_minute_combo.findText(minute_str)
-            if minute_index >= 0:
-                self.reboot_minute_combo.setCurrentIndex(minute_index)
-            
-            # Set AM/PM dropdown
-            ampm = reboot_time.strftime('%p')
-            ampm_index = self.reboot_ampm_combo.findText(ampm)
-            if ampm_index >= 0:
-                self.reboot_ampm_combo.setCurrentIndex(ampm_index)
-        except ValueError:
-            # If parsing fails, use defaults (already set)
-            pass
         
         # Load and apply screen sleep settings
         screen_sleep_enabled = config.get('screen_sleep_enabled', False)
@@ -1027,11 +982,6 @@ class MainWindow(QMainWindow):
             self.filter_by_direction_checkbox.blockSignals(True)
             self.filter_by_direction_checkbox.setChecked(config.get('filter_by_direction', False))
             self.filter_by_direction_checkbox.blockSignals(False)
-        # Reboot enabled
-        if hasattr(self, 'reboot_enabled_checkbox'):
-            self.reboot_enabled_checkbox.blockSignals(True)
-            self.reboot_enabled_checkbox.setChecked(config.get('reboot_enabled', False))
-            self.reboot_enabled_checkbox.blockSignals(False)
         # Screen sleep
         if hasattr(self, 'screen_sleep_enabled_checkbox'):
             self.screen_sleep_enabled_checkbox.blockSignals(True)
@@ -2050,131 +2000,14 @@ class MainWindow(QMainWindow):
         content_layout.addLayout(separator_container)
         content_layout.addSpacing(10)
         
-        # Add automatic reboot and screen sleep section below the two-column layout
+        # Add screen sleep section below the two-column layout
         
-        # Main section container with two columns
+        # Main section container
         system_settings_layout = QHBoxLayout()
         system_settings_layout.setContentsMargins(40, 0, 40, 0)
         system_settings_layout.setSpacing(40)
         
-        # Left column: Reboot settings
-        reboot_column_layout = QVBoxLayout()
-        reboot_column_layout.setSpacing(15)
-        
-        # First row - Enable reboot checkbox
-        reboot_enable_layout = QHBoxLayout()
-        reboot_enable_layout.setContentsMargins(0, 0, 0, 0)
-        
-        reboot_enable_label = QLabel("Enable Automatic Reboot:")
-        reboot_enable_label.setStyleSheet("font-family: Quicksand; font-size: 21px; font-weight: bold;")
-        reboot_enable_layout.addWidget(reboot_enable_label)
-        
-        self.reboot_enabled_checkbox = QCheckBox()
-        self.reboot_enabled_checkbox.setStyleSheet("""
-            QCheckBox {
-                spacing: 5px;
-            }
-            QCheckBox::indicator {
-                width: 25px;
-                height: 25px;
-                border: 2px solid #ccc;
-                border-radius: 3px;
-                background-color: white;
-            }
-            QCheckBox::indicator:hover {
-                border: 2px solid #999;
-            }
-            QCheckBox::indicator:checked {
-                background-color: #4CAF50;
-                border: 2px solid #4CAF50;
-            }
-        """)
-        self.reboot_enabled_checkbox.setChecked(False)
-        self.reboot_enabled_checkbox.stateChanged.connect(self.mark_settings_changed)
-        reboot_enable_layout.addWidget(self.reboot_enabled_checkbox)
-        reboot_enable_layout.addStretch()
-        
-        reboot_column_layout.addLayout(reboot_enable_layout)
-        
-        # Second row - Reboot time selection
-        reboot_time_layout = QHBoxLayout()
-        reboot_time_layout.setContentsMargins(0, 0, 0, 0)
-        reboot_time_layout.setSpacing(10)
-        
-        reboot_time_label = QLabel("Reboot Time:")
-        reboot_time_label.setStyleSheet("font-family: Quicksand; font-size: 21px; font-weight: bold;")
-        reboot_time_layout.addWidget(reboot_time_label)
-        
-        # Hour dropdown (1-12)
-        self.reboot_hour_combo = QComboBox()
-        self.reboot_hour_combo.setStyleSheet("""
-            QComboBox {
-                font-family: Quicksand;
-                font-size: 18px;
-                padding: 7px;
-                border: 1px solid #ccc;
-                border-radius: 3px;
-                background-color: white;
-            }
-            QComboBox:hover {
-                border: 1px solid #999;
-            }
-            QComboBox QAbstractItemView {
-                font-family: Quicksand;
-                font-size: 18px;
-                background-color: white;
-                selection-background-color: #e0e0e0;
-                selection-color: #000;
-                color: #000;
-            }
-            QComboBox QAbstractItemView::item {
-                color: #000;
-                padding: 5px;
-            }
-            QComboBox QAbstractItemView::item:selected {
-                background-color: #e0e0e0;
-                color: #000;
-            }
-            QComboBox QAbstractItemView::item:hover {
-                background-color: #e0e0e0;
-                color: #000;
-            }
-        """)
-        for hour in range(1, 13):
-            self.reboot_hour_combo.addItem(str(hour))
-        self.reboot_hour_combo.setCurrentIndex(11)  # Default to 12
-        self.reboot_hour_combo.currentIndexChanged.connect(self.mark_settings_changed)
-        reboot_time_layout.addWidget(self.reboot_hour_combo)
-        
-        # Colon separator
-        colon_label = QLabel(":")
-        colon_label.setStyleSheet("font-family: Quicksand; font-size: 21px; font-weight: bold;")
-        reboot_time_layout.addWidget(colon_label)
-        
-        # Minute dropdown (00-59)
-        self.reboot_minute_combo = QComboBox()
-        self.reboot_minute_combo.setStyleSheet(self.reboot_hour_combo.styleSheet())
-        for minute in range(60):
-            self.reboot_minute_combo.addItem(f"{minute:02d}")
-        self.reboot_minute_combo.setCurrentIndex(0)  # Default to 00
-        self.reboot_minute_combo.currentIndexChanged.connect(self.mark_settings_changed)
-        reboot_time_layout.addWidget(self.reboot_minute_combo)
-        
-        # AM/PM dropdown
-        self.reboot_ampm_combo = QComboBox()
-        self.reboot_ampm_combo.setStyleSheet(self.reboot_hour_combo.styleSheet())
-        self.reboot_ampm_combo.addItem("AM")
-        self.reboot_ampm_combo.addItem("PM")
-        self.reboot_ampm_combo.setCurrentIndex(0)  # Default to AM
-        self.reboot_ampm_combo.currentIndexChanged.connect(self.mark_settings_changed)
-        reboot_time_layout.addWidget(self.reboot_ampm_combo)
-        
-        reboot_time_layout.addStretch()
-        reboot_column_layout.addLayout(reboot_time_layout)
-        
-        system_settings_layout.addLayout(reboot_column_layout)
-        
-        # Right column: Screen sleep settings
+        # Screen sleep settings
         screen_sleep_column_layout = QVBoxLayout()
         screen_sleep_column_layout.setSpacing(15)
         

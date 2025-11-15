@@ -85,32 +85,6 @@
       <hr>
 
       <div class="row">
-        <label>Enable Automatic Reboot</label>
-        <input type="checkbox" name="reboot_enabled" {% if config.get('reboot_enabled', False) %}checked{% endif %}>
-      </div>
-
-      <div class="row">
-        <label>Reboot Time</label>
-        {% set rt = config.get('reboot_time', '12:00 AM').split(' ') %}
-        {% set hm = rt[0].split(':') %}
-        <select name="reboot_hour" id="reboot_hour">
-          {% for h in range(1,13) %}
-            <option value="{{ h }}" {% if hm[0] == h|string %}selected{% endif %}>{{ h }}</option>
-          {% endfor %}
-        </select>
-        :
-        <select name="reboot_minute" id="reboot_minute">
-          {% for m in range(0,60) %}
-            <option value="{{ '%02d' % m }}" {% if hm[1] == ('%02d' % m) %}selected{% endif %}>{{ '%02d' % m }}</option>
-          {% endfor %}
-        </select>
-        <select name="reboot_ampm" id="reboot_ampm">
-          <option value="AM" {% if (rt|length>1 and rt[1]=='AM') %}selected{% endif %}>AM</option>
-          <option value="PM" {% if (rt|length>1 and rt[1]=='PM') %}selected{% endif %}>PM</option>
-        </select>
-      </div>
-
-      <div class="row">
         <label>Enable Screen Sleep</label>
         <input type="checkbox" name="screen_sleep_enabled" {% if config.get('screen_sleep_enabled', False) %}checked{% endif %}>
       </div>

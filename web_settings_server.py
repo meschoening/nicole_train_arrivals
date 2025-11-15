@@ -207,7 +207,8 @@ def start_web_settings_server(data_handler, host="0.0.0.0", port=80):
 
     @app.get("/system-management")
     def get_system_management():
-        return render_template("system_management.html")
+        config = config_handler.load_config()
+        return render_template("system_management.html", config=config)
 
     @app.post("/api/reboot")
     def api_reboot():
@@ -234,6 +235,32 @@ def start_web_settings_server(data_handler, host="0.0.0.0", port=80):
 
         threading.Thread(target=_do_shutdown, daemon=True).start()
         return jsonify({"status": "shutting down"})
+
+    @app.get("/api/reboot-config")
+    def api_get_reboot_config():
+        config = config_handler.load_config()
+        return jsonify({
+            "reboot_enabled": config.get("reboot_enabled", False),
+            "reboot_time": config.get("reboot_time", "12:00 AM")
+        })
+
+    @app.post("/api/reboot-config")
+    def api_post_reboot_config():
+        data = request.get_json()
+        
+        # Update reboot_enabled
+        if "reboot_enabled" in data:
+            config_handler.save_config("reboot_enabled", bool(data["reboot_enabled"]))
+        
+        # Update reboot_time from three components
+        if "reboot_hour" in data and "reboot_minute" in data and "reboot_ampm" in data:
+            hour = data["reboot_hour"]
+            minute = data["reboot_minute"]
+            ampm = data["reboot_ampm"]
+            time_str = f"{hour}:{minute} {ampm}"
+            config_handler.save_config("reboot_time", time_str)
+        
+        return jsonify({"status": "saved"})
 
     @app.post("/settings")
     def post_settings():

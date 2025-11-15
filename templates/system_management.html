@@ -8,6 +8,9 @@
       body { font-family: sans-serif; margin: 0; padding: 0; }
       .container { max-width: 720px; margin: 0 auto; padding: 24px; }
       .row { margin-bottom: 12px; }
+      label { display: inline-block; min-width: 220px; font-weight: bold; }
+      input[type="checkbox"] { transform: scale(1.3); margin-right: 8px; }
+      select { padding: 6px; font-size: 14px; }
       button { 
         padding: 12px 18px; 
         font-weight: bold; 
@@ -66,6 +69,33 @@
         <a href="{{ url_for('index') }}" class="btn">← Back</a>
       </div>
       <h2>System Management</h2>
+      
+      <div class="row">
+        <label>Enable Automatic Reboot</label>
+        <input type="checkbox" id="rebootEnabled" name="reboot_enabled" {% if config.get('reboot_enabled', False) %}checked{% endif %}>
+      </div>
+
+      <div class="row">
+        <label>Reboot Time</label>
+        {% set rt = config.get('reboot_time', '12:00 AM').split(' ') %}
+        {% set hm = rt[0].split(':') %}
+        <select name="reboot_hour" id="reboot_hour">
+          {% for h in range(1,13) %}
+            <option value="{{ h }}" {% if hm[0] == h|string %}selected{% endif %}>{{ h }}</option>
+          {% endfor %}
+        </select>
+        :
+        <select name="reboot_minute" id="reboot_minute">
+          {% for m in range(0,60) %}
+            <option value="{{ '%02d' % m }}" {% if hm[1] == ('%02d' % m) %}selected{% endif %}>{{ '%02d' % m }}</option>
+          {% endfor %}
+        </select>
+        <select name="reboot_ampm" id="reboot_ampm">
+          <option value="AM" {% if (rt|length>1 and rt[1]=='AM') %}selected{% endif %}>AM</option>
+          <option value="PM" {% if (rt|length>1 and rt[1]=='PM') %}selected{% endif %}>PM</option>
+        </select>
+      </div>
+
       <div class="buttons-container">
         <button id="rebootBtn" class="normal">Reboot</button>
         <button id="shutdownBtn" class="normal">Shutdown</button>
@@ -77,6 +107,10 @@
       const rebootBtn = document.getElementById('rebootBtn');
       const shutdownBtn = document.getElementById('shutdownBtn');
       const statusEl = document.getElementById('status');
+      const rebootEnabled = document.getElementById('rebootEnabled');
+      const rebootHour = document.getElementById('reboot_hour');
+      const rebootMinute = document.getElementById('reboot_minute');
+      const rebootAmpm = document.getElementById('reboot_ampm');
 
       let rebootConfirmed = false;
       let shutdownConfirmed = false;
@@ -157,6 +191,42 @@
           }
         }
       });
+
+      async function saveRebootConfig() {
+        const enabled = rebootEnabled.checked;
+        const hour = rebootHour.value;
+        const minute = rebootMinute.value;
+        const ampm = rebootAmpm.value;
+        
+        try {
+          const response = await fetch('/api/reboot-config', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              reboot_enabled: enabled,
+              reboot_hour: hour,
+              reboot_minute: minute,
+              reboot_ampm: ampm
+            })
+          });
+          
+          if (response.ok) {
+            setStatus('Reboot settings saved', '#4caf50');
+            setTimeout(() => setStatus(''), 2000);
+          } else {
+            setStatus('Failed to save reboot settings', '#cc3333');
+          }
+        } catch (e) {
+          setStatus('Failed to save reboot settings', '#cc3333');
+        }
+      }
+
+      rebootEnabled.addEventListener('change', saveRebootConfig);
+      rebootHour.addEventListener('change', saveRebootConfig);
+      rebootMinute.addEventListener('change', saveRebootConfig);
+      rebootAmpm.addEventListener('change', saveRebootConfig);
     </script>
   </body>
 </html>
