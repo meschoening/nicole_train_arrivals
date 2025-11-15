@@ -192,18 +192,16 @@ def start_web_settings_server(data_handler, host="0.0.0.0", port=80):
 
     @app.post("/api/restart")
     def api_restart():
-        # Restart the entire application shortly after returning a response
-        def _do_restart():
+        # Alias for /api/reboot - kept for backward compatibility but redirects to reboot logic
+        def _do_reboot():
             try:
                 time.sleep(0.25)
-                script_path = os.path.abspath(os.path.join(os.path.dirname(__file__), 'main_display.py'))
-                os.execv(sys.executable, [sys.executable, script_path])
+                os.system("sudo shutdown -r now")
             except Exception:
-                # If exec fails, process will continue running; no silent pass
                 raise
 
-        threading.Thread(target=_do_restart, daemon=True).start()
-        return jsonify({"status": "restarting"})
+        threading.Thread(target=_do_reboot, daemon=True).start()
+        return jsonify({"status": "rebooting"})
 
     @app.get("/system-management")
     def get_system_management():

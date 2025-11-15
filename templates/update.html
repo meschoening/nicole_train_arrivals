@@ -13,7 +13,7 @@
       a.btn:hover { background: #e6e6e6; }
       #console { background: #111; color: #ddd; padding: 12px; border-radius: 6px; min-height: 220px; white-space: pre-wrap; overflow: auto; }
       #status { margin-top: 8px; color: #666; }
-      #restartBtn { display: none; }
+      #rebootBtn { display: none; }
     </style>
   </head>
   <body>
@@ -24,7 +24,7 @@
       <h2>Update Software</h2>
       <div class="row">
         <button id="runUpdate">Run Update</button>
-        <button id="restartBtn">Restart App</button>
+        <button id="rebootBtn">Reboot System</button>
       </div>
       <div id="status" class="row"></div>
       <pre id="console" class="row"></pre>
@@ -32,7 +32,7 @@
 
     <script>
       const runBtn = document.getElementById('runUpdate');
-      const restartBtn = document.getElementById('restartBtn');
+      const rebootBtn = document.getElementById('rebootBtn');
       const consoleEl = document.getElementById('console');
       const statusEl = document.getElementById('status');
 
@@ -42,7 +42,7 @@
       function appendLine(line) { consoleEl.textContent += (line.endsWith('\n')? line : line + '\n'); consoleEl.scrollTop = consoleEl.scrollHeight; }
       function setStatus(text, color = '#666') { statusEl.textContent = text; statusEl.style.color = color; }
       function disableRun(disabled) { runBtn.disabled = disabled; }
-      function showRestart(show) { restartBtn.style.display = show ? 'inline-block' : 'none'; }
+      function showReboot(show) { rebootBtn.style.display = show ? 'inline-block' : 'none'; }
 
       function closeEventSource() {
         if (evtSource) { evtSource.close(); evtSource = null; }
@@ -50,7 +50,7 @@
 
       runBtn.addEventListener('click', () => {
         clearConsole();
-        showRestart(false);
+        showReboot(false);
         setStatus('Running update...');
         disableRun(true);
         closeEventSource();
@@ -67,13 +67,13 @@
             const payload = JSON.parse(e.data || '{}');
             if (payload.has_error) {
               setStatus('Error updating. See console for details.', '#cc3333');
-              showRestart(false);
+              showReboot(false);
             } else if (payload.has_updates) {
-              setStatus('Update completed. Restart required.', '#d49200');
-              showRestart(true);
+              setStatus('Update completed. Reboot required.', '#d49200');
+              showReboot(true);
             } else {
               setStatus('Already up to date.', '#2a7a2a');
-              showRestart(false);
+              showReboot(false);
             }
           } catch {
             setStatus('Update finished.');
@@ -87,13 +87,13 @@
         };
       });
 
-      restartBtn.addEventListener('click', async () => {
-        setStatus('Restarting app...');
+      rebootBtn.addEventListener('click', async () => {
+        setStatus('Rebooting system...');
         try {
-          await fetch('/api/restart', { method: 'POST' });
-          setStatus('App is restarting... this page may become unreachable.', '#d49200');
+          await fetch('/api/reboot', { method: 'POST' });
+          setStatus('System is rebooting... this page may become unreachable.', '#d49200');
         } catch (e) {
-          setStatus('Failed to trigger restart.', '#cc3333');
+          setStatus('Failed to trigger reboot.', '#cc3333');
         }
       });
     </script>

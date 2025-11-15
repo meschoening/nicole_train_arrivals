@@ -1104,9 +1104,9 @@ class MainWindow(QMainWindow):
             # Start the update process
             self.show_update_popout()
             self.run_git_pull()
-        elif button_text == "Restart":
-            # Restart the application
-            self.restart_application()
+        elif button_text == "Reboot":
+            # Reboot the system
+            self.reboot_application()
         elif button_text.startswith("Checking"):
             # Already checking, do nothing
             pass
@@ -1274,7 +1274,7 @@ class MainWindow(QMainWindow):
             has_updates = self.parse_git_output()
             
             if has_updates:
-                self.update_button.setText("Restart")
+                self.update_button.setText("Reboot")
                 self.set_update_button_color("orange")  # Stay orange to indicate action needed
             else:
                 self.update_button.setText("Up to date!")
@@ -1336,18 +1336,14 @@ class MainWindow(QMainWindow):
         self.update_button.setText(animations[self.checking_animation_state])
         self.checking_animation_state = (self.checking_animation_state + 1) % len(animations)
     
-    def restart_application(self):
-        """Restart the application"""
+    def reboot_application(self):
+        """Reboot the system"""
         # Close the update popout
         if hasattr(self, 'update_popout'):
             self.update_popout.hide()
         
-        # Get the current script path
-        script_path = os.path.abspath(__file__)
-        
-        # Restart using os.execv (replaces current process)
-        python = sys.executable
-        os.execv(python, [python, script_path])
+        # Perform system reboot
+        self.perform_system_reboot()
     
     def on_shutdown_exit_button_clicked(self):
         """Handle Shutdown/Exit button click"""
