@@ -1,4 +1,4 @@
-from PyQt5.QtWidgets import QApplication, QMainWindow, QVBoxLayout, QHBoxLayout, QGridLayout, QLabel, QWidget, QPushButton, QStackedWidget, QComboBox, QCheckBox, QPlainTextEdit, QSizePolicy, QSlider
+from PyQt5.QtWidgets import QApplication, QMainWindow, QVBoxLayout, QHBoxLayout, QGridLayout, QLabel, QWidget, QPushButton, QStackedWidget, QComboBox, QCheckBox, QPlainTextEdit, QSizePolicy, QSlider, QLineEdit
 from PyQt5.QtCore import QSize, Qt, QTimer, QEvent, QProcess
 from PyQt5.QtGui import QFontDatabase, QColor, QPalette, QPixmap, QPainter, QIcon
 from MetroAPI import MetroAPI, MetroAPIError
@@ -7,8 +7,10 @@ import config_handler
 import os
 import sys
 import socket
+import subprocess
 from datetime import datetime
 from web_settings_server import start_web_settings_server
+import wifi_handler
 
 class IPPopout(QWidget):
     """A popout widget that displays the device IP address"""
@@ -2087,14 +2089,15 @@ class MainWindow(QMainWindow):
         
         # Add screen sleep section below the two-column layout
         
-        # Main section container
+        # Main section container with two-column layout matching top section
         system_settings_layout = QHBoxLayout()
         system_settings_layout.setContentsMargins(40, 0, 40, 0)
-        system_settings_layout.setSpacing(40)
+        system_settings_layout.setSpacing(0)  # Set to 0, will manually add spacing for separator
         
-        # Screen sleep settings
+        # Left column - Screen sleep settings
         screen_sleep_column_layout = QVBoxLayout()
         screen_sleep_column_layout.setSpacing(15)
+        screen_sleep_column_layout.setAlignment(Qt.AlignTop)
         
         # First row - Enable screen sleep checkbox
         screen_sleep_enable_layout = QHBoxLayout()
@@ -2181,6 +2184,50 @@ class MainWindow(QMainWindow):
         screen_sleep_column_layout.addLayout(screen_sleep_slider_layout)
         
         system_settings_layout.addLayout(screen_sleep_column_layout)
+        
+        # Add spacing before separator (half of the gap minus half of separator width)
+        system_settings_layout.addSpacing(40)  # Half of the 80px spacing
+        
+        # Add vertical separator line between columns
+        system_separator_line = QWidget()
+        system_separator_line.setStyleSheet("background-color: #d0d0d0;")
+        system_separator_line.setFixedWidth(1)
+        system_settings_layout.addWidget(system_separator_line)
+        
+        # Add spacing after separator (half of the gap minus half of separator width)
+        system_settings_layout.addSpacing(39)  # 40 - 1px for separator width = 39 to total 80px
+        
+        # Right column - Wi-Fi Setup button
+        wifi_column_layout = QVBoxLayout()
+        wifi_column_layout.setSpacing(20)
+        wifi_column_layout.setAlignment(Qt.AlignCenter)
+        
+        wifi_column_layout.addStretch()
+        self.wifi_setup_button = QPushButton("Wi-Fi Setup")
+        self.wifi_setup_button.setStyleSheet("""
+            QPushButton {
+                font-family: Quicksand;
+                font-size: 20px;
+                font-weight: bold;
+                padding: 12px 36px;
+                background-color: #4CAF50;
+                color: white;
+                border: none;
+                border-radius: 5px;
+            }
+            QPushButton:hover {
+                background-color: #45a049;
+            }
+            QPushButton:pressed {
+                background-color: #3d8b40;
+                padding-bottom: 11px;
+            }
+        """)
+        self.wifi_setup_button.clicked.connect(self.show_wifi_setup_page)
+        wifi_column_layout.addWidget(self.wifi_setup_button)
+        wifi_column_layout.addStretch()
+        
+        system_settings_layout.addLayout(wifi_column_layout)
         
         content_layout.addLayout(system_settings_layout)
         
@@ -2323,6 +2370,356 @@ class MainWindow(QMainWindow):
         
         page.setLayout(layout)
         return page
+    
+    def create_wifi_setup_page(self):
+        """Create the WiFi setup page"""
+        page = QWidget()
+        layout = QVBoxLayout()
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(0)
+        
+        # Create back button
+        back_button = QPushButton("←")
+        back_button.setStyleSheet("""
+            QPushButton {
+                font-family: Quicksand;
+                font-size: 22px;
+                font-weight: bold;
+                padding: 5px 20px;
+                background-color: lightgray;
+                border: none;
+                border-radius: 5px;
+            }
+            QPushButton:hover {
+                background-color: #b0b0b0;
+            }
+            QPushButton:pressed {
+                background-color: #909090;
+                padding-bottom: 4px;
+            }
+        """)
+        back_button.setFixedHeight(45)
+        back_button.clicked.connect(self.close_wifi_setup_page)
+        
+        # Add title bar
+        layout.addWidget(self.create_title_bar(back_button))
+        
+        # Add WiFi setup subtitle
+        content_layout = QVBoxLayout()
+        wifi_label = QLabel("Wi-Fi Setup")
+        wifi_label.setStyleSheet("font-family: Quicksand; font-size: 28px; font-weight: bold;")
+        wifi_label.setAlignment(Qt.AlignCenter)
+        content_layout.addWidget(wifi_label)
+        content_layout.addSpacing(0)
+        
+        # Main content area
+        main_content_layout = QVBoxLayout()
+        main_content_layout.setContentsMargins(40, 12, 40, 20)
+        main_content_layout.setSpacing(25)
+        main_content_layout.setAlignment(Qt.AlignTop | Qt.AlignHCenter)
+        
+        # WiFi network dropdown
+        network_label = QLabel("Select Wi-Fi Network:")
+        network_label.setStyleSheet("font-family: Quicksand; font-size: 21px; font-weight: bold;")
+        main_content_layout.addWidget(network_label)
+        
+        self.wifi_network_combo = QComboBox()
+        self.wifi_network_combo.setStyleSheet("""
+            QComboBox {
+                font-family: Quicksand;
+                font-size: 18px;
+                padding: 7px;
+                border: 1px solid #ccc;
+                border-radius: 3px;
+                background-color: white;
+            }
+            QComboBox:hover {
+                border: 1px solid #999;
+            }
+            QComboBox QAbstractItemView {
+                font-family: Quicksand;
+                font-size: 18px;
+                background-color: white;
+                selection-background-color: #e0e0e0;
+                selection-color: #000;
+                color: #000;
+            }
+            QComboBox QAbstractItemView::item {
+                color: #000;
+                padding: 5px;
+            }
+            QComboBox QAbstractItemView::item:selected {
+                background-color: #e0e0e0;
+                color: #000;
+            }
+            QComboBox QAbstractItemView::item:hover {
+                background-color: #e0e0e0;
+                color: #000;
+            }
+        """)
+        self.wifi_network_combo.setMinimumHeight(40)
+        main_content_layout.addWidget(self.wifi_network_combo)
+        
+        # Refresh networks button
+        refresh_button = QPushButton("Refresh Networks")
+        refresh_button.setStyleSheet("""
+            QPushButton {
+                font-family: Quicksand;
+                font-size: 16px;
+                font-weight: bold;
+                padding: 8px 16px;
+                background-color: #e0e0e0;
+                border: none;
+                border-radius: 5px;
+            }
+            QPushButton:hover {
+                background-color: #d0d0d0;
+            }
+            QPushButton:pressed {
+                background-color: #c0c0c0;
+                padding-bottom: 7px;
+            }
+        """)
+        refresh_button.clicked.connect(self.scan_wifi_networks)
+        main_content_layout.addWidget(refresh_button)
+        
+        main_content_layout.addSpacing(-9)
+        
+        # Password field
+        password_label = QLabel("Password:")
+        password_label.setStyleSheet("font-family: Quicksand; font-size: 21px; font-weight: bold;")
+        main_content_layout.addWidget(password_label)
+        
+        self.wifi_password_input = QLineEdit()
+        self.wifi_password_input.setEchoMode(QLineEdit.Password)
+        self.wifi_password_input.setStyleSheet("""
+            QLineEdit {
+                font-family: Quicksand;
+                font-size: 18px;
+                padding: 7px;
+                border: 1px solid #ccc;
+                border-radius: 3px;
+                background-color: white;
+            }
+            QLineEdit:hover {
+                border: 1px solid #999;
+            }
+            QLineEdit:focus {
+                border: 2px solid #4CAF50;
+            }
+        """)
+        self.wifi_password_input.setMinimumHeight(40)
+        main_content_layout.addWidget(self.wifi_password_input)
+        
+        main_content_layout.addSpacing(20)
+        
+        # Status label
+        self.wifi_status_label = QLabel("")
+        self.wifi_status_label.setStyleSheet("font-family: Quicksand; font-size: 16px;")
+        self.wifi_status_label.setAlignment(Qt.AlignCenter)
+        self.wifi_status_label.setWordWrap(True)
+        main_content_layout.addWidget(self.wifi_status_label)
+        
+        main_content_layout.addStretch()
+        
+        # Save button
+        save_wifi_button = QPushButton("Save and Connect")
+        save_wifi_button.setStyleSheet("""
+            QPushButton {
+                font-family: Quicksand;
+                font-size: 20px;
+                font-weight: bold;
+                padding: 12px 36px;
+                background-color: #4CAF50;
+                color: white;
+                border: none;
+                border-radius: 5px;
+            }
+            QPushButton:hover {
+                background-color: #45a049;
+            }
+            QPushButton:pressed {
+                background-color: #3d8b40;
+                padding-bottom: 11px;
+            }
+        """)
+        save_wifi_button.clicked.connect(self.save_wifi_credentials)
+        main_content_layout.addWidget(save_wifi_button, alignment=Qt.AlignCenter)
+        
+        content_layout.addLayout(main_content_layout)
+        content_layout.addStretch()
+        
+        content_widget = QWidget()
+        content_widget.setLayout(content_layout)
+        layout.addWidget(content_widget)
+        
+        page.setLayout(layout)
+        return page
+    
+    def scan_wifi_networks(self):
+        """Scan for available WiFi networks"""
+        self.wifi_status_label.setText("Scanning for networks...")
+        self.wifi_status_label.setStyleSheet("font-family: Quicksand; font-size: 16px; color: #666;")
+        
+        try:
+            # Try nmcli first (preferred for Raspberry Pi OS with NetworkManager)
+            result = subprocess.run(
+                ["nmcli", "-t", "-f", "SSID", "dev", "wifi"],
+                capture_output=True,
+                text=True,
+                timeout=10
+            )
+            
+            if result.returncode == 0 and result.stdout.strip():
+                networks = []
+                seen = set()
+                for line in result.stdout.strip().split('\n'):
+                    ssid = line.strip()
+                    if ssid and ssid not in seen and ssid != '--':
+                        networks.append(ssid)
+                        seen.add(ssid)
+                
+                if networks:
+                    self.wifi_network_combo.clear()
+                    self.wifi_network_combo.addItems(sorted(networks))
+                    self.wifi_status_label.setText(f"Found {len(networks)} network(s)")
+                    self.wifi_status_label.setStyleSheet("font-family: Quicksand; font-size: 16px; color: #4CAF50;")
+                else:
+                    self.wifi_status_label.setText("No networks found")
+                    self.wifi_status_label.setStyleSheet("font-family: Quicksand; font-size: 16px; color: #e74c3c;")
+            else:
+                # Fallback to iwlist if nmcli fails
+                result = subprocess.run(
+                    ["iwlist", "wlan0", "scan"],
+                    capture_output=True,
+                    text=True,
+                    timeout=15
+                )
+                
+                if result.returncode == 0:
+                    networks = []
+                    seen = set()
+                    for line in result.stdout.split('\n'):
+                        if 'ESSID:' in line:
+                            ssid = line.split('ESSID:')[1].strip().strip('"')
+                            if ssid and ssid not in seen:
+                                networks.append(ssid)
+                                seen.add(ssid)
+                    
+                    if networks:
+                        self.wifi_network_combo.clear()
+                        self.wifi_network_combo.addItems(sorted(networks))
+                        self.wifi_status_label.setText(f"Found {len(networks)} network(s)")
+                        self.wifi_status_label.setStyleSheet("font-family: Quicksand; font-size: 16px; color: #4CAF50;")
+                    else:
+                        self.wifi_status_label.setText("No networks found")
+                        self.wifi_status_label.setStyleSheet("font-family: Quicksand; font-size: 16px; color: #e74c3c;")
+                else:
+                    self.wifi_status_label.setText("Error scanning networks. Make sure WiFi is enabled.")
+                    self.wifi_status_label.setStyleSheet("font-family: Quicksand; font-size: 16px; color: #e74c3c;")
+        except subprocess.TimeoutExpired:
+            self.wifi_status_label.setText("Scan timeout. Please try again.")
+            self.wifi_status_label.setStyleSheet("font-family: Quicksand; font-size: 16px; color: #e74c3c;")
+        except FileNotFoundError:
+            self.wifi_status_label.setText("WiFi tools not found. Please install NetworkManager (nmcli) or wireless-tools (iwlist).")
+            self.wifi_status_label.setStyleSheet("font-family: Quicksand; font-size: 16px; color: #e74c3c;")
+        except Exception as e:
+            self.wifi_status_label.setText(f"Error: {str(e)}")
+            self.wifi_status_label.setStyleSheet("font-family: Quicksand; font-size: 16px; color: #e74c3c;")
+    
+    def save_wifi_credentials(self):
+        """Save WiFi credentials and connect to network"""
+        ssid = self.wifi_network_combo.currentText()
+        password = self.wifi_password_input.text()
+        
+        if not ssid:
+            self.wifi_status_label.setText("Please select a network")
+            self.wifi_status_label.setStyleSheet("font-family: Quicksand; font-size: 16px; color: #e74c3c;")
+            return
+        
+        self.wifi_status_label.setText("Connecting to network...")
+        self.wifi_status_label.setStyleSheet("font-family: Quicksand; font-size: 16px; color: #666;")
+        
+        try:
+            # Save encrypted credentials
+            wifi_handler.save_wifi_config(ssid, password)
+            
+            # Connect to network using nmcli
+            if password:
+                result = subprocess.run(
+                    ["sudo", "nmcli", "device", "wifi", "connect", ssid, "password", password],
+                    capture_output=True,
+                    text=True,
+                    timeout=30
+                )
+            else:
+                # Open network (no password)
+                result = subprocess.run(
+                    ["sudo", "nmcli", "device", "wifi", "connect", ssid],
+                    capture_output=True,
+                    text=True,
+                    timeout=30
+                )
+            
+            if result.returncode == 0:
+                # Find the connection name (might be SSID or formatted differently)
+                # First try using SSID directly
+                conn_result = subprocess.run(
+                    ["nmcli", "-t", "-f", "NAME", "connection", "show", "--active"],
+                    capture_output=True,
+                    text=True,
+                    timeout=5
+                )
+                
+                # Try to find connection matching SSID
+                connection_name = ssid
+                if conn_result.returncode == 0:
+                    active_conns = conn_result.stdout.strip().split('\n')
+                    # Look for connection that matches SSID or contains it
+                    for conn in active_conns:
+                        if ssid in conn or conn == ssid:
+                            connection_name = conn
+                            break
+                
+                # Set as auto-connect using the connection name
+                subprocess.run(
+                    ["sudo", "nmcli", "connection", "modify", connection_name, "connection.autoconnect", "yes"],
+                    capture_output=True,
+                    text=True,
+                    timeout=10
+                )
+                
+                self.wifi_status_label.setText("Connected successfully! System will reboot...")
+                self.wifi_status_label.setStyleSheet("font-family: Quicksand; font-size: 16px; color: #4CAF50;")
+                
+                # Reboot system after a short delay
+                QTimer.singleShot(2000, self.perform_system_reboot)
+            else:
+                error_msg = result.stderr.strip() if result.stderr else "Connection failed"
+                self.wifi_status_label.setText(f"Connection failed: {error_msg}")
+                self.wifi_status_label.setStyleSheet("font-family: Quicksand; font-size: 16px; color: #e74c3c;")
+        except subprocess.TimeoutExpired:
+            self.wifi_status_label.setText("Connection timeout. Please try again.")
+            self.wifi_status_label.setStyleSheet("font-family: Quicksand; font-size: 16px; color: #e74c3c;")
+        except Exception as e:
+            self.wifi_status_label.setText(f"Error: {str(e)}")
+            self.wifi_status_label.setStyleSheet("font-family: Quicksand; font-size: 16px; color: #e74c3c;")
+    
+    def show_wifi_setup_page(self):
+        """Show the WiFi setup page"""
+        if not hasattr(self, 'wifi_setup_page'):
+            self.wifi_setup_page = self.create_wifi_setup_page()
+            self.stack.addWidget(self.wifi_setup_page)
+        
+        # Scan for networks when page is shown
+        self.scan_wifi_networks()
+        
+        # Switch to WiFi setup page
+        self.stack.setCurrentWidget(self.wifi_setup_page)
+    
+    def close_wifi_setup_page(self):
+        """Close WiFi setup page and return to settings"""
+        self.stack.setCurrentWidget(self.settings_page)
 
 # Load configuration and initialize API
 config = config_handler.load_config()
