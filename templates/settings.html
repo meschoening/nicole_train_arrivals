@@ -47,7 +47,7 @@
       </div>
 
       <div class="row">
-        <label for="selected_destination">Direction</label>
+        <label for="selected_destination">Destination</label>
         <select id="selected_destination" name="selected_destination">
           {# directions may be strings (legacy) or objects {name, lines} #}
           {% set emoji_map = {'RD':'🔴','OR':'🟠','YL':'🟡','GR':'🟢','BL':'🔵','SV':'⚫'} %}
@@ -78,8 +78,13 @@
       </div>
 
       <div class="row">
-        <label>Filter by Selected Direction</label>
+        <label>Filter by Selected Destination</label>
         <input type="checkbox" name="filter_by_direction" {% if config.get('filter_by_direction', False) %}checked{% endif %}>
+      </div>
+
+      <div class="row">
+        <label>Filter by Destination Direction</label>
+        <input type="checkbox" name="filter_by_destination_direction" {% if config.get('filter_by_destination_direction', False) %}checked{% endif %}>
       </div>
 
       <hr>
@@ -157,6 +162,24 @@
       }
       // Mark unsaved when any field changes
       settingsForm.addEventListener('change', markUnsaved);
+
+      // Make filter checkboxes mutually exclusive
+      const filterByDestCheckbox = document.querySelector('input[name="filter_by_direction"]');
+      const filterByDirCheckbox = document.querySelector('input[name="filter_by_destination_direction"]');
+      
+      if (filterByDestCheckbox && filterByDirCheckbox) {
+        filterByDestCheckbox.addEventListener('change', function() {
+          if (this.checked && filterByDirCheckbox.checked) {
+            filterByDirCheckbox.checked = false;
+          }
+        });
+        
+        filterByDirCheckbox.addEventListener('change', function() {
+          if (this.checked && filterByDestCheckbox.checked) {
+            filterByDestCheckbox.checked = false;
+          }
+        });
+      }
     </script>
   </body>
   </html>

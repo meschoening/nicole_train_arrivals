@@ -629,16 +629,16 @@ class MainWindow(QMainWindow):
             station_code = self.station_combo.itemData(index)
             self.populate_directions(station_code)
     
-    def on_direction_selected(self, index):
-        """Handle direction selection change"""
-        # Direction selection doesn't trigger any cascading updates
+    def on_destination_selected(self, index):
+        """Handle destination selection change"""
+        # Destination selection doesn't trigger any cascading updates
         pass
     
     def populate_stations(self, line_code):
         """Populate station dropdown based on selected line"""
-        # Clear current stations and directions
+        # Clear current stations and destinations
         self.station_combo.clear()
-        self.direction_combo.clear()
+        self.destination_combo.clear()
         
         if not line_code:
             return
@@ -657,9 +657,9 @@ class MainWindow(QMainWindow):
             self.refresh_error_message = str(e)
     
     def populate_directions(self, station_code):
-        """Populate direction dropdown with unique destinations from station predictions"""
-        # Clear current directions
-        self.direction_combo.clear()
+        """Populate destination dropdown with unique destinations from station predictions"""
+        # Clear current destinations
+        self.destination_combo.clear()
         
         if not station_code:
             return
@@ -695,10 +695,61 @@ class MainWindow(QMainWindow):
                     else:
                         icon = self.create_multi_colored_circle_icon(colors)
                     
-                    self.direction_combo.addItem(icon, destination)
+                    self.destination_combo.addItem(icon, destination)
         except MetroAPIError as e:
             # Store error for display in countdown
             self.refresh_error_message = str(e)
+    
+    def get_destination_direction(self, destination_name, destination_line):
+        """
+        Determine the direction of a destination relative to the current station.
+        
+        Args:
+            destination_name: Name of the destination station
+            destination_line: Line code of the destination (e.g., 'RD', 'SV')
+        
+        Returns:
+            'forward' if destination is ahead on the line, 'backward' if behind, or None if can't determine
+        """
+        try:
+            # Get current station code from config
+            config = config_handler.load_config()
+            current_station_code = config.get('selected_station')
+            if not current_station_code:
+                return None
+            
+            # Get all stations for the destination's line
+            stations_data = data_handler.get_cached_stations(destination_line)
+            if stations_data is None or stations_data.empty:
+                return None
+            
+            # Find positions of current and destination stations
+            current_position = None
+            destination_position = None
+            
+            for idx, station in stations_data.iterrows():
+                station_code = station.get('Code', '')
+                station_name = station.get('Name', '')
+                
+                if station_code == current_station_code:
+                    current_position = idx
+                if station_name == destination_name:
+                    destination_position = idx
+            
+            # If both positions found, compare them
+            if current_position is not None and destination_position is not None:
+                if destination_position > current_position:
+                    return 'forward'
+                elif destination_position < current_position:
+                    return 'backward'
+                else:
+                    # Same station - treat as forward by default
+                    return 'forward'
+            
+            return None
+            
+        except Exception:
+            return None
     
     def get_config_last_saved(self):
         """Get the last modified timestamp of the config file"""
@@ -718,6 +769,24 @@ class MainWindow(QMainWindow):
         """Show warning label when settings are changed"""
         self.unsaved_warning_label.show()
     
+    def on_filter_by_destination_changed(self, state):
+        """Handle filter by destination checkbox state change"""
+        if state == Qt.Checked:
+            # Uncheck the other filter if it's checked
+            if self.filter_by_destination_direction_checkbox.isChecked():
+                self.filter_by_destination_direction_checkbox.blockSignals(True)
+                self.filter_by_destination_direction_checkbox.setChecked(False)
+                self.filter_by_destination_direction_checkbox.blockSignals(False)
+    
+    def on_filter_by_direction_changed(self, state):
+        """Handle filter by destination direction checkbox state change"""
+        if state == Qt.Checked:
+            # Uncheck the other filter if it's checked
+            if self.filter_by_destination_checkbox.isChecked():
+                self.filter_by_destination_checkbox.blockSignals(True)
+                self.filter_by_destination_checkbox.setChecked(False)
+                self.filter_by_destination_checkbox.blockSignals(False)
+    
     def save_settings(self):
         """Manually save current settings to config file"""
         current_index = self.line_combo.currentIndex()
@@ -730,9 +799,9 @@ class MainWindow(QMainWindow):
             station_code = self.station_combo.itemData(station_index)
             config_handler.save_config('selected_station', station_code)
         
-        direction_index = self.direction_combo.currentIndex()
-        if direction_index >= 0:
-            destination = self.direction_combo.currentText()
+        destination_index = self.destination_combo.currentIndex()
+        if destination_index >= 0:
+            destination = self.destination_combo.currentText()
             config_handler.save_config('selected_destination', destination)
         
         # Save countdown visibility setting
@@ -741,8 +810,11 @@ class MainWindow(QMainWindow):
         # Save clock visibility setting
         config_handler.save_config('show_clock', self.show_clock_checkbox.isChecked())
         
-        # Save filter by direction setting
-        config_handler.save_config('filter_by_direction', self.filter_by_direction_checkbox.isChecked())
+        # Save filter by selected destination setting
+        config_handler.save_config('filter_by_direction', self.filter_by_destination_checkbox.isChecked())
+        
+        # Save filter by destination direction setting
+        config_handler.save_config('filter_by_destination_direction', self.filter_by_destination_direction_checkbox.isChecked())
         
         # Save screen sleep settings
         config_handler.save_config('screen_sleep_enabled', self.screen_sleep_enabled_checkbox.isChecked())
@@ -766,7 +838,7 @@ class MainWindow(QMainWindow):
         # Clear all dropdowns first
         self.line_combo.clear()
         self.station_combo.clear()
-        self.direction_combo.clear()
+        self.destination_combo.clear()
         
         # Load config
         config = config_handler.load_config()
@@ -785,9 +857,16 @@ class MainWindow(QMainWindow):
         if hasattr(self, 'clock_label'):
             self.clock_label.setVisible(show_clock)
         
-        # Load and apply filter by direction setting
+        # Load and apply filter by selected destination setting
         filter_by_direction = config.get('filter_by_direction', False)  # Default to False (show all)
-        self.filter_by_direction_checkbox.setChecked(filter_by_direction)
+        filter_by_destination_direction = config.get('filter_by_destination_direction', False)  # Default to False (show all)
+        
+        # Ensure only one filter is checked (prioritize filter_by_direction if both are true)
+        if filter_by_direction and filter_by_destination_direction:
+            filter_by_destination_direction = False
+        
+        self.filter_by_destination_checkbox.setChecked(filter_by_direction)
+        self.filter_by_destination_direction_checkbox.setChecked(filter_by_destination_direction)
         
         # Load and apply screen sleep settings
         screen_sleep_enabled = config.get('screen_sleep_enabled', False)
@@ -826,12 +905,12 @@ class MainWindow(QMainWindow):
                             # Manually populate directions for this station
                             self.populate_directions(selected_station)
                             
-                            # Set direction from config
+                            # Set destination from config
                             selected_destination = config.get('selected_destination')
                             if selected_destination:
-                                direction_index = self.direction_combo.findText(selected_destination)
-                                if direction_index >= 0:
-                                    self.direction_combo.setCurrentIndex(direction_index)
+                                destination_index = self.destination_combo.findText(selected_destination)
+                                if destination_index >= 0:
+                                    self.destination_combo.setCurrentIndex(destination_index)
         
         # Hide unsaved warning after initialization (signals may have triggered it)
         self.unsaved_warning_label.hide()
@@ -983,6 +1062,50 @@ class MainWindow(QMainWindow):
                         row.time_label.setText("—")
                     return
         
+        # Apply direction-based filtering if enabled
+        if config.get('filter_by_destination_direction', False):
+            selected_destination = config.get('selected_destination')
+            if selected_destination:
+                # Find the direction of the selected destination
+                # We need to get the line for the selected destination from predictions
+                selected_direction = None
+                selected_destination_line = None
+                
+                # First, find which line the selected destination is on
+                for _, pred_row in predictions_data.iterrows():
+                    if pred_row.get('DestinationName') == selected_destination:
+                        selected_destination_line = pred_row.get('Line')
+                        break
+                
+                # Determine the direction of the selected destination
+                if selected_destination_line:
+                    selected_direction = self.get_destination_direction(selected_destination, selected_destination_line)
+                
+                # If we have a direction, filter predictions to only show trains going in that direction
+                if selected_direction:
+                    # Create a mask for filtering
+                    mask = []
+                    for _, pred_row in predictions_data.iterrows():
+                        dest_name = pred_row.get('DestinationName')
+                        dest_line = pred_row.get('Line')
+                        if dest_name and dest_line:
+                            dest_direction = self.get_destination_direction(dest_name, dest_line)
+                            mask.append(dest_direction == selected_direction)
+                        else:
+                            mask.append(False)
+                    
+                    # Apply the mask to filter the DataFrame
+                    predictions_data = predictions_data[mask].copy()
+                
+                # Check if any predictions remain after filtering
+                if predictions_data.empty:
+                    # No arrivals in the selected direction
+                    for row in self.arrival_rows:
+                        row.circle_label.setStyleSheet("background-color: #cccccc; border-radius: 10px;")
+                        row.destination_label.setText("No arrivals")
+                        row.time_label.setText("—")
+                    return
+        
         # Sort predictions by arrival time (Min field)
         # Need to handle special values like 'ARR', 'BRD', etc.
         def sort_key(row_data):
@@ -1121,11 +1244,22 @@ class MainWindow(QMainWindow):
             self.show_clock_checkbox.setChecked(config.get('show_clock', True))
             self.show_clock_checkbox.blockSignals(False)
             self.toggle_clock_visibility()
-        # Filter by direction
-        if hasattr(self, 'filter_by_direction_checkbox'):
-            self.filter_by_direction_checkbox.blockSignals(True)
-            self.filter_by_direction_checkbox.setChecked(config.get('filter_by_direction', False))
-            self.filter_by_direction_checkbox.blockSignals(False)
+        # Filter by selected destination and direction (mutually exclusive)
+        if hasattr(self, 'filter_by_destination_checkbox') and hasattr(self, 'filter_by_destination_direction_checkbox'):
+            filter_by_direction = config.get('filter_by_direction', False)
+            filter_by_destination_direction = config.get('filter_by_destination_direction', False)
+            
+            # Ensure only one filter is checked (prioritize filter_by_direction if both are true)
+            if filter_by_direction and filter_by_destination_direction:
+                filter_by_destination_direction = False
+            
+            self.filter_by_destination_checkbox.blockSignals(True)
+            self.filter_by_destination_checkbox.setChecked(filter_by_direction)
+            self.filter_by_destination_checkbox.blockSignals(False)
+            
+            self.filter_by_destination_direction_checkbox.blockSignals(True)
+            self.filter_by_destination_direction_checkbox.setChecked(filter_by_destination_direction)
+            self.filter_by_destination_direction_checkbox.blockSignals(False)
         # Screen sleep
         if hasattr(self, 'screen_sleep_enabled_checkbox'):
             self.screen_sleep_enabled_checkbox.blockSignals(True)
@@ -1868,8 +2002,8 @@ class MainWindow(QMainWindow):
         checkboxes_column_layout.setSpacing(20)
         checkboxes_column_layout.setAlignment(Qt.AlignTop)
 
-        selectors_label_width = 180
-        checkboxes_label_width = 300
+        selectors_label_width = 190
+        checkboxes_label_width = 310
 
         # Add line selector
         line_selector_layout = QHBoxLayout()
@@ -1977,17 +2111,17 @@ class MainWindow(QMainWindow):
         station_selector_layout.addStretch()
         selectors_column_layout.addLayout(station_selector_layout)
         
-        # Add direction selector
-        direction_selector_layout = QHBoxLayout()
-        direction_selector_layout.setContentsMargins(0, 0, 0, 0)
+        # Add destination selector
+        destination_selector_layout = QHBoxLayout()
+        destination_selector_layout.setContentsMargins(0, 0, 0, 0)
         
-        direction_label = QLabel("Select Direction:")
-        direction_label.setStyleSheet("font-family: Quicksand; font-size: 21px; font-weight: bold;")
-        direction_label.setFixedWidth(selectors_label_width)
-        direction_selector_layout.addWidget(direction_label)
+        destination_label = QLabel("Select Destination:")
+        destination_label.setStyleSheet("font-family: Quicksand; font-size: 21px; font-weight: bold;")
+        destination_label.setFixedWidth(selectors_label_width)
+        destination_selector_layout.addWidget(destination_label)
         
-        self.direction_combo = QComboBox()
-        self.direction_combo.setStyleSheet("""
+        self.destination_combo = QComboBox()
+        self.destination_combo.setStyleSheet("""
             QComboBox {
                 font-family: Quicksand;
                 font-size: 18px;
@@ -2020,15 +2154,15 @@ class MainWindow(QMainWindow):
                 color: #000;
             }
         """)
-        self.direction_combo.setMinimumWidth(265)
+        self.destination_combo.setMinimumWidth(265)
         
         # Connect selection change to save config
-        self.direction_combo.currentIndexChanged.connect(self.on_direction_selected)
-        self.direction_combo.currentIndexChanged.connect(self.mark_settings_changed)
+        self.destination_combo.currentIndexChanged.connect(self.on_destination_selected)
+        self.destination_combo.currentIndexChanged.connect(self.mark_settings_changed)
         
-        direction_selector_layout.addWidget(self.direction_combo)
-        direction_selector_layout.addStretch()
-        selectors_column_layout.addLayout(direction_selector_layout)
+        destination_selector_layout.addWidget(self.destination_combo)
+        destination_selector_layout.addStretch()
+        selectors_column_layout.addLayout(destination_selector_layout)
         
         # Add countdown visibility checkbox
         countdown_checkbox_layout = QHBoxLayout()
@@ -2088,17 +2222,17 @@ class MainWindow(QMainWindow):
         clock_checkbox_layout.addStretch()
         checkboxes_column_layout.addLayout(clock_checkbox_layout)
         
-        # Add filter by direction checkbox
+        # Add filter by selected destination checkbox
         filter_checkbox_layout = QHBoxLayout()
         filter_checkbox_layout.setContentsMargins(0, 0, 0, 0)
         
-        filter_label = QLabel("Filter by Selected Direction:")
+        filter_label = QLabel("Filter by Selected Destination:")
         filter_label.setStyleSheet("font-family: Quicksand; font-size: 21px; font-weight: bold;")
         filter_label.setFixedWidth(checkboxes_label_width)
         filter_checkbox_layout.addWidget(filter_label)
         
-        self.filter_by_direction_checkbox = QCheckBox()
-        self.filter_by_direction_checkbox.setStyleSheet("""
+        self.filter_by_destination_checkbox = QCheckBox()
+        self.filter_by_destination_checkbox.setStyleSheet("""
             QCheckBox {
                 spacing: 5px;
             }
@@ -2117,15 +2251,56 @@ class MainWindow(QMainWindow):
                 border: 2px solid #4CAF50;
             }
         """)
-        self.filter_by_direction_checkbox.setChecked(False)  # Default to unchecked (show all)
+        self.filter_by_destination_checkbox.setChecked(False)  # Default to unchecked (show all)
         
         # Connect checkbox to refresh arrivals
-        self.filter_by_direction_checkbox.stateChanged.connect(self.update_arrivals_display)
-        self.filter_by_direction_checkbox.stateChanged.connect(self.mark_settings_changed)
+        self.filter_by_destination_checkbox.stateChanged.connect(self.on_filter_by_destination_changed)
+        self.filter_by_destination_checkbox.stateChanged.connect(self.update_arrivals_display)
+        self.filter_by_destination_checkbox.stateChanged.connect(self.mark_settings_changed)
         
-        filter_checkbox_layout.addWidget(self.filter_by_direction_checkbox)
+        filter_checkbox_layout.addWidget(self.filter_by_destination_checkbox)
         filter_checkbox_layout.addStretch()
         checkboxes_column_layout.addLayout(filter_checkbox_layout)
+        
+        # Add filter by destination direction checkbox
+        filter_direction_checkbox_layout = QHBoxLayout()
+        filter_direction_checkbox_layout.setContentsMargins(0, 0, 0, 0)
+        
+        filter_direction_label = QLabel("Filter by Destination Direction:")
+        filter_direction_label.setStyleSheet("font-family: Quicksand; font-size: 21px; font-weight: bold;")
+        filter_direction_label.setFixedWidth(checkboxes_label_width)
+        filter_direction_checkbox_layout.addWidget(filter_direction_label)
+        
+        self.filter_by_destination_direction_checkbox = QCheckBox()
+        self.filter_by_destination_direction_checkbox.setStyleSheet("""
+            QCheckBox {
+                spacing: 5px;
+            }
+            QCheckBox::indicator {
+                width: 25px;
+                height: 25px;
+                border: 2px solid #ccc;
+                border-radius: 3px;
+                background-color: white;
+            }
+            QCheckBox::indicator:hover {
+                border: 2px solid #999;
+            }
+            QCheckBox::indicator:checked {
+                background-color: #4CAF50;
+                border: 2px solid #4CAF50;
+            }
+        """)
+        self.filter_by_destination_direction_checkbox.setChecked(False)  # Default to unchecked (show all)
+        
+        # Connect checkbox to refresh arrivals
+        self.filter_by_destination_direction_checkbox.stateChanged.connect(self.on_filter_by_direction_changed)
+        self.filter_by_destination_direction_checkbox.stateChanged.connect(self.update_arrivals_display)
+        self.filter_by_destination_direction_checkbox.stateChanged.connect(self.mark_settings_changed)
+        
+        filter_direction_checkbox_layout.addWidget(self.filter_by_destination_direction_checkbox)
+        filter_direction_checkbox_layout.addStretch()
+        checkboxes_column_layout.addLayout(filter_direction_checkbox_layout)
         
         controls_layout.addLayout(selectors_column_layout)
         

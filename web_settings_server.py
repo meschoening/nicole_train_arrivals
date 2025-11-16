@@ -271,6 +271,7 @@ def start_web_settings_server(data_handler, host="0.0.0.0", port=80):
         config_handler.save_config("show_countdown", as_bool("show_countdown"))
         config_handler.save_config("show_clock", as_bool("show_clock"))
         config_handler.save_config("filter_by_direction", as_bool("filter_by_direction"))
+        config_handler.save_config("filter_by_destination_direction", as_bool("filter_by_destination_direction"))
         config_handler.save_config("reboot_enabled", as_bool("reboot_enabled"))
         config_handler.save_config("screen_sleep_enabled", as_bool("screen_sleep_enabled"))
 
