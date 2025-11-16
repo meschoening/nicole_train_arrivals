@@ -8,7 +8,7 @@ import os
 import sys
 import socket
 import subprocess
-from datetime import datetime
+from datetime import datetime, timedelta
 from web_settings_server import start_web_settings_server
 
 class IPPopout(QWidget):
@@ -481,6 +481,9 @@ class MainWindow(QMainWindow):
         # Error state tracking for refresh countdown (must be initialized before first data load)
         self.refresh_error_message = None
         
+        # Track which arrival rows are showing actual time (persists across refreshes)
+        self.rows_showing_actual_time = set()
+        
         # Initialize settings with config values
         self.initialize_settings_from_config()
         
@@ -843,6 +846,7 @@ class MainWindow(QMainWindow):
         bg_color = "#ffffff" if index % 2 == 0 else "#f5f5f5"
         row.setStyleSheet(f"background-color: {bg_color};")
         row.setFixedHeight(95)
+        row.setCursor(Qt.PointingHandCursor)  # Show pointer cursor on hover
         
         row_layout = QHBoxLayout()
         row_layout.setContentsMargins(25, 15, 25, 15)
@@ -871,8 +875,62 @@ class MainWindow(QMainWindow):
         row.circle_label = circle_label
         row.destination_label = destination_label
         row.time_label = time_label
+        row.row_index = index
+        row.base_color = bg_color  # Store base color for press effect
+        
+        # Make row clickable with press effect
+        row.mousePressEvent = lambda event: self.on_arrival_row_pressed(index)
+        row.mouseReleaseEvent = lambda event: self.on_arrival_row_released(index)
         
         return row
+    
+    def on_arrival_row_pressed(self, index):
+        """Handle mouse press on arrival row - show darker color"""
+        row = self.arrival_rows[index]
+        # Apply pressed color (slightly darker)
+        pressed_color = "#e8e8e8" if index % 2 == 0 else "#e0e0e0"
+        row.setStyleSheet(f"background-color: {pressed_color};")
+    
+    def on_arrival_row_released(self, index):
+        """Handle mouse release on arrival row - toggle time display and restore color"""
+        row = self.arrival_rows[index]
+        
+        # Toggle the time display state
+        if index in self.rows_showing_actual_time:
+            # Row is currently showing actual time, toggle it off
+            self.rows_showing_actual_time.remove(index)
+        else:
+            # Row is not showing actual time, toggle it on
+            self.rows_showing_actual_time.add(index)
+        
+        # Restore base color
+        base_color = "#ffffff" if index % 2 == 0 else "#f5f5f5"
+        row.setStyleSheet(f"background-color: {base_color};")
+        
+        # Refresh display to show updated format
+        self.update_arrivals_display()
+    
+    def calculate_actual_time(self, min_value):
+        """Calculate the actual arrival time given minutes until arrival"""
+        # Handle special cases that shouldn't show actual time
+        if min_value in ['ARR', 'BRD', '—']:
+            return None
+        
+        # Try to convert to integer
+        try:
+            if isinstance(min_value, str):
+                minutes = int(min_value)
+            else:
+                minutes = int(min_value)
+        except (ValueError, TypeError):
+            return None
+        
+        # Calculate actual arrival time
+        now = datetime.now()
+        arrival_time = now + timedelta(minutes=minutes)
+        
+        # Format as 12-hour time with AM/PM, remove leading zero
+        return arrival_time.strftime("%I:%M %p").lstrip('0')
     
     def update_arrivals_display(self):
         """Update the arrivals display with latest prediction data"""
@@ -949,6 +1007,10 @@ class MainWindow(QMainWindow):
             if i < len(sorted_predictions):
                 prediction = sorted_predictions[i]
                 
+                # Update row background to base color
+                base_color = "#ffffff" if i % 2 == 0 else "#f5f5f5"
+                row.setStyleSheet(f"background-color: {base_color};")
+                
                 # Update line color
                 line_code = prediction.get('Line', '')
                 color = self.LINE_COLORS.get(line_code, '#cccccc')
@@ -964,11 +1026,18 @@ class MainWindow(QMainWindow):
                     time_text = min_val
                 elif isinstance(min_val, (int, float)) or (isinstance(min_val, str) and min_val.isdigit()):
                     time_text = f"{min_val} min"
+                    # Add actual time if this row is clicked
+                    if i in self.rows_showing_actual_time:
+                        actual_time = self.calculate_actual_time(min_val)
+                        if actual_time:
+                            time_text = f"{actual_time} • {min_val} min"
                 else:
                     time_text = str(min_val)
                 row.time_label.setText(time_text)
             else:
                 # No more predictions, show empty row
+                base_color = "#ffffff" if i % 2 == 0 else "#f5f5f5"
+                row.setStyleSheet(f"background-color: {base_color};")
                 row.circle_label.setStyleSheet("background-color: #cccccc; border-radius: 10px;")
                 row.destination_label.setText("—")
                 row.time_label.setText("—")
