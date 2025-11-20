@@ -68,6 +68,12 @@
       </div>
 
       <div class="row">
+        <label for="refresh_rate_seconds">Refresh Rate</label>
+        <input type="number" min="5" max="120" step="1" id="refresh_rate_seconds" name="refresh_rate_seconds" value="{{ config.get('refresh_rate_seconds', 30) }}">
+        <span style="color:#999; font-size:12px; margin-left:8px;">seconds (5-120)</span>
+      </div>
+
+      <div class="row">
         <label>Show Time to Refresh</label>
         <input type="checkbox" name="show_countdown" {% if config.get('show_countdown', True) %}checked{% endif %}>
       </div>

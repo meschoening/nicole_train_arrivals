@@ -10,8 +10,14 @@ DEFAULT_MESSAGES = {
     ],
     "timing_mode": "periodic",
     "periodic_interval_minutes": 30,
+    "periodic_time_window_enabled": False,
+    "periodic_window_start": "09:00",
+    "periodic_window_end": "17:00",
     "random_min_minutes": 15,
     "random_max_minutes": 60,
+    "random_time_window_enabled": False,
+    "random_window_start": "09:00",
+    "random_window_end": "17:00",
     "display_duration_seconds": 5,
     "fade_duration_ms": 800
 }

@@ -11,7 +11,7 @@ import socket
 import subprocess
 import random
 from datetime import datetime, timedelta
-from web_settings_server import start_web_settings_server, get_pending_message_trigger
+from web_settings_server import start_web_settings_server, get_pending_message_trigger, get_pending_settings_change
 
 class IPPopout(QWidget):
     """A popout widget that displays the device IP address"""
@@ -507,13 +507,17 @@ class MainWindow(QMainWindow):
             # Store error for display in countdown
             self.refresh_error_message = str(e)
         
-        # Set up auto-refresh timer (30 seconds)
+        # Load refresh rate from config
+        config = config_handler.load_config()
+        refresh_rate_seconds = config.get('refresh_rate_seconds', 30)
+        
+        # Set up auto-refresh timer
         self.refresh_timer = QTimer()
         self.refresh_timer.timeout.connect(self.refresh_arrivals)
-        self.refresh_timer.start(30000)  # 30000ms = 30 seconds
+        self.refresh_timer.start(refresh_rate_seconds * 1000)  # Convert seconds to milliseconds
         
         # Set up countdown timer (updates every second)
-        self.seconds_until_refresh = 30
+        self.seconds_until_refresh = refresh_rate_seconds
         self.countdown_timer = QTimer()
         self.countdown_timer.timeout.connect(self.update_countdown)
         self.countdown_timer.start(1000)  # 1000ms = 1 second
@@ -1199,28 +1203,45 @@ class MainWindow(QMainWindow):
         # Update the display
         self.update_arrivals_display()
         
-        # Reset countdown
-        self.seconds_until_refresh = 30
+        # Reset countdown to configured refresh rate
+        config = config_handler.load_config()
+        self.seconds_until_refresh = config.get('refresh_rate_seconds', 30)
+    
+    def format_time_display(self, seconds):
+        """Format seconds into user-friendly display string"""
+        if seconds < 60:
+            return f"{seconds}s"
+        else:
+            minutes = seconds // 60
+            remaining_seconds = seconds % 60
+            if remaining_seconds == 0:
+                return f"{minutes}m"
+            else:
+                return f"{minutes}m {remaining_seconds}s"
     
     def update_countdown(self):
         """Update the countdown label"""
         self.seconds_until_refresh -= 1
         
         if self.seconds_until_refresh <= 0:
-            self.seconds_until_refresh = 30
+            config = config_handler.load_config()
+            self.seconds_until_refresh = config.get('refresh_rate_seconds', 30)
+        
+        # Format the time display
+        time_display = self.format_time_display(self.seconds_until_refresh)
         
         # Update the label text and styling based on error state
         if self.refresh_error_message:
             # Display error message with red background
             self.refresh_countdown_label.setText(
-                f"Error Refreshing: {self.refresh_error_message} Trying again in {self.seconds_until_refresh}s"
+                f"Error Refreshing: {self.refresh_error_message} Trying again in {time_display}"
             )
             self.refresh_countdown_label.setStyleSheet(
                 "font-family: Quicksand; font-size: 14px; color: white; background-color: #e74c3c; padding: 5px; border-radius: 3px;"
             )
         else:
             # Normal countdown display
-            self.refresh_countdown_label.setText(f"Refresh in {self.seconds_until_refresh}s")
+            self.refresh_countdown_label.setText(f"Refresh in {time_display}")
             self.refresh_countdown_label.setStyleSheet("font-family: Quicksand; font-size: 14px; color: #666;")
     
     def toggle_countdown_visibility(self):
@@ -1285,6 +1306,12 @@ class MainWindow(QMainWindow):
             self.update_screen_sleep_label()
         # Apply to system if needed
         self.apply_screen_sleep_settings()
+        # Refresh rate
+        if hasattr(self, 'refresh_timer'):
+            refresh_rate_seconds = config.get('refresh_rate_seconds', 30)
+            self.refresh_timer.stop()
+            self.refresh_timer.start(refresh_rate_seconds * 1000)  # Convert seconds to milliseconds
+            self.seconds_until_refresh = refresh_rate_seconds
     
     def update_screen_sleep_label(self):
         """Update the screen sleep label to show current slider value"""
@@ -1790,20 +1817,9 @@ class MainWindow(QMainWindow):
             
             # Enable screen saver with timeout
             os.system(f"xset s {timeout_seconds}")
-            
-            # Enable DPMS (Display Power Management Signaling) with the same timeout
-            # Format: xset dpms standby suspend off (all in seconds)
-            # We'll use the same timeout for all three stages
-            os.system(f"xset dpms {timeout_seconds} {timeout_seconds} {timeout_seconds}")
-            
-            # Make sure DPMS is enabled
-            os.system("xset +dpms")
         else:
             # Disable screen saver
             os.system("xset s off")
-            
-            # Disable DPMS
-            os.system("xset -dpms")
     
     def create_title_bar(self, button_widget, countdown_label=None, center_widget=None):
         """Create a title bar with fixed center widget regardless of left/right widths"""
@@ -1878,10 +1894,27 @@ class MainWindow(QMainWindow):
         self.schedule_next_message()
     
     def check_for_web_trigger(self):
-        """Check if there's a pending message trigger from the web interface"""
+        """Check if there's a pending message trigger or settings change from the web interface"""
+        # Check for message trigger
         trigger = get_pending_message_trigger()
         if trigger is not False:  # False means no trigger, None or a string means trigger
             self.trigger_message_display(trigger)
+        
+        # Check for settings change
+        if get_pending_settings_change():
+            self.handle_settings_changed()
+    
+    def handle_settings_changed(self):
+        """Handle settings change from web interface - sync settings and refresh display"""
+        # Sync all settings from config file
+        self.sync_settings_from_config()
+        
+        # Refresh the arrivals display immediately
+        try:
+            self.refresh_error_message = None  # Clear any previous error
+            self.refresh_arrivals()
+        except MetroAPIError as e:
+            self.refresh_error_message = str(e)
     
     def schedule_next_message(self):
         """Calculate and schedule the next automatic message display"""
@@ -1900,20 +1933,102 @@ class MainWindow(QMainWindow):
         if timing_mode == "disabled":
             return
         
+        # Check if we should respect time window
         if timing_mode == "periodic":
             interval_minutes = self.message_config.get("periodic_interval_minutes", 30)
             delay_ms = interval_minutes * 60 * 1000
+            time_window_enabled = self.message_config.get("periodic_time_window_enabled", False)
+            window_start = self.message_config.get("periodic_window_start", "09:00")
+            window_end = self.message_config.get("periodic_window_end", "17:00")
         else:  # random
             min_minutes = self.message_config.get("random_min_minutes", 15)
             max_minutes = self.message_config.get("random_max_minutes", 60)
             random_minutes = random.randint(min_minutes, max_minutes)
             delay_ms = random_minutes * 60 * 1000
+            time_window_enabled = self.message_config.get("random_time_window_enabled", False)
+            window_start = self.message_config.get("random_window_start", "09:00")
+            window_end = self.message_config.get("random_window_end", "17:00")
+        
+        # If time window is enabled, check if we're currently in the window
+        if time_window_enabled and not self.is_in_time_window(window_start, window_end):
+            # Schedule a check for when the window opens
+            delay_ms = self.calculate_delay_until_window(window_start)
         
         # Create single-shot timer for next message
         self.message_schedule_timer = QTimer()
         self.message_schedule_timer.setSingleShot(True)
-        self.message_schedule_timer.timeout.connect(lambda: self.trigger_message_display(None))
+        self.message_schedule_timer.timeout.connect(lambda: self.on_message_timer_trigger())
         self.message_schedule_timer.start(delay_ms)
+    
+    def on_message_timer_trigger(self):
+        """Called when message timer triggers - checks time window before displaying"""
+        timing_mode = self.message_config.get("timing_mode", "periodic")
+        
+        # Get time window settings for current mode
+        if timing_mode == "periodic":
+            time_window_enabled = self.message_config.get("periodic_time_window_enabled", False)
+            window_start = self.message_config.get("periodic_window_start", "09:00")
+            window_end = self.message_config.get("periodic_window_end", "17:00")
+        else:  # random
+            time_window_enabled = self.message_config.get("random_time_window_enabled", False)
+            window_start = self.message_config.get("random_window_start", "09:00")
+            window_end = self.message_config.get("random_window_end", "17:00")
+        
+        # Check if we're in the time window (or if window is disabled)
+        if not time_window_enabled or self.is_in_time_window(window_start, window_end):
+            self.trigger_message_display(None)
+        else:
+            # Outside window, reschedule for when window opens
+            self.schedule_next_message()
+    
+    def is_in_time_window(self, start_time_str, end_time_str):
+        """Check if current time is within the specified time window"""
+        now = datetime.now().time()
+        
+        # Parse time strings (format: "HH:MM")
+        start_parts = start_time_str.split(':')
+        end_parts = end_time_str.split(':')
+        
+        start_time = datetime.now().replace(
+            hour=int(start_parts[0]), 
+            minute=int(start_parts[1]), 
+            second=0, 
+            microsecond=0
+        ).time()
+        
+        end_time = datetime.now().replace(
+            hour=int(end_parts[0]), 
+            minute=int(end_parts[1]), 
+            second=0, 
+            microsecond=0
+        ).time()
+        
+        # Handle window that crosses midnight
+        if start_time <= end_time:
+            return start_time <= now <= end_time
+        else:
+            return now >= start_time or now <= end_time
+    
+    def calculate_delay_until_window(self, start_time_str):
+        """Calculate milliseconds until the time window starts"""
+        now = datetime.now()
+        
+        # Parse start time
+        start_parts = start_time_str.split(':')
+        window_start = now.replace(
+            hour=int(start_parts[0]), 
+            minute=int(start_parts[1]), 
+            second=0, 
+            microsecond=0
+        )
+        
+        # If window start is in the past today, schedule for tomorrow
+        if window_start <= now:
+            window_start += timedelta(days=1)
+        
+        # Calculate delay in milliseconds
+        delay = (window_start - now).total_seconds() * 1000
+        return int(delay)
     
     def trigger_message_display(self, message=None):
         """

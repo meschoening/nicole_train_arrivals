@@ -13,6 +13,8 @@ import json
 _data_lock = threading.Lock()
 _message_trigger = {"message": None, "pending": False}
 _message_trigger_lock = threading.Lock()
+_settings_changed_trigger = {"pending": False}
+_settings_changed_lock = threading.Lock()
 
 
 def get_pending_message_trigger():
@@ -29,6 +31,21 @@ def get_pending_message_trigger():
             _message_trigger["pending"] = False
             _message_trigger["message"] = None
             return message
+        return False
+
+
+def get_pending_settings_change():
+    """
+    Check if there's a pending settings change from the web interface.
+    Returns True if settings were changed and clears the pending flag.
+    
+    Returns:
+        bool: True if settings were changed, False otherwise
+    """
+    with _settings_changed_lock:
+        if _settings_changed_trigger["pending"]:
+            _settings_changed_trigger["pending"] = False
+            return True
         return False
 
 
@@ -343,6 +360,17 @@ def start_web_settings_server(data_handler, host="0.0.0.0", port=80):
         if minutes_val is not None:
             config_handler.save_config("screen_sleep_minutes", minutes_val)
 
+        # Update refresh rate
+        refresh_rate = form.get("refresh_rate_seconds")
+        try:
+            refresh_rate_val = int(refresh_rate) if refresh_rate is not None else None
+        except ValueError:
+            refresh_rate_val = None
+        if refresh_rate_val is not None:
+            # Validate range (5-120 seconds)
+            if 5 <= refresh_rate_val <= 120:
+                config_handler.save_config("refresh_rate_seconds", refresh_rate_val)
+
         # Update selections
         selected_line = form.get("selected_line")
         if selected_line is not None:
@@ -363,6 +391,10 @@ def start_web_settings_server(data_handler, host="0.0.0.0", port=80):
         if reboot_hour and reboot_minute and reboot_ampm:
             time_str = f"{reboot_hour}:{reboot_minute} {reboot_ampm}"
             config_handler.save_config("reboot_time", time_str)
+
+        # Trigger settings changed flag for main display to refresh
+        with _settings_changed_lock:
+            _settings_changed_trigger["pending"] = True
 
         return redirect(url_for("get_settings"))
 

@@ -78,6 +78,20 @@
               <label for="periodicInterval">Show every (minutes)</label>
               <input type="number" id="periodicInterval" name="periodic_interval_minutes" min="1" max="1440" step="1" value="30">
             </div>
+            <div class="row">
+              <label for="periodicTimeWindow">Show only during time window</label>
+              <input type="checkbox" id="periodicTimeWindow" name="periodic_time_window_enabled">
+            </div>
+            <div class="conditional-settings" id="periodicTimeWindowSettings" style="display: none; margin-left: 0px;">
+              <div class="row">
+                <label for="periodicWindowStart">Window start time</label>
+                <input type="time" id="periodicWindowStart" name="periodic_window_start" value="09:00">
+              </div>
+              <div class="row">
+                <label for="periodicWindowEnd">Window end time</label>
+                <input type="time" id="periodicWindowEnd" name="periodic_window_end" value="17:00">
+              </div>
+            </div>
           </div>
 
           <div class="conditional-settings" id="randomSettings" style="display: none;">
@@ -88,6 +102,20 @@
             <div class="row">
               <label for="randomMax">Maximum minutes between</label>
               <input type="number" id="randomMax" name="random_max_minutes" min="1" max="1440" step="1" value="60">
+            </div>
+            <div class="row">
+              <label for="randomTimeWindow">Show only during time window</label>
+              <input type="checkbox" id="randomTimeWindow" name="random_time_window_enabled">
+            </div>
+            <div class="conditional-settings" id="randomTimeWindowSettings" style="display: none; margin-left: 0px;">
+              <div class="row">
+                <label for="randomWindowStart">Window start time</label>
+                <input type="time" id="randomWindowStart" name="random_window_start" value="09:00">
+              </div>
+              <div class="row">
+                <label for="randomWindowEnd">Window end time</label>
+                <input type="time" id="randomWindowEnd" name="random_window_end" value="17:00">
+              </div>
             </div>
           </div>
 
@@ -183,6 +211,20 @@
       randomRadio.addEventListener('change', updateTimingDisplay);
       disabledRadio.addEventListener('change', updateTimingDisplay);
 
+      // Time window toggles
+      const periodicTimeWindowCheckbox = document.getElementById('periodicTimeWindow');
+      const periodicTimeWindowSettings = document.getElementById('periodicTimeWindowSettings');
+      const randomTimeWindowCheckbox = document.getElementById('randomTimeWindow');
+      const randomTimeWindowSettings = document.getElementById('randomTimeWindowSettings');
+
+      periodicTimeWindowCheckbox.addEventListener('change', function() {
+        periodicTimeWindowSettings.style.display = this.checked ? 'block' : 'none';
+      });
+
+      randomTimeWindowCheckbox.addEventListener('change', function() {
+        randomTimeWindowSettings.style.display = this.checked ? 'block' : 'none';
+      });
+
       // Trigger now button with countdown
       let countdownInterval = null;
       const triggerBtn = document.getElementById('triggerNowBtn');
@@ -249,8 +291,14 @@
           messages: messages,
           timing_mode: document.querySelector('input[name="timing_mode"]:checked').value,
           periodic_interval_minutes: parseInt(document.getElementById('periodicInterval').value),
+          periodic_time_window_enabled: document.getElementById('periodicTimeWindow').checked,
+          periodic_window_start: document.getElementById('periodicWindowStart').value,
+          periodic_window_end: document.getElementById('periodicWindowEnd').value,
           random_min_minutes: parseInt(document.getElementById('randomMin').value),
           random_max_minutes: parseInt(document.getElementById('randomMax').value),
+          random_time_window_enabled: document.getElementById('randomTimeWindow').checked,
+          random_window_start: document.getElementById('randomWindowStart').value,
+          random_window_end: document.getElementById('randomWindowEnd').value,
           display_duration_seconds: parseInt(document.getElementById('displayDuration').value),
           fade_duration_ms: {{ config.get('fade_duration_ms', 800) }}
         };
@@ -287,9 +335,20 @@
       randomRadio.checked = config.timing_mode === 'random';
       disabledRadio.checked = config.timing_mode === 'disabled';
       document.getElementById('periodicInterval').value = config.periodic_interval_minutes;
+      document.getElementById('periodicTimeWindow').checked = config.periodic_time_window_enabled || false;
+      document.getElementById('periodicWindowStart').value = config.periodic_window_start || '09:00';
+      document.getElementById('periodicWindowEnd').value = config.periodic_window_end || '17:00';
       document.getElementById('randomMin').value = config.random_min_minutes;
       document.getElementById('randomMax').value = config.random_max_minutes;
+      document.getElementById('randomTimeWindow').checked = config.random_time_window_enabled || false;
+      document.getElementById('randomWindowStart').value = config.random_window_start || '09:00';
+      document.getElementById('randomWindowEnd').value = config.random_window_end || '17:00';
       document.getElementById('displayDuration').value = config.display_duration_seconds;
+      
+      // Show/hide time window settings based on checkbox state
+      periodicTimeWindowSettings.style.display = config.periodic_time_window_enabled ? 'block' : 'none';
+      randomTimeWindowSettings.style.display = config.random_time_window_enabled ? 'block' : 'none';
+      
       updateTimingDisplay();
       renderMessages();
     </script>
