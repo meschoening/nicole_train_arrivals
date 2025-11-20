@@ -1,0 +1,298 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Message Settings</title>
+    <style>
+      body { font-family: sans-serif; margin: 0; padding: 0; }
+      .container { max-width: 720px; margin: 0 auto; padding: 24px; }
+      .row { margin-bottom: 12px; }
+      label { display: inline-block; min-width: 220px; font-weight: bold; }
+      input[type="checkbox"], input[type="radio"] { transform: scale(1.3); margin-right: 8px; }
+      select, input[type="number"] { padding: 6px; font-size: 14px; }
+      button { padding: 8px 14px; font-weight: bold; cursor: pointer; }
+      button:disabled { opacity: 0.6; cursor: not-allowed; }
+      .trigger-active { background-color: #ffcccc !important; border: 1px solid #ff9999 !important; }
+      a.btn { text-decoration: none; display: inline-block; padding: 8px 14px; border-radius: 6px; background: #f0f0f0; color: #000; font-weight: 700; border: 1px solid #ddd; }
+      a.btn:hover { background: #e6e6e6; }
+      .message-list-container { border: 1px solid #ddd; padding: 12px; border-radius: 6px; background: #fafafa; margin-bottom: 16px; }
+      .message-list-container h3 { margin-top: 4px; }
+      .message-list { min-height: 150px; max-height: 300px; overflow-y: auto; border: 1px solid #ccc; padding: 8px; background: white; margin-bottom: 12px; }
+      .message-item { padding: 6px; margin: 4px 0; cursor: pointer; border-radius: 4px; }
+      .message-item:hover { background: #f0f0f0; }
+      .message-item.selected { background: #d0e8ff; font-weight: bold; }
+      .btn-group { display: flex; gap: 8px; margin-bottom: 12px; }
+      .timing-section { border: 1px solid #ddd; padding: 12px; border-radius: 6px; background: #fafafa; margin: 16px 0; }
+      .timing-section h3 { margin-top: 4px; }
+      .timing-section .row label:first-child { text-align: left; }
+      .timing-section > .row { margin-bottom: 16px; }
+      .conditional-settings { margin-left: 0px; margin-top: 8px; }
+      .conditional-settings .row label:first-child { text-align: left; }
+      hr { margin: 20px 0; border: none; border-top: 1px solid #ddd; }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <div class="row">
+        <a href="{{ url_for('index') }}" class="btn">← Back</a>
+      </div>
+      <h2>Message Display Settings</h2>
+      <div class="row" style="color:#666;">
+        <span id="lastSaved">Last saved: {{ last_saved }}</span>
+        <span style="margin-left:16px;color:#cc6666;">Changes are saved only when you click Save.</span>
+      </div>
+
+      <form id="messagesForm">
+        <div class="message-list-container">
+          <h3>Custom Messages</h3>
+          <div class="message-list" id="messageList">
+            <!-- Messages will be populated by JavaScript -->
+          </div>
+          <div class="btn-group">
+            <button type="button" id="addMessageBtn">Add New Message</button>
+            <button type="button" id="deleteMessageBtn">Delete Selected</button>
+          </div>
+        </div>
+
+        <div class="timing-section">
+          <h3>Display Timing</h3>
+          
+          <div class="row">
+            <label style="display: block; margin-bottom: 8px;">Timing Mode</label>
+            <div style="display: block;">
+              <label style="min-width: auto; font-weight: normal;">
+                <input type="radio" name="timing_mode" value="periodic" id="timingPeriodic"> Show Periodically
+              </label>
+              <label style="min-width: auto; font-weight: normal; margin-left: 16px;">
+                <input type="radio" name="timing_mode" value="random" id="timingRandom"> Show at Random Times
+              </label>
+              <label style="min-width: auto; font-weight: normal; margin-left: 16px;">
+                <input type="radio" name="timing_mode" value="disabled" id="timingDisabled"> Disabled
+              </label>
+            </div>
+          </div>
+
+          <div class="conditional-settings" id="periodicSettings">
+            <div class="row">
+              <label for="periodicInterval">Show every (minutes)</label>
+              <input type="number" id="periodicInterval" name="periodic_interval_minutes" min="1" max="1440" step="1" value="30">
+            </div>
+          </div>
+
+          <div class="conditional-settings" id="randomSettings" style="display: none;">
+            <div class="row">
+              <label for="randomMin">Minimum minutes between</label>
+              <input type="number" id="randomMin" name="random_min_minutes" min="1" max="1440" step="1" value="15">
+            </div>
+            <div class="row">
+              <label for="randomMax">Maximum minutes between</label>
+              <input type="number" id="randomMax" name="random_max_minutes" min="1" max="1440" step="1" value="60">
+            </div>
+          </div>
+
+          <div class="row">
+            <label for="displayDuration">Message display duration (seconds)</label>
+            <input type="number" id="displayDuration" name="display_duration_seconds" min="1" max="60" step="1" value="5">
+          </div>
+        </div>
+
+        <div class="row">
+          <button type="button" id="triggerNowBtn">Trigger Message Now</button>
+          <span style="margin-left: 12px; color: #666; font-size: 14px;">(Shows selected message, or random if none selected)</span>
+        </div>
+
+        <hr>
+
+        <div class="row">
+          <button type="submit" style="background: #4CAF50; color: white; border: none; padding: 10px 20px; border-radius: 6px; font-size: 16px;">Save Settings</button>
+        </div>
+      </form>
+    </div>
+
+    <script>
+      let messages = {{ messages_json | safe }};
+      let selectedIndex = -1;
+
+      function renderMessages() {
+        const listEl = document.getElementById('messageList');
+        listEl.innerHTML = '';
+        
+        if (messages.length === 0) {
+          listEl.innerHTML = '<div style="color: #999; padding: 12px; text-align: center;">No messages yet. Click "Add New Message" to create one.</div>';
+          return;
+        }
+
+        messages.forEach((msg, idx) => {
+          const div = document.createElement('div');
+          div.className = 'message-item' + (idx === selectedIndex ? ' selected' : '');
+          div.textContent = msg;
+          div.onclick = () => {
+            // Toggle selection: deselect if already selected
+            selectedIndex = (selectedIndex === idx) ? -1 : idx;
+            renderMessages();
+          };
+          listEl.appendChild(div);
+        });
+      }
+
+      document.getElementById('addMessageBtn').onclick = () => {
+        const msg = prompt('Enter new message:');
+        if (msg && msg.trim()) {
+          messages.push(msg.trim());
+          renderMessages();
+          markUnsaved();
+        }
+      };
+
+      document.getElementById('deleteMessageBtn').onclick = () => {
+        if (selectedIndex >= 0 && selectedIndex < messages.length) {
+          if (confirm(`Delete message: "${messages[selectedIndex]}"?`)) {
+            messages.splice(selectedIndex, 1);
+            selectedIndex = -1;
+            renderMessages();
+            markUnsaved();
+          }
+        } else {
+          alert('Please select a message to delete.');
+        }
+      };
+
+      // Timing mode toggle
+      const periodicRadio = document.getElementById('timingPeriodic');
+      const randomRadio = document.getElementById('timingRandom');
+      const disabledRadio = document.getElementById('timingDisabled');
+      const periodicSettings = document.getElementById('periodicSettings');
+      const randomSettings = document.getElementById('randomSettings');
+
+      function updateTimingDisplay() {
+        if (periodicRadio.checked) {
+          periodicSettings.style.display = 'block';
+          randomSettings.style.display = 'none';
+        } else if (randomRadio.checked) {
+          periodicSettings.style.display = 'none';
+          randomSettings.style.display = 'block';
+        } else {
+          // Disabled mode - hide all settings
+          periodicSettings.style.display = 'none';
+          randomSettings.style.display = 'none';
+        }
+      }
+
+      periodicRadio.addEventListener('change', updateTimingDisplay);
+      randomRadio.addEventListener('change', updateTimingDisplay);
+      disabledRadio.addEventListener('change', updateTimingDisplay);
+
+      // Trigger now button with countdown
+      let countdownInterval = null;
+      const triggerBtn = document.getElementById('triggerNowBtn');
+      const originalBtnText = 'Trigger Message Now';
+      
+      triggerBtn.onclick = async () => {
+        const message = selectedIndex >= 0 ? messages[selectedIndex] : null;
+        
+        try {
+          const response = await fetch('/api/trigger_message', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ message: message })
+          });
+          
+          if (!response.ok) {
+            alert('Failed to trigger message.');
+            return;
+          }
+          
+          // Calculate total duration: display duration + 2 fade animations + 1 second buffer
+          const config = {{ config | tojson }};
+          const displaySeconds = config.display_duration_seconds || 5;
+          const fadeDurationMs = config.fade_duration_ms || 800;
+          const totalSeconds = displaySeconds + (2 * fadeDurationMs / 1000) + 1;
+          
+          // Start countdown
+          startCountdown(Math.ceil(totalSeconds));
+          
+        } catch (e) {
+          alert('Error triggering message: ' + e.message);
+        }
+      };
+      
+      function startCountdown(seconds) {
+        let remaining = seconds;
+        
+        // Disable button and change style
+        triggerBtn.disabled = true;
+        triggerBtn.classList.add('trigger-active');
+        triggerBtn.textContent = `On Screen (${remaining})`;
+        
+        // Update every second
+        countdownInterval = setInterval(() => {
+          remaining--;
+          
+          if (remaining <= 0) {
+            // Reset button
+            clearInterval(countdownInterval);
+            triggerBtn.disabled = false;
+            triggerBtn.classList.remove('trigger-active');
+            triggerBtn.textContent = originalBtnText;
+          } else {
+            triggerBtn.textContent = `On Screen (${remaining})`;
+          }
+        }, 1000);
+      }
+
+      // Form submission
+      document.getElementById('messagesForm').onsubmit = async (e) => {
+        e.preventDefault();
+        
+        const data = {
+          messages: messages,
+          timing_mode: document.querySelector('input[name="timing_mode"]:checked').value,
+          periodic_interval_minutes: parseInt(document.getElementById('periodicInterval').value),
+          random_min_minutes: parseInt(document.getElementById('randomMin').value),
+          random_max_minutes: parseInt(document.getElementById('randomMax').value),
+          display_duration_seconds: parseInt(document.getElementById('displayDuration').value),
+          fade_duration_ms: {{ config.get('fade_duration_ms', 800) }}
+        };
+
+        try {
+          const response = await fetch('/messages', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(data)
+          });
+          
+          if (response.ok) {
+            const result = await response.json();
+            document.getElementById('lastSaved').textContent = 'Last saved: ' + result.timestamp;
+            document.getElementById('lastSaved').style.color = '#666';
+          } else {
+            alert('Failed to save settings.');
+          }
+        } catch (e) {
+          alert('Error saving settings: ' + e.message);
+        }
+      };
+
+      // Mark as unsaved on change
+      const lastSaved = document.getElementById('lastSaved');
+      function markUnsaved() {
+        if (lastSaved) lastSaved.style.color = '#cc6666';
+      }
+      document.getElementById('messagesForm').addEventListener('change', markUnsaved);
+
+      // Initialize on load
+      const config = {{ config | tojson }};
+      periodicRadio.checked = config.timing_mode === 'periodic';
+      randomRadio.checked = config.timing_mode === 'random';
+      disabledRadio.checked = config.timing_mode === 'disabled';
+      document.getElementById('periodicInterval').value = config.periodic_interval_minutes;
+      document.getElementById('randomMin').value = config.random_min_minutes;
+      document.getElementById('randomMax').value = config.random_max_minutes;
+      document.getElementById('displayDuration').value = config.display_duration_seconds;
+      updateTimingDisplay();
+      renderMessages();
+    </script>
+  </body>
+</html>
+

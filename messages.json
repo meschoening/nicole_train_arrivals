@@ -1,0 +1,12 @@
+{
+  "messages": [
+    "Have a great day!",
+    "Love you!"
+  ],
+  "timing_mode": "disabled",
+  "periodic_interval_minutes": 30,
+  "random_min_minutes": 15,
+  "random_max_minutes": 60,
+  "display_duration_seconds": 5,
+  "fade_duration_ms": 800
+}

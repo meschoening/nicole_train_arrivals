@@ -1,15 +1,17 @@
-from PyQt5.QtWidgets import QApplication, QMainWindow, QVBoxLayout, QHBoxLayout, QGridLayout, QLabel, QWidget, QPushButton, QStackedWidget, QComboBox, QCheckBox, QPlainTextEdit, QSizePolicy, QSlider, QLineEdit
-from PyQt5.QtCore import QSize, Qt, QTimer, QEvent, QProcess
+from PyQt5.QtWidgets import QApplication, QMainWindow, QVBoxLayout, QHBoxLayout, QGridLayout, QLabel, QWidget, QPushButton, QStackedWidget, QComboBox, QCheckBox, QPlainTextEdit, QSizePolicy, QSlider, QLineEdit, QGraphicsOpacityEffect
+from PyQt5.QtCore import QSize, Qt, QTimer, QEvent, QProcess, QPropertyAnimation, QEasingCurve
 from PyQt5.QtGui import QFontDatabase, QColor, QPalette, QPixmap, QPainter, QIcon
 from MetroAPI import MetroAPI, MetroAPIError
 from data_handler import DataHandler
 import config_handler
+import message_handler
 import os
 import sys
 import socket
 import subprocess
+import random
 from datetime import datetime, timedelta
-from web_settings_server import start_web_settings_server
+from web_settings_server import start_web_settings_server, get_pending_message_trigger
 
 class IPPopout(QWidget):
     """A popout widget that displays the device IP address"""
@@ -464,6 +466,17 @@ class MainWindow(QMainWindow):
         painter.drawText(pixmap.rect(), Qt.AlignCenter, "🚆")
         painter.end()
         self.setWindowIcon(QIcon(pixmap))
+        
+        # Message display system (initialize before creating pages)
+        self.default_title_text = "Nicole's Train Tracker!"
+        self.message_config = message_handler.load_messages()
+        self.home_title_label = None  # Will be set in create_home_page
+        self.title_opacity_effect = None
+        self.current_fade_animation = None
+        self.message_restore_timer = None
+        self.message_schedule_timer = None
+        self.is_showing_message = False
+        self.web_trigger_check_timer = None
 
         # Create main widget with stacked layout
         self.stack = QStackedWidget()
@@ -1809,8 +1822,12 @@ class MainWindow(QMainWindow):
         left_layout.setSpacing(0)
         title_label = QLabel("Nicole's Train Tracker!")
         title_label.setStyleSheet("font-family: Quicksand; font-size: 30px; font-weight: bold;")
+        
         left_layout.addWidget(title_label, alignment=Qt.AlignVCenter | Qt.AlignLeft)
         left_container.setLayout(left_layout)
+        
+        # Return the title label so the caller can reference it
+        self._last_title_label = title_label
 
         # Center: Optional center widget (clock)
         center_container = QWidget()
@@ -1843,6 +1860,161 @@ class MainWindow(QMainWindow):
 
         title_bar.setLayout(grid)
         return title_bar
+    
+    def setup_message_system(self):
+        """Initialize the message display system with timers and scheduling"""
+        if self.home_title_label is None:
+            return
+        
+        # Reload message config to get latest settings
+        self.message_config = message_handler.load_messages()
+        
+        # Set up timer to check for web triggers
+        self.web_trigger_check_timer = QTimer()
+        self.web_trigger_check_timer.timeout.connect(self.check_for_web_trigger)
+        self.web_trigger_check_timer.start(500)  # Check every 500ms
+        
+        # Schedule first automatic message
+        self.schedule_next_message()
+    
+    def check_for_web_trigger(self):
+        """Check if there's a pending message trigger from the web interface"""
+        trigger = get_pending_message_trigger()
+        if trigger is not False:  # False means no trigger, None or a string means trigger
+            self.trigger_message_display(trigger)
+    
+    def schedule_next_message(self):
+        """Calculate and schedule the next automatic message display"""
+        # Stop any existing schedule timer
+        if hasattr(self, 'message_schedule_timer') and self.message_schedule_timer:
+            self.message_schedule_timer.stop()
+            self.message_schedule_timer = None
+        
+        # Don't schedule if no messages or already showing a message
+        if not self.message_config.get("messages") or self.is_showing_message:
+            return
+        
+        timing_mode = self.message_config.get("timing_mode", "periodic")
+        
+        # Don't schedule if disabled
+        if timing_mode == "disabled":
+            return
+        
+        if timing_mode == "periodic":
+            interval_minutes = self.message_config.get("periodic_interval_minutes", 30)
+            delay_ms = interval_minutes * 60 * 1000
+        else:  # random
+            min_minutes = self.message_config.get("random_min_minutes", 15)
+            max_minutes = self.message_config.get("random_max_minutes", 60)
+            random_minutes = random.randint(min_minutes, max_minutes)
+            delay_ms = random_minutes * 60 * 1000
+        
+        # Create single-shot timer for next message
+        self.message_schedule_timer = QTimer()
+        self.message_schedule_timer.setSingleShot(True)
+        self.message_schedule_timer.timeout.connect(lambda: self.trigger_message_display(None))
+        self.message_schedule_timer.start(delay_ms)
+    
+    def trigger_message_display(self, message=None):
+        """
+        Display a message with fade animation.
+        
+        Args:
+            message: Specific message to display, or None to pick random from list
+        """
+        # Don't trigger if already showing a message
+        if self.is_showing_message:
+            return
+        
+        # Reload config to get latest messages
+        self.message_config = message_handler.load_messages()
+        messages_list = self.message_config.get("messages", [])
+        
+        if not messages_list:
+            return
+        
+        # Pick message
+        if message is None:
+            display_message = random.choice(messages_list)
+        else:
+            display_message = message
+        
+        self.is_showing_message = True
+        
+        # Get fade duration from config
+        fade_duration = self.message_config.get("fade_duration_ms", 800)
+        
+        # Fade out
+        self.fade_out(fade_duration, lambda: self.swap_to_message(display_message))
+    
+    def swap_to_message(self, message):
+        """Swap title text to message and fade back in"""
+        self.home_title_label.setText(message)
+        
+        fade_duration = self.message_config.get("fade_duration_ms", 800)
+        display_duration_seconds = self.message_config.get("display_duration_seconds", 5)
+        
+        # Fade in
+        self.fade_in(fade_duration, lambda: self.schedule_message_restore(display_duration_seconds))
+    
+    def schedule_message_restore(self, duration_seconds):
+        """Schedule restoration of default title after message display duration"""
+        # Stop any existing restore timer
+        if self.message_restore_timer:
+            self.message_restore_timer.stop()
+        
+        self.message_restore_timer = QTimer()
+        self.message_restore_timer.setSingleShot(True)
+        self.message_restore_timer.timeout.connect(self.restore_default_title)
+        self.message_restore_timer.start(duration_seconds * 1000)
+    
+    def restore_default_title(self):
+        """Fade back to the default title"""
+        fade_duration = self.message_config.get("fade_duration_ms", 800)
+        
+        # Fade out
+        self.fade_out(fade_duration, lambda: self.swap_to_default())
+    
+    def swap_to_default(self):
+        """Swap title text back to default and fade in"""
+        self.home_title_label.setText(self.default_title_text)
+        
+        fade_duration = self.message_config.get("fade_duration_ms", 800)
+        
+        # Fade in
+        self.fade_in(fade_duration, lambda: self.on_message_display_complete())
+    
+    def on_message_display_complete(self):
+        """Called when message display cycle is complete"""
+        self.is_showing_message = False
+        # Schedule next message
+        self.schedule_next_message()
+    
+    def fade_out(self, duration_ms, on_finished):
+        """Fade title label to transparent"""
+        if self.current_fade_animation:
+            self.current_fade_animation.stop()
+        
+        self.current_fade_animation = QPropertyAnimation(self.title_opacity_effect, b"opacity")
+        self.current_fade_animation.setDuration(duration_ms)
+        self.current_fade_animation.setStartValue(1.0)
+        self.current_fade_animation.setEndValue(0.0)
+        self.current_fade_animation.setEasingCurve(QEasingCurve.InOutQuad)
+        self.current_fade_animation.finished.connect(on_finished)
+        self.current_fade_animation.start()
+    
+    def fade_in(self, duration_ms, on_finished):
+        """Fade title label from transparent to visible"""
+        if self.current_fade_animation:
+            self.current_fade_animation.stop()
+        
+        self.current_fade_animation = QPropertyAnimation(self.title_opacity_effect, b"opacity")
+        self.current_fade_animation.setDuration(duration_ms)
+        self.current_fade_animation.setStartValue(0.0)
+        self.current_fade_animation.setEndValue(1.0)
+        self.current_fade_animation.setEasingCurve(QEasingCurve.InOutQuad)
+        self.current_fade_animation.finished.connect(on_finished)
+        self.current_fade_animation.start()
     
     def create_home_page(self):
         """Create the home page"""
@@ -1928,6 +2100,12 @@ class MainWindow(QMainWindow):
         # Add title bar with centered clock
         layout.addWidget(self.create_title_bar(buttons_container, self.refresh_countdown_label, self.clock_label))
         
+        # Capture the home page title label and add opacity effect for animations
+        self.home_title_label = self._last_title_label
+        self.title_opacity_effect = QGraphicsOpacityEffect()
+        self.title_opacity_effect.setOpacity(1.0)
+        self.home_title_label.setGraphicsEffect(self.title_opacity_effect)
+        
         # Add content
         content_layout = QVBoxLayout()
         content_layout.setContentsMargins(20, 20, 20, 20)
@@ -1947,6 +2125,10 @@ class MainWindow(QMainWindow):
         layout.addWidget(content_widget)
         
         page.setLayout(layout)
+        
+        # Initialize message system now that title_label is created
+        self.setup_message_system()
+        
         return page
     
     def create_settings_page(self):

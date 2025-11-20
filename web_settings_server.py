@@ -1,6 +1,7 @@
 import threading
 from flask import Flask, request, jsonify, render_template, redirect, url_for, Response
 import config_handler
+import message_handler
 import os
 from datetime import datetime
 import subprocess
@@ -10,6 +11,25 @@ import json
 
 
 _data_lock = threading.Lock()
+_message_trigger = {"message": None, "pending": False}
+_message_trigger_lock = threading.Lock()
+
+
+def get_pending_message_trigger():
+    """
+    Check if there's a pending message trigger from the web interface.
+    Returns the message (or None for random) and clears the pending flag.
+    
+    Returns:
+        str or None: Message to display, or None if no trigger pending or for random message
+    """
+    with _message_trigger_lock:
+        if _message_trigger["pending"]:
+            message = _message_trigger["message"]
+            _message_trigger["pending"] = False
+            _message_trigger["message"] = None
+            return message
+        return False
 
 
 def _ensure_lines(data_handler):
@@ -76,6 +96,45 @@ def start_web_settings_server(data_handler, host="0.0.0.0", port=80):
             return ip
         except Exception:
             return "Unable to detect"
+
+    def _get_messages_last_saved():
+        messages_path = getattr(message_handler, 'MESSAGES_FILE', 'messages.json')
+        if os.path.exists(messages_path):
+            mtime = os.path.getmtime(messages_path)
+            dt = datetime.fromtimestamp(mtime)
+            return dt.strftime("%m/%d/%Y %I:%M:%S %p")
+        return "Never"
+
+    @app.get("/messages")
+    def get_messages():
+        config = message_handler.load_messages()
+        messages_list = config.get("messages", [])
+        return render_template(
+            "messages.html",
+            config=config,
+            messages_json=json.dumps(messages_list),
+            last_saved=_get_messages_last_saved(),
+        )
+
+    @app.post("/messages")
+    def post_messages():
+        data = request.get_json()
+        message_handler.save_messages(data)
+        return jsonify({
+            "status": "saved",
+            "timestamp": _get_messages_last_saved()
+        })
+
+    @app.post("/api/trigger_message")
+    def api_trigger_message():
+        data = request.get_json() or {}
+        message = data.get("message")
+        
+        with _message_trigger_lock:
+            _message_trigger["message"] = message
+            _message_trigger["pending"] = True
+        
+        return jsonify({"status": "triggered"})
 
     @app.get("/settings")
     def get_settings():
