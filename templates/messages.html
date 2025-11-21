@@ -19,9 +19,14 @@
       .message-list-container { border: 1px solid #ddd; padding: 12px; border-radius: 6px; background: #fafafa; margin-bottom: 16px; }
       .message-list-container h3 { margin-top: 4px; }
       .message-list { min-height: 150px; max-height: 300px; overflow-y: auto; border: 1px solid #ccc; padding: 8px; background: white; margin-bottom: 12px; }
-      .message-item { padding: 6px; margin: 4px 0; cursor: pointer; border-radius: 4px; }
+      .message-item { padding: 6px; margin: 4px 0; cursor: pointer; border-radius: 4px; display: flex; align-items: center; gap: 8px; }
       .message-item:hover { background: #f0f0f0; }
       .message-item.selected { background: #d0e8ff; font-weight: bold; }
+      .message-text { flex: 1; }
+      .color-swatch { width: 24px; height: 24px; border: 1px solid #ccc; border-radius: 3px; flex-shrink: 0; }
+      .color-input { width: 40px; height: 24px; border: 1px solid #ccc; border-radius: 3px; cursor: pointer; flex-shrink: 0; }
+      .message-edit-row { display: flex; align-items: center; gap: 8px; padding: 8px; background: #f9f9f9; border-radius: 4px; margin: 4px 0; }
+      .message-edit-row input[type="text"] { flex: 1; padding: 4px; }
       .btn-group { display: flex; gap: 8px; margin-bottom: 12px; }
       .timing-section { border: 1px solid #ddd; padding: 12px; border-radius: 6px; background: #fafafa; margin: 16px 0; }
       .timing-section h3 { margin-top: 4px; }
@@ -139,8 +144,44 @@
     </div>
 
     <script>
-      let messages = {{ messages_json | safe }};
+      // Helper function to convert hex to RGB
+      function hexToRgb(hex) {
+        // Remove # if present
+        hex = hex.replace('#', '');
+        // Parse hex values
+        const r = parseInt(hex.substring(0, 2), 16);
+        const g = parseInt(hex.substring(2, 4), 16);
+        const b = parseInt(hex.substring(4, 6), 16);
+        return `rgb(${r}, ${g}, ${b})`;
+      }
+
+      // Helper function to convert RGB to hex (for color input)
+      function rgbToHex(rgb) {
+        if (!rgb || rgb === 'null' || rgb === 'undefined') return '#000000';
+        // Handle rgb(r, g, b) format
+        const match = rgb.match(/rgb\((\d+),\s*(\d+),\s*(\d+)\)/);
+        if (match) {
+          const r = parseInt(match[1]).toString(16).padStart(2, '0');
+          const g = parseInt(match[2]).toString(16).padStart(2, '0');
+          const b = parseInt(match[3]).toString(16).padStart(2, '0');
+          return `#${r}${g}${b}`;
+        }
+        return '#000000';
+      }
+
+      // Normalize messages to object format
+      let messagesRaw = {{ messages_json | safe }};
+      let messages = messagesRaw.map(msg => {
+        if (typeof msg === 'string') {
+          return { text: msg, color: null };
+        }
+        return {
+          text: msg.text || '',
+          color: msg.color || null
+        };
+      });
       let selectedIndex = -1;
+      let editingIndex = -1;
 
       function renderMessages() {
         const listEl = document.getElementById('messageList');
@@ -152,22 +193,118 @@
         }
 
         messages.forEach((msg, idx) => {
-          const div = document.createElement('div');
-          div.className = 'message-item' + (idx === selectedIndex ? ' selected' : '');
-          div.textContent = msg;
-          div.onclick = () => {
-            // Toggle selection: deselect if already selected
-            selectedIndex = (selectedIndex === idx) ? -1 : idx;
-            renderMessages();
-          };
-          listEl.appendChild(div);
+          if (editingIndex === idx) {
+            // Show edit row
+            const editRow = document.createElement('div');
+            editRow.className = 'message-edit-row';
+            
+            const textInput = document.createElement('input');
+            textInput.type = 'text';
+            textInput.value = msg.text;
+            textInput.placeholder = 'Message text';
+            
+            const colorInput = document.createElement('input');
+            colorInput.type = 'color';
+            colorInput.value = msg.color ? rgbToHex(msg.color) : '#000000';
+            colorInput.className = 'color-input';
+            
+            const useDefaultCheckbox = document.createElement('input');
+            useDefaultCheckbox.type = 'checkbox';
+            useDefaultCheckbox.checked = !msg.color;
+            useDefaultCheckbox.id = 'useDefault_' + idx;
+            const useDefaultLabel = document.createElement('label');
+            useDefaultLabel.htmlFor = 'useDefault_' + idx;
+            useDefaultLabel.textContent = 'Use default color';
+            useDefaultLabel.style.cssText = 'font-size: 12px; font-weight: normal; cursor: pointer;';
+            
+            // Update color input disabled state based on checkbox
+            colorInput.disabled = useDefaultCheckbox.checked;
+            useDefaultCheckbox.onchange = () => {
+              colorInput.disabled = useDefaultCheckbox.checked;
+            };
+            
+            const saveBtn = document.createElement('button');
+            saveBtn.textContent = 'Save';
+            saveBtn.onclick = () => {
+              const newText = textInput.value.trim();
+              if (newText) {
+                const useDefault = useDefaultCheckbox.checked;
+                messages[idx] = {
+                  text: newText,
+                  color: useDefault ? null : hexToRgb(colorInput.value)
+                };
+                editingIndex = -1;
+                renderMessages();
+                markUnsaved();
+              } else {
+                alert('Message text cannot be empty.');
+              }
+            };
+            
+            const cancelBtn = document.createElement('button');
+            cancelBtn.textContent = 'Cancel';
+            cancelBtn.onclick = () => {
+              editingIndex = -1;
+              renderMessages();
+            };
+            
+            editRow.appendChild(textInput);
+            editRow.appendChild(colorInput);
+            editRow.appendChild(useDefaultCheckbox);
+            editRow.appendChild(useDefaultLabel);
+            editRow.appendChild(saveBtn);
+            editRow.appendChild(cancelBtn);
+            listEl.appendChild(editRow);
+          } else {
+            // Show normal message item
+            const div = document.createElement('div');
+            div.className = 'message-item' + (idx === selectedIndex ? ' selected' : '');
+            
+            const textSpan = document.createElement('span');
+            textSpan.className = 'message-text';
+            textSpan.textContent = msg.text;
+            
+            const colorSwatch = document.createElement('div');
+            colorSwatch.className = 'color-swatch';
+            if (msg.color) {
+              colorSwatch.style.backgroundColor = msg.color;
+            } else {
+              colorSwatch.style.backgroundColor = 'transparent';
+              colorSwatch.style.border = '2px dashed #ccc';
+            }
+            
+            div.appendChild(colorSwatch);
+            div.appendChild(textSpan);
+            
+            div.onclick = (e) => {
+              // Don't trigger selection if clicking on edit button
+              if (e.target.tagName === 'BUTTON') return;
+              // Toggle selection: deselect if already selected
+              selectedIndex = (selectedIndex === idx) ? -1 : idx;
+              renderMessages();
+            };
+            
+            const editBtn = document.createElement('button');
+            editBtn.textContent = 'Edit';
+            editBtn.style.cssText = 'padding: 4px 8px; font-size: 12px;';
+            editBtn.onclick = (e) => {
+              e.stopPropagation();
+              editingIndex = idx;
+              selectedIndex = -1;
+              renderMessages();
+            };
+            div.appendChild(editBtn);
+            
+            listEl.appendChild(div);
+          }
         });
       }
 
       document.getElementById('addMessageBtn').onclick = () => {
         const msg = prompt('Enter new message:');
         if (msg && msg.trim()) {
-          messages.push(msg.trim());
+          messages.push({ text: msg.trim(), color: null });
+          editingIndex = messages.length - 1;
           renderMessages();
           markUnsaved();
         }
@@ -175,9 +312,11 @@
 
       document.getElementById('deleteMessageBtn').onclick = () => {
         if (selectedIndex >= 0 && selectedIndex < messages.length) {
-          if (confirm(`Delete message: "${messages[selectedIndex]}"?`)) {
+          const msgText = messages[selectedIndex].text || messages[selectedIndex];
+          if (confirm(`Delete message: "${msgText}"?`)) {
             messages.splice(selectedIndex, 1);
             selectedIndex = -1;
+            editingIndex = -1;
             renderMessages();
             markUnsaved();
           }

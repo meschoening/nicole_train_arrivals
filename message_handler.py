@@ -5,8 +5,8 @@ MESSAGES_FILE = "messages.json"
 
 DEFAULT_MESSAGES = {
     "messages": [
-        "Have a great day!",
-        "Love you!"
+        {"text": "Have a great day!", "color": None},
+        {"text": "Love you!", "color": None}
     ],
     "timing_mode": "periodic",
     "periodic_interval_minutes": 30,
@@ -27,6 +27,7 @@ def load_messages():
     """
     Load message configuration from JSON file.
     Creates the file with default settings if it doesn't exist.
+    Migrates old string-only messages to new object format with text and color.
     
     Returns:
         dict: Message configuration dictionary with defaults if file doesn't exist.
@@ -38,8 +39,35 @@ def load_messages():
     try:
         with open(MESSAGES_FILE, 'r') as f:
             data = json.load(f)
+        
+        # Migrate old string-only messages to new object format
+        messages_list = data.get("messages", [])
+        if messages_list and isinstance(messages_list[0], str):
+            # Old format: list of strings, convert to objects
+            data["messages"] = [{"text": msg, "color": None} for msg in messages_list]
+            # Save migrated format
+            save_messages(data)
+        
         # Merge with defaults to ensure all keys exist
-        return {**DEFAULT_MESSAGES, **data}
+        result = {**DEFAULT_MESSAGES, **data}
+        
+        # Ensure all messages in result are in object format
+        if "messages" in result:
+            migrated_messages = []
+            for msg in result["messages"]:
+                if isinstance(msg, str):
+                    # Still a string, convert it
+                    migrated_messages.append({"text": msg, "color": None})
+                elif isinstance(msg, dict):
+                    # Already an object, ensure it has both keys
+                    migrated_msg = {"text": msg.get("text", ""), "color": msg.get("color")}
+                    migrated_messages.append(migrated_msg)
+                else:
+                    # Invalid format, skip
+                    continue
+            result["messages"] = migrated_messages
+        
+        return result
     except (json.JSONDecodeError, IOError):
         save_messages(DEFAULT_MESSAGES.copy())
         return DEFAULT_MESSAGES.copy()

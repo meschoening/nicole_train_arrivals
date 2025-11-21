@@ -1,12 +1,24 @@
 {
   "messages": [
-    "Have a great day!",
-    "Love you!"
+    {
+      "text": "Have a great day!",
+      "color": null
+    },
+    {
+      "text": "Love you!",
+      "color": "rgb(254, 57, 57)"
+    }
   ],
   "timing_mode": "disabled",
   "periodic_interval_minutes": 30,
+  "periodic_time_window_enabled": false,
+  "periodic_window_start": "09:00",
+  "periodic_window_end": "17:00",
   "random_min_minutes": 15,
   "random_max_minutes": 60,
+  "random_time_window_enabled": false,
+  "random_window_start": "09:00",
+  "random_window_end": "17:00",
   "display_duration_seconds": 5,
   "fade_duration_ms": 800
 }

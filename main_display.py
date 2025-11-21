@@ -2035,7 +2035,7 @@ class MainWindow(QMainWindow):
         Display a message with fade animation.
         
         Args:
-            message: Specific message to display, or None to pick random from list
+            message: Specific message object or string to display, or None to pick random from list
         """
         # Don't trigger if already showing a message
         if self.is_showing_message:
@@ -2054,6 +2054,13 @@ class MainWindow(QMainWindow):
         else:
             display_message = message
         
+        # Handle old string format for backward compatibility
+        if isinstance(display_message, str):
+            display_message = {"text": display_message, "color": None}
+        # Ensure it's a dict with text and color keys
+        elif not isinstance(display_message, dict):
+            return
+        
         self.is_showing_message = True
         
         # Get fade duration from config
@@ -2064,7 +2071,22 @@ class MainWindow(QMainWindow):
     
     def swap_to_message(self, message):
         """Swap title text to message and fade back in"""
-        self.home_title_label.setText(message)
+        # Extract text and color from message object
+        message_text = message.get("text", "") if isinstance(message, dict) else str(message)
+        message_color = message.get("color") if isinstance(message, dict) else None
+        
+        self.home_title_label.setText(message_text)
+        
+        # Apply color if specified
+        if message_color:
+            self.home_title_label.setStyleSheet(
+                f"font-family: Quicksand; font-size: 30px; font-weight: bold; color: {message_color};"
+            )
+        else:
+            # Use default (no color specified - current behavior)
+            self.home_title_label.setStyleSheet(
+                "font-family: Quicksand; font-size: 30px; font-weight: bold;"
+            )
         
         fade_duration = self.message_config.get("fade_duration_ms", 800)
         display_duration_seconds = self.message_config.get("display_duration_seconds", 5)
@@ -2093,6 +2115,11 @@ class MainWindow(QMainWindow):
     def swap_to_default(self):
         """Swap title text back to default and fade in"""
         self.home_title_label.setText(self.default_title_text)
+        
+        # Restore default styling (no color specified)
+        self.home_title_label.setStyleSheet(
+            "font-family: Quicksand; font-size: 30px; font-weight: bold;"
+        )
         
         fade_duration = self.message_config.get("fade_duration_ms", 800)
         
