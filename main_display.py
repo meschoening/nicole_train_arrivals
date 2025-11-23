@@ -13,6 +13,51 @@ import random
 from datetime import datetime, timedelta
 from web_settings_server import start_web_settings_server, get_pending_message_trigger, get_pending_settings_change
 
+class TouchscreenComboViewFilter:
+    """Event filter for QComboBox views to handle touchscreen taps correctly"""
+    def __init__(self, combo_box):
+        self.combo_box = combo_box
+        self.pressed_index = None
+    
+    def eventFilter(self, obj, event):
+        """Filter events to prevent dropdown from closing on mouse press for touchscreens"""
+        from PyQt5.QtWidgets import QAbstractItemView
+        from PyQt5.QtGui import QMouseEvent
+        
+        # Only filter events for the combo box view
+        view = self.combo_box.view()
+        if isinstance(obj, QAbstractItemView) and obj == view:
+            # On mouse press, remember the item index
+            if event.type() == QEvent.MouseButtonPress:
+                if isinstance(event, QMouseEvent):
+                    index = obj.indexAt(event.pos())
+                    if index.isValid():
+                        self.pressed_index = index.row()
+                        # Select the item on press (for visual feedback) but don't close yet
+                        obj.setCurrentIndex(index)
+                        # Block the event to prevent default closing behavior
+                        return True
+            
+            # On mouse release, close the dropdown and set the selection
+            elif event.type() == QEvent.MouseButtonRelease:
+                if isinstance(event, QMouseEvent):
+                    index = obj.indexAt(event.pos())
+                    # If we have a valid press and the release is on the same or nearby item
+                    if self.pressed_index is not None:
+                        if index.isValid():
+                            # Set the combo box selection to the item under the release
+                            self.combo_box.setCurrentIndex(index.row())
+                        else:
+                            # If release is outside, use the pressed index
+                            self.combo_box.setCurrentIndex(self.pressed_index)
+                        # Close the dropdown
+                        self.combo_box.hidePopup()
+                        self.pressed_index = None
+                        return True
+                    self.pressed_index = None
+        
+        return False
+
 class IPPopout(QWidget):
     """A popout widget that displays the device IP address"""
     def __init__(self, ip_address, parent=None):
@@ -621,6 +666,23 @@ class MainWindow(QMainWindow):
         painter.end()
         
         return QIcon(pixmap)
+    
+    def configure_combo_for_touchscreen(self, combo_box):
+        """Configure a QComboBox for touchscreen use by installing an event filter on its view"""
+        # Create and store the event filter
+        if not hasattr(self, '_combo_filters'):
+            self._combo_filters = {}
+        
+        filter_obj = TouchscreenComboViewFilter(combo_box)
+        self._combo_filters[combo_box] = filter_obj
+        
+        # Connect to showPopup to install the filter on the view when it opens
+        def on_show_popup():
+            view = combo_box.view()
+            if view:
+                view.installEventFilter(filter_obj)
+        
+        combo_box.showPopup.connect(on_show_popup)
     
     def open_settings_page(self):
         """Open settings page and reload values from config"""
@@ -2374,6 +2436,9 @@ class MainWindow(QMainWindow):
         """)
         self.line_combo.setMinimumWidth(265)
         
+        # Configure for touchscreen use
+        self.configure_combo_for_touchscreen(self.line_combo)
+        
         # Connect selection change to save config (connect before populating to ensure signals work)
         self.line_combo.currentIndexChanged.connect(self.on_line_selected)
         self.line_combo.currentIndexChanged.connect(self.mark_settings_changed)
@@ -2427,6 +2492,9 @@ class MainWindow(QMainWindow):
         """)
         self.station_combo.setMinimumWidth(265)
         
+        # Configure for touchscreen use
+        self.configure_combo_for_touchscreen(self.station_combo)
+        
         # Connect selection change to save config
         self.station_combo.currentIndexChanged.connect(self.on_station_selected)
         self.station_combo.currentIndexChanged.connect(self.mark_settings_changed)
@@ -2479,6 +2547,9 @@ class MainWindow(QMainWindow):
             }
         """)
         self.destination_combo.setMinimumWidth(265)
+        
+        # Configure for touchscreen use
+        self.configure_combo_for_touchscreen(self.destination_combo)
         
         # Connect selection change to save config
         self.destination_combo.currentIndexChanged.connect(self.on_destination_selected)
