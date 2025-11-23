@@ -1,4 +1,4 @@
-from PyQt5.QtWidgets import QApplication, QMainWindow, QVBoxLayout, QHBoxLayout, QGridLayout, QLabel, QWidget, QPushButton, QStackedWidget, QComboBox, QCheckBox, QPlainTextEdit, QSizePolicy, QSlider, QLineEdit, QGraphicsOpacityEffect
+from PyQt5.QtWidgets import QApplication, QMainWindow, QVBoxLayout, QHBoxLayout, QGridLayout, QLabel, QWidget, QPushButton, QStackedWidget, QComboBox, QCheckBox, QPlainTextEdit, QSizePolicy, QSlider, QLineEdit, QGraphicsOpacityEffect, QAbstractItemView
 from PyQt5.QtCore import QSize, Qt, QTimer, QEvent, QProcess, QPropertyAnimation, QEasingCurve
 from PyQt5.QtGui import QFontDatabase, QColor, QPalette, QPixmap, QPainter, QIcon
 from MetroAPI import MetroAPI, MetroAPIError
