@@ -676,13 +676,17 @@ class MainWindow(QMainWindow):
         filter_obj = TouchscreenComboViewFilter(combo_box)
         self._combo_filters[combo_box] = filter_obj
         
-        # Connect to showPopup to install the filter on the view when it opens
-        def on_show_popup():
+        # Override showPopup to install the filter on the view when it opens
+        original_show_popup = combo_box.showPopup
+        
+        def show_popup_wrapper():
+            original_show_popup()
+            # Install the filter on the view after the popup is shown
             view = combo_box.view()
             if view:
                 view.installEventFilter(filter_obj)
         
-        combo_box.showPopup.connect(on_show_popup)
+        combo_box.showPopup = show_popup_wrapper
     
     def open_settings_page(self):
         """Open settings page and reload values from config"""
