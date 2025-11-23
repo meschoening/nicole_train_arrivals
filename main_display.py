@@ -1,5 +1,5 @@
 from PyQt5.QtWidgets import QApplication, QMainWindow, QVBoxLayout, QHBoxLayout, QGridLayout, QLabel, QWidget, QPushButton, QStackedWidget, QComboBox, QCheckBox, QPlainTextEdit, QSizePolicy, QSlider, QLineEdit, QGraphicsOpacityEffect, QAbstractItemView
-from PyQt5.QtCore import QSize, Qt, QTimer, QEvent, QProcess, QPropertyAnimation, QEasingCurve
+from PyQt5.QtCore import QSize, Qt, QTimer, QEvent, QProcess, QPropertyAnimation, QEasingCurve, QObject
 from PyQt5.QtGui import QFontDatabase, QColor, QPalette, QPixmap, QPainter, QIcon
 from MetroAPI import MetroAPI, MetroAPIError
 from data_handler import DataHandler
@@ -13,9 +13,10 @@ import random
 from datetime import datetime, timedelta
 from web_settings_server import start_web_settings_server, get_pending_message_trigger, get_pending_settings_change
 
-class TouchscreenComboViewFilter:
+class TouchscreenComboViewFilter(QObject):
     """Event filter for QComboBox views to handle touchscreen taps correctly"""
     def __init__(self, combo_box):
+        super().__init__()
         self.combo_box = combo_box
         self.pressed_index = None
     
