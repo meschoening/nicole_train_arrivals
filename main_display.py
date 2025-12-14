@@ -64,32 +64,38 @@ class IPPopout(QWidget):
     def __init__(self, ip_address, parent=None):
         super().__init__(parent)
         self.setWindowFlags(Qt.ToolTip | Qt.FramelessWindowHint)
-        self.setAttribute(Qt.WA_TranslucentBackground, False)
+        self.setAttribute(Qt.WA_TranslucentBackground, True)
         
-        # Create layout
-        layout = QHBoxLayout()
-        layout.setContentsMargins(15, 10, 15, 10)
-        layout.setSpacing(10)
+        # Create content layout with labels
+        content_layout = QHBoxLayout()
+        content_layout.setContentsMargins(15, 10, 15, 10)
+        content_layout.setSpacing(10)
         
         # Create labels
         label = QLabel("Device IP:")
-        label.setStyleSheet("font-family: Quicksand; font-size: 16px; font-weight: bold; color: #333;")
-        layout.addWidget(label)
+        label.setStyleSheet("font-family: Quicksand; font-size: 16px; font-weight: bold; color: #333; border: none;")
+        content_layout.addWidget(label)
         
         ip_label = QLabel(ip_address)
-        ip_label.setStyleSheet("font-family: Quicksand; font-size: 16px; color: #666;")
-        layout.addWidget(ip_label)
+        ip_label.setStyleSheet("font-family: Quicksand; font-size: 16px; color: #666; border: none;")
+        content_layout.addWidget(ip_label)
         
-        self.setLayout(layout)
-        
-        # Style the popout
-        self.setStyleSheet("""
-            IPPopout {
+        # Create a container widget for the border and background
+        container = QWidget()
+        container.setLayout(content_layout)
+        container.setStyleSheet("""
+            QWidget {
                 background-color: white;
-                border: 2px solid #999;
-                border-radius: 5px;
+                border: 2px solid white;
+                border-radius: 10px;
             }
         """)
+        
+        # Main layout to hold the container
+        main_layout = QVBoxLayout()
+        main_layout.setContentsMargins(0, 0, 0, 0)
+        main_layout.addWidget(container)
+        self.setLayout(main_layout)
         
         self.adjustSize()
 
@@ -520,6 +526,7 @@ class MainWindow(QMainWindow):
         # Message display system (initialize before creating pages)
         self.message_config = message_handler.load_messages()
         self.home_title_label = None  # Will be set in create_home_page
+        self.settings_title_label = None  # Will be set in create_settings_page
         self.title_opacity_effect = None
         self.current_fade_animation = None
         self.message_restore_timer = None
@@ -1341,9 +1348,12 @@ class MainWindow(QMainWindow):
         if new_title_text != self.default_title_text:
             self.default_title_text = new_title_text
             self.setWindowTitle(self.default_title_text)
-            # Update the title label if it exists and we're not showing a message
+            # Update the home page title label if it exists and we're not showing a message
             if hasattr(self, 'home_title_label') and self.home_title_label and not self.is_showing_message:
                 self.home_title_label.setText(self.default_title_text)
+            # Update the settings page title label if it exists
+            if hasattr(self, 'settings_title_label') and self.settings_title_label:
+                self.settings_title_label.setText(self.default_title_text)
         # Show countdown
         if hasattr(self, 'show_countdown_checkbox'):
             self.show_countdown_checkbox.blockSignals(True)
@@ -2383,6 +2393,9 @@ class MainWindow(QMainWindow):
         
         # Add title bar
         layout.addWidget(self.create_title_bar(back_button))
+        
+        # Capture the settings page title label
+        self.settings_title_label = self._last_title_label
         
         # Add settings subtitle
         content_layout = QVBoxLayout()
