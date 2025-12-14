@@ -384,6 +384,11 @@ def start_web_settings_server(data_handler, host="0.0.0.0", port=80):
         if selected_destination is not None:
             config_handler.save_config("selected_destination", selected_destination)
 
+        # Update title text
+        title_text = form.get("title_text")
+        if title_text is not None:
+            config_handler.save_config("title_text", title_text)
+
         # Reboot time from three components
         reboot_hour = form.get("reboot_hour")
         reboot_minute = form.get("reboot_minute")

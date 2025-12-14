@@ -498,8 +498,12 @@ class MainWindow(QMainWindow):
         # Load custom font
         QFontDatabase.addApplicationFont("assets/Quicksand-Bold.ttf")
 
+        # Load config to get title text
+        config = config_handler.load_config()
+        self.default_title_text = config.get('title_text', "Nicole's Train Tracker!")
+
         # self.setFixedSize(QSize(1024,600))  # Commented out for fullscreen mode
-        self.setWindowTitle("Nicole's Train Tracker!")
+        self.setWindowTitle(self.default_title_text)
 
         # Set window icon to train emoji
         pixmap = QPixmap(128, 128)
@@ -514,7 +518,6 @@ class MainWindow(QMainWindow):
         self.setWindowIcon(QIcon(pixmap))
         
         # Message display system (initialize before creating pages)
-        self.default_title_text = "Nicole's Train Tracker!"
         self.message_config = message_handler.load_messages()
         self.home_title_label = None  # Will be set in create_home_page
         self.title_opacity_effect = None
@@ -1333,6 +1336,14 @@ class MainWindow(QMainWindow):
     def sync_settings_from_config(self):
         """Sync checkbox and screen sleep settings from config file"""
         config = config_handler.load_config()
+        # Update title text
+        new_title_text = config.get('title_text', "Nicole's Train Tracker!")
+        if new_title_text != self.default_title_text:
+            self.default_title_text = new_title_text
+            self.setWindowTitle(self.default_title_text)
+            # Update the title label if it exists and we're not showing a message
+            if hasattr(self, 'home_title_label') and self.home_title_label and not self.is_showing_message:
+                self.home_title_label.setText(self.default_title_text)
         # Show countdown
         if hasattr(self, 'show_countdown_checkbox'):
             self.show_countdown_checkbox.blockSignals(True)
@@ -1903,7 +1914,7 @@ class MainWindow(QMainWindow):
         left_layout = QHBoxLayout()
         left_layout.setContentsMargins(0, 0, 0, 0)
         left_layout.setSpacing(0)
-        title_label = QLabel("Nicole's Train Tracker!")
+        title_label = QLabel(self.default_title_text)
         title_label.setStyleSheet("font-family: Quicksand; font-size: 30px; font-weight: bold;")
         
         left_layout.addWidget(title_label, alignment=Qt.AlignVCenter | Qt.AlignLeft)
@@ -2842,7 +2853,7 @@ class MainWindow(QMainWindow):
         left_buttons_layout = QHBoxLayout()
         left_buttons_layout.setSpacing(10)
         
-        self.ip_button = QPushButton("ⓘ")
+        self.ip_button = QPushButton("IP")
         self.ip_button.setStyleSheet("""
             QPushButton {
                 font-family: Quicksand;

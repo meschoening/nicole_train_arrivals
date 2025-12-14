@@ -10,7 +10,8 @@ DEFAULT_CONFIG = {
     "reboot_time": "12:00 AM",
     "screen_sleep_enabled": False,
     "screen_sleep_minutes": 5,
-    "refresh_rate_seconds": 30
+    "refresh_rate_seconds": 30,
+    "title_text": "Nicole's Train Tracker!"
 }
 
 

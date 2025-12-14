@@ -10,7 +10,7 @@
       .row { margin-bottom: 12px; }
       label { display: inline-block; min-width: 220px; font-weight: bold; }
       input[type="checkbox"] { transform: scale(1.3); margin-right: 8px; }
-      select, input[type="number"] { padding: 6px; font-size: 14px; }
+      select, input[type="number"], input[type="text"] { padding: 6px; font-size: 14px; }
       button { padding: 8px 14px; font-weight: bold; }
       a.btn { text-decoration: none; display: inline-block; padding: 8px 14px; border-radius: 6px; background: #f0f0f0; color: #000; font-weight: 700; border: 1px solid #ddd; }
       a.btn:hover { background: #e6e6e6; }
@@ -94,6 +94,11 @@
       </div>
 
       <hr>
+
+      <div class="row">
+        <label for="title_text">Title Text</label>
+        <input type="text" id="title_text" name="title_text" value="{{ config.get('title_text', "Nicole's Train Tracker!") }}" style="min-width: 300px;">
+      </div>
 
       <div class="row">
         <label>Enable Screen Sleep</label>
