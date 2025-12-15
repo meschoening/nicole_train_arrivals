@@ -575,7 +575,7 @@ class MainWindow(QMainWindow):
         self.countdown_timer.timeout.connect(self.update_countdown)
         
         # Defer initial API load until after window is shown
-        QTimer.singleShot(100, self.perform_initial_load)
+        QTimer.singleShot(500, self.perform_initial_load)
         
         # Update button state management
         self.git_process = None
