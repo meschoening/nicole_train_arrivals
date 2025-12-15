@@ -576,7 +576,7 @@ class MainWindow(QMainWindow):
         
         # Defer initial API load until after window is shown
         print("Showing startup page for 5 seconds at time:", datetime.now().strftime("%H:%M:%S"))
-        QTimer.singleShot(5000, self.perform_initial_load)
+        QTimer.singleShot(15000, self.perform_initial_load)
         
         # Update button state management
         self.git_process = None
@@ -588,7 +588,7 @@ class MainWindow(QMainWindow):
         # Reboot scheduling
         self.reboot_check_timer = QTimer()
         self.reboot_check_timer.timeout.connect(self.check_reboot_schedule)
-        self.reboot_check_timer.start(15000)  # Check every second
+        self.reboot_check_timer.start(1000)  # Check every second
         
         self.reboot_countdown_timer = None
         self.reboot_countdown_seconds = 0
