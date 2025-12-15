@@ -575,7 +575,8 @@ class MainWindow(QMainWindow):
         self.countdown_timer.timeout.connect(self.update_countdown)
         
         # Defer initial API load until after window is shown
-        QTimer.singleShot(1000, self.perform_initial_load)
+        print("Showing startup page for 5 seconds at time:", datetime.now().strftime("%H:%M:%S"))
+        QTimer.singleShot(5000, self.perform_initial_load)
         
         # Update button state management
         self.git_process = None
