@@ -574,9 +574,8 @@ class MainWindow(QMainWindow):
         self.countdown_timer = QTimer()
         self.countdown_timer.timeout.connect(self.update_countdown)
         
-        # Defer initial API load until after window is shown
-        print("Showing startup page for 5 seconds at time:", datetime.now().strftime("%H:%M:%S"))
-        QTimer.singleShot(15000, self.perform_initial_load)
+        # Initial load will be triggered after window is shown (see showEvent)
+        self.initial_load_triggered = False
         
         # Update button state management
         self.git_process = None
@@ -594,6 +593,16 @@ class MainWindow(QMainWindow):
         self.reboot_countdown_seconds = 0
         self.reboot_warning_overlay = None
         self.reboot_scheduled_for_today = False  # Track if we already triggered reboot today
+    
+    def showEvent(self, event):
+        """Called when the window is shown - trigger initial API load"""
+        super().showEvent(event)
+        # Only trigger once (showEvent can be called multiple times)
+        if not self.initial_load_triggered:
+            self.initial_load_triggered = True
+            print("Window shown at time:", datetime.now().strftime("%H:%M:%S"))
+            # Now start the delay for initial load
+            QTimer.singleShot(1000, self.perform_initial_load)
     
     def eventFilter(self, obj, event):
         """Event filter to handle hover events on IP button and clicks outside shutdown popout"""
