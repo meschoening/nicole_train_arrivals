@@ -594,6 +594,11 @@ class MainWindow(QMainWindow):
         self.reboot_countdown_seconds = 0
         self.reboot_warning_overlay = None
         self.reboot_scheduled_for_today = False  # Track if we already triggered reboot today
+        
+        # API key detection for retry after web interface adds key
+        self.waiting_for_api_key = False
+        self.api_key_check_timer = QTimer()
+        self.api_key_check_timer.timeout.connect(self.check_for_api_key)
     
     def showEvent(self, event):
         """Called when the window is shown - trigger initial API load"""
@@ -640,7 +645,14 @@ class MainWindow(QMainWindow):
                 message = "API Key Missing. Add it by visiting nicoletrains.local"
                 self.startup_status_label.setText(message)
                 self.startup_status_label.setStyleSheet("font-family: Quicksand; font-size: 24px; color: #cc0000;")
+                # Start checking for API key to be added
+                self.waiting_for_api_key = True
+                self.api_key_check_timer.start(2000)  # Check every 2 seconds
                 return
+
+            # Stop API key check timer if it was running
+            self.waiting_for_api_key = False
+            self.api_key_check_timer.stop()
 
             self.update_arrivals_display()
             # Success - switch to home page and start timers
@@ -656,6 +668,33 @@ class MainWindow(QMainWindow):
             self.startup_status_label.setStyleSheet("font-family: Quicksand; font-size: 24px; color: #cc0000;")
             # Show the action buttons
             self.startup_buttons_container.show()
+    
+    def check_for_api_key(self):
+        """Check if API key has been added via web interface and retry initial load"""
+        if not self.waiting_for_api_key:
+            return
+        
+        config = config_handler.load_config()
+        api_key = config.get('api_key')
+        
+        if api_key:
+            # API key has been added, update the global metro_api object
+            # Access metro_api from module scope (defined at bottom of file)
+            import sys
+            current_module = sys.modules[__name__]
+            if hasattr(current_module, 'metro_api'):
+                current_module.metro_api.api_key = api_key
+            
+            # API key has been added, reset status label and retry
+            self.waiting_for_api_key = False
+            self.api_key_check_timer.stop()
+            
+            # Reset status label to original state
+            self.startup_status_label.setText("Connecting to Metro API...")
+            self.startup_status_label.setStyleSheet("font-family: Quicksand; font-size: 24px; color: #666;")
+            
+            # Retry the initial load
+            self.perform_initial_load()
     
     def get_device_ip(self):
         """Get the local IP address of the device"""
