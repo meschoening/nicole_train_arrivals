@@ -22,11 +22,11 @@
       <h2>Nicole's Train Tracker: Remote Control Dashboard</h2>
       <div style="color:#666;margin:8px 0 16px;">Device IP: {{ device_ip }}</div>
       <div class="buttons">
-        <a href="{{ url_for('get_settings') }}" class="btn">Change Display Settings</a>
-        <a href="{{ url_for('get_messages') }}" class="btn">Manage Messages</a>
-        <a href="{{ url_for('get_api_key') }}" class="btn">Edit API Key</a>
-        <a href="{{ url_for('get_update') }}" class="btn">Update Software</a>
-        <a href="{{ url_for('get_system_management') }}" class="btn">System/Power Management</a>
+        <a href="{{ url_for('get_settings') }}" class="btn">Display Settings</a>
+        <a href="{{ url_for('get_messages') }}" class="btn">Header Message Configuration</a>
+        <a href="{{ url_for('get_api_key') }}" class="btn">Authentication Keys</a>
+        <a href="{{ url_for('get_update') }}" class="btn">Software Update</a>
+        <a href="{{ url_for('get_system_management') }}" class="btn">Power Management</a>
       </div>
     </div>
   </body>

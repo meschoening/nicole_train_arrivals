@@ -1,0 +1,21 @@
+Run the following commands before initializing ssh key for git, using git:
+    apt install git openssh-client
+
+Run the following commands to install the app font:
+    apt install fontconfig
+    mkdir -p /usr/share/fonts/truetype/custom
+    cp /home/max/nicole_train_arrivals/assets/Quicksand-Bold.ttf /usr/share/fonts/truetype/custom/
+
+Run following commands to install Python addon packages:
+    apt install python3-pyqt5 python3-requests python3-pandas python3-flask
+    sudo setcap 'cap_net_bind_service=+ep' $(readlink -f $(which python3))
+
+Add the following to the very bottom/as new lines to "/boot/config.txt":
+    framebuffer_width=1024
+    framebuffer_height=600
+    hdmi_force_hotplug=1
+    hdmi_cvt=1024 600 60 3 0 0 0
+    hdmi_group=2
+    hdmi_mode=87
+
+Reboot after complete.
