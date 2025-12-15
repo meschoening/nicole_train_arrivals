@@ -588,7 +588,7 @@ class MainWindow(QMainWindow):
         # Reboot scheduling
         self.reboot_check_timer = QTimer()
         self.reboot_check_timer.timeout.connect(self.check_reboot_schedule)
-        self.reboot_check_timer.start(1000)  # Check every second
+        self.reboot_check_timer.start(15000)  # Check every second
         
         self.reboot_countdown_timer = None
         self.reboot_countdown_seconds = 0
