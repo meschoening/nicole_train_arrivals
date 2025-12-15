@@ -602,7 +602,7 @@ class MainWindow(QMainWindow):
             self.initial_load_triggered = True
             print("Window shown at time:", datetime.now().strftime("%H:%M:%S"))
             # Now start the delay for initial load
-            QTimer.singleShot(1000, self.perform_initial_load)
+            QTimer.singleShot(5000, self.perform_initial_load)
     
     def eventFilter(self, obj, event):
         """Event filter to handle hover events on IP button and clicks outside shutdown popout"""
