@@ -625,6 +625,7 @@ class MainWindow(QMainWindow):
         try:
             self.update_arrivals_display()
             # Success - switch to home page and start timers
+            print("Switching to main schedule page at time:", datetime.now().strftime("%H:%M:%S"))
             self.stack.setCurrentIndex(1)  # Home page
             self.refresh_timer.start(self.refresh_rate_seconds * 1000)
             self.countdown_timer.start(1000)
