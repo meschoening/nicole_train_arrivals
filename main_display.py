@@ -538,12 +538,17 @@ class MainWindow(QMainWindow):
         self.stack = QStackedWidget()
         
         # Create pages
+        self.startup_page = self.create_startup_page()
         self.home_page = self.create_home_page()
         self.settings_page = self.create_settings_page()
         
-        # Add pages to stack
+        # Add pages to stack (startup=0, home=1, settings=2)
+        self.stack.addWidget(self.startup_page)
         self.stack.addWidget(self.home_page)
         self.stack.addWidget(self.settings_page)
+        
+        # Start on the startup page
+        self.stack.setCurrentIndex(0)
         
         self.setCentralWidget(self.stack)
         
@@ -556,27 +561,21 @@ class MainWindow(QMainWindow):
         # Initialize settings with config values
         self.initialize_settings_from_config()
         
-        # Initial load of arrivals data
-        try:
-            self.update_arrivals_display()
-        except MetroAPIError as e:
-            # Store error for display in countdown
-            self.refresh_error_message = str(e)
-        
-        # Load refresh rate from config
+        # Load refresh rate from config (needed for timers after initial load)
         config = config_handler.load_config()
-        refresh_rate_seconds = config.get('refresh_rate_seconds', 30)
+        self.refresh_rate_seconds = config.get('refresh_rate_seconds', 30)
         
-        # Set up auto-refresh timer
+        # Set up auto-refresh timer (will be started after initial load succeeds)
         self.refresh_timer = QTimer()
         self.refresh_timer.timeout.connect(self.refresh_arrivals)
-        self.refresh_timer.start(refresh_rate_seconds * 1000)  # Convert seconds to milliseconds
         
-        # Set up countdown timer (updates every second)
-        self.seconds_until_refresh = refresh_rate_seconds
+        # Set up countdown timer (will be started after initial load succeeds)
+        self.seconds_until_refresh = self.refresh_rate_seconds
         self.countdown_timer = QTimer()
         self.countdown_timer.timeout.connect(self.update_countdown)
-        self.countdown_timer.start(1000)  # 1000ms = 1 second
+        
+        # Defer initial API load until after window is shown
+        QTimer.singleShot(100, self.perform_initial_load)
         
         # Update button state management
         self.git_process = None
@@ -619,6 +618,23 @@ class MainWindow(QMainWindow):
                     self.close_shutdown_popout()
         
         return super().eventFilter(obj, event)
+    
+    def perform_initial_load(self):
+        """Perform initial API data load after window is shown"""
+        try:
+            self.update_arrivals_display()
+            # Success - switch to home page and start timers
+            self.stack.setCurrentIndex(1)  # Home page
+            self.refresh_timer.start(self.refresh_rate_seconds * 1000)
+            self.countdown_timer.start(1000)
+        except MetroAPIError as e:
+            # Store error for reference
+            self.refresh_error_message = str(e)
+            # Update startup screen to show error
+            self.startup_status_label.setText(str(e))
+            self.startup_status_label.setStyleSheet("font-family: Quicksand; font-size: 24px; color: #cc0000;")
+            # Show the action buttons
+            self.startup_buttons_container.show()
     
     def get_device_ip(self):
         """Get the local IP address of the device"""
@@ -704,12 +720,12 @@ class MainWindow(QMainWindow):
         # Reload dropdowns from config (now using cache, so it's fast)
         self.initialize_settings_from_config()
         # Switch to settings page
-        self.stack.setCurrentIndex(1)
+        self.stack.setCurrentIndex(2)
     
     def close_settings_page(self):
         """Close settings page"""
         # Just switch to home page
-        self.stack.setCurrentIndex(0)
+        self.stack.setCurrentIndex(1)
     
     def on_line_selected(self, index):
         """Handle line selection change"""
@@ -2245,6 +2261,129 @@ class MainWindow(QMainWindow):
         self.current_fade_animation.setEasingCurve(QEasingCurve.InOutQuad)
         self.current_fade_animation.finished.connect(on_finished)
         self.current_fade_animation.start()
+    
+    def create_startup_page(self):
+        """Create the startup/loading page shown before API connection"""
+        page = QWidget()
+        page.setStyleSheet("background-color: lightgray;")
+        
+        # Main layout to center content vertically and horizontally
+        main_layout = QVBoxLayout()
+        main_layout.setContentsMargins(0, 0, 0, 0)
+        main_layout.setSpacing(0)
+        
+        # Add stretch to push content to center
+        main_layout.addStretch()
+        
+        # Center container for title and status
+        center_container = QWidget()
+        center_layout = QVBoxLayout()
+        center_layout.setAlignment(Qt.AlignCenter)
+        center_layout.setSpacing(20)
+        
+        # Title label - large and centered
+        self.startup_title_label = QLabel(self.default_title_text)
+        self.startup_title_label.setStyleSheet("font-family: Quicksand; font-size: 48px; font-weight: bold; color: #333;")
+        self.startup_title_label.setAlignment(Qt.AlignCenter)
+        center_layout.addWidget(self.startup_title_label)
+        
+        # Status label - smaller, below title
+        self.startup_status_label = QLabel("Connecting to Metro API...")
+        self.startup_status_label.setStyleSheet("font-family: Quicksand; font-size: 24px; color: #666;")
+        self.startup_status_label.setAlignment(Qt.AlignCenter)
+        center_layout.addWidget(self.startup_status_label)
+        
+        # Buttons container (initially hidden)
+        self.startup_buttons_container = QWidget()
+        buttons_layout = QHBoxLayout()
+        buttons_layout.setContentsMargins(0, 20, 0, 0)
+        buttons_layout.setSpacing(20)
+        buttons_layout.setAlignment(Qt.AlignCenter)
+        
+        # Exit to Desktop button
+        self.startup_exit_button = QPushButton("Exit to Desktop")
+        self.startup_exit_button.setMinimumWidth(180)
+        self.startup_exit_button.setStyleSheet("""
+            QPushButton {
+                font-family: Quicksand;
+                font-size: 18px;
+                font-weight: bold;
+                padding: 10px 20px;
+                background-color: #e0e0e0;
+                border: none;
+                border-radius: 5px;
+            }
+            QPushButton:hover {
+                background-color: #d0d0d0;
+            }
+            QPushButton:pressed {
+                background-color: #c0c0c0;
+                padding-bottom: 9px;
+            }
+        """)
+        self.startup_exit_button.clicked.connect(QApplication.instance().quit)
+        buttons_layout.addWidget(self.startup_exit_button)
+        
+        # Reboot button
+        self.startup_reboot_button = QPushButton("Reboot")
+        self.startup_reboot_button.setMinimumWidth(180)
+        self.startup_reboot_button.setStyleSheet("""
+            QPushButton {
+                font-family: Quicksand;
+                font-size: 18px;
+                font-weight: bold;
+                padding: 10px 20px;
+                background-color: #e0e0e0;
+                border: none;
+                border-radius: 5px;
+            }
+            QPushButton:hover {
+                background-color: #d0d0d0;
+            }
+            QPushButton:pressed {
+                background-color: #c0c0c0;
+                padding-bottom: 9px;
+            }
+        """)
+        self.startup_reboot_button.clicked.connect(self.perform_system_reboot)
+        buttons_layout.addWidget(self.startup_reboot_button)
+        
+        # Shutdown button
+        self.startup_shutdown_button = QPushButton("Shutdown")
+        self.startup_shutdown_button.setMinimumWidth(180)
+        self.startup_shutdown_button.setStyleSheet("""
+            QPushButton {
+                font-family: Quicksand;
+                font-size: 18px;
+                font-weight: bold;
+                padding: 10px 20px;
+                background-color: #e0e0e0;
+                border: none;
+                border-radius: 5px;
+            }
+            QPushButton:hover {
+                background-color: #d0d0d0;
+            }
+            QPushButton:pressed {
+                background-color: #c0c0c0;
+                padding-bottom: 9px;
+            }
+        """)
+        self.startup_shutdown_button.clicked.connect(self.perform_system_shutdown)
+        buttons_layout.addWidget(self.startup_shutdown_button)
+        
+        self.startup_buttons_container.setLayout(buttons_layout)
+        self.startup_buttons_container.hide()  # Initially hidden
+        center_layout.addWidget(self.startup_buttons_container)
+        
+        center_container.setLayout(center_layout)
+        main_layout.addWidget(center_container)
+        
+        # Add stretch to push content to center
+        main_layout.addStretch()
+        
+        page.setLayout(main_layout)
+        return page
     
     def create_home_page(self):
         """Create the home page"""
