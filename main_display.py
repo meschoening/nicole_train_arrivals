@@ -633,6 +633,15 @@ class MainWindow(QMainWindow):
     def perform_initial_load(self):
         """Perform initial API data load after window is shown"""
         try:
+            config = config_handler.load_config()
+            api_key = config.get('api_key')
+            if not api_key:
+                # Stay on startup page and prompt user to add API key
+                message = "API Key Missing. Add it by visiting nicoletrains.local"
+                self.startup_status_label.setText(message)
+                self.startup_status_label.setStyleSheet("font-family: Quicksand; font-size: 24px; color: #cc0000;")
+                return
+
             self.update_arrivals_display()
             # Success - switch to home page and start timers
             print("Switching to main schedule page at time:", datetime.now().strftime("%H:%M:%S"))

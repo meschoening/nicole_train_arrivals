@@ -18,4 +18,8 @@ Add the following to the very bottom/as new lines to "/boot/config.txt":
     hdmi_group=2
     hdmi_mode=87
 
+
+Add the following to "visudo" to enable reboot/shutdown buttons:
+    max ALL=(ALL) NOPASSWD: /usr/sbin/shutdown
+
 Reboot after complete.
