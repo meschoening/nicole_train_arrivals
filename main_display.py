@@ -10,6 +10,7 @@ import sys
 import socket
 import subprocess
 import random
+import argparse
 from datetime import datetime, timedelta
 from web_settings_server import start_web_settings_server, get_pending_message_trigger, get_pending_settings_change
 
@@ -602,7 +603,7 @@ class MainWindow(QMainWindow):
             self.initial_load_triggered = True
             print("Window shown at time:", datetime.now().strftime("%H:%M:%S"))
             # Now start the delay for initial load
-            QTimer.singleShot(5000, self.perform_initial_load)
+            QTimer.singleShot(3000, self.perform_initial_load)
     
     def eventFilter(self, obj, event):
         """Event filter to handle hover events on IP button and clicks outside shutdown popout"""
@@ -3144,7 +3145,18 @@ class MainWindow(QMainWindow):
         page.setLayout(layout)
         return page
 
+def parse_cli_args():
+    """Parse command line arguments for runtime display options."""
+    parser = argparse.ArgumentParser(description="Train arrivals display")
+    parser.add_argument(
+        "--fullscreen",
+        action="store_true",
+        help="Launch the display in fullscreen mode",
+    )
+    return parser.parse_args()
+
 # Load configuration and initialize API
+args = parse_cli_args()
 config = config_handler.load_config()
 metro_api = MetroAPI(config['api_key'])
 
@@ -3161,8 +3173,7 @@ except MetroAPIError:
 app = QApplication([])
 
 window = MainWindow()
-screen_size = app.primaryScreen().size()
-if screen_size.width() == 1024 and screen_size.height() == 600:
+if args.fullscreen:
     window.showFullScreen()
 else:
     window.setFixedSize(1024, 600)
