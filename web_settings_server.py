@@ -443,6 +443,22 @@ def start_web_settings_server(data_handler, host="0.0.0.0", port=443):
 
     thread = threading.Thread(target=_run, daemon=True)
     thread.start()
+    
+    # If SSL is enabled, start a redirect server on port 80 to redirect HTTP -> HTTPS
+    if _ssl_enabled:
+        redirect_app = Flask(__name__ + "_redirect")
+        
+        @redirect_app.before_request
+        def redirect_to_https():
+            # Redirect all HTTP requests to HTTPS
+            return redirect(request.url.replace("http://", "https://", 1), code=301)
+        
+        def _run_redirect():
+            redirect_app.run(host=host, port=80, threaded=True, use_reloader=False, debug=False)
+        
+        redirect_thread = threading.Thread(target=_run_redirect, daemon=True)
+        redirect_thread.start()
+    
     return thread
 
 
