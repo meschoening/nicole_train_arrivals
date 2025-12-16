@@ -217,17 +217,30 @@
           const sshSection = document.getElementById('sshKeySection');
           const generateDiv = document.getElementById('sshKeyGenerate');
 
-          // Create the "keys exist" UI
+          // Create the "keys exist" UI safely using DOM methods (not innerHTML)
           const existsDiv = document.createElement('div');
           existsDiv.id = 'sshKeyExists';
-          existsDiv.innerHTML = `
-              <div class="row">
-                <textarea class="ssh-key-display" id="sshPublicKey" readonly>${data.public_key}</textarea>
-              </div>
-              <div class="row">
-                <button type="button" id="copyKeyBtn" onclick="copySSHKey()">Copy SSH Public Key</button>
-              </div>
-            `;
+
+          const row1 = document.createElement('div');
+          row1.className = 'row';
+          const textarea = document.createElement('textarea');
+          textarea.className = 'ssh-key-display';
+          textarea.id = 'sshPublicKey';
+          textarea.readOnly = true;
+          textarea.textContent = data.public_key;  // Safe: textContent escapes HTML
+          row1.appendChild(textarea);
+
+          const row2 = document.createElement('div');
+          row2.className = 'row';
+          const copyBtn = document.createElement('button');
+          copyBtn.type = 'button';
+          copyBtn.id = 'copyKeyBtn';
+          copyBtn.textContent = 'Copy SSH Public Key';
+          copyBtn.onclick = copySSHKey;
+          row2.appendChild(copyBtn);
+
+          existsDiv.appendChild(row1);
+          existsDiv.appendChild(row2);
 
           // Replace the generate UI with the exists UI
           generateDiv.replaceWith(existsDiv);
