@@ -1,3 +1,6 @@
+Install tailscale for remote access:
+    curl -fsSL https://tailscale.com/install.sh | sh
+
 Run the following commands before initializing ssh key for git, using git:
     apt install git openssh-client
 

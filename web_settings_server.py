@@ -455,6 +455,7 @@ def start_web_settings_server(data_handler, host="0.0.0.0", port=80):
         }
         if ssl_context is not None:
             run_kwargs["ssl_context"] = ssl_context
+            print(ssl_context)
         app.run(**run_kwargs)
 
     thread = threading.Thread(target=_run, daemon=True)
