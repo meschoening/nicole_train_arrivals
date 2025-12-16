@@ -635,23 +635,17 @@ def start_web_settings_server(data_handler, host="0.0.0.0", port=443):
         timezone = form.get("timezone")
         if timezone:
             # Apply timezone system-wide via timedatectl
-            cmd = ["sudo", "timedatectl", "set-timezone", timezone]
-            print(f"[DEBUG] Running timezone command: {' '.join(cmd)}")
             try:
                 result = subprocess.run(
-                    cmd,
+                    ["sudo", "timedatectl", "set-timezone", timezone],
                     capture_output=True,
-                    text=True,
                     timeout=10
                 )
-                print(f"[DEBUG] Return code: {result.returncode}")
-                print(f"[DEBUG] stdout: {result.stdout}")
-                print(f"[DEBUG] stderr: {result.stderr}")
                 # Refresh Python's timezone cache after setting system timezone
                 if result.returncode == 0:
                     time.tzset()
-            except Exception as e:
-                print(f"[DEBUG] Exception: {e}")
+            except Exception:
+                pass
 
         # Reboot time from three components
         reboot_hour = form.get("reboot_hour")
