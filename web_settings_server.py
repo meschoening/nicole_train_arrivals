@@ -107,10 +107,10 @@ def _check_ssl_available():
 
 def _get_ssl_context():
     """
-    Create SSL context from Tailscale certificate files.
+    Get SSL certificate file paths for Flask.
     
     Returns:
-        ssl.SSLContext or None: SSL context if both files exist, None otherwise
+        tuple or None: Tuple of (cert_path, key_path) if both files exist, None otherwise
     """
     cert_path = os.path.expanduser("~/nicoletrains.tail45f1e5.ts.net.crt")
     key_path = os.path.expanduser("~/nicoletrains.tail45f1e5.ts.net.key")
@@ -118,12 +118,7 @@ def _get_ssl_context():
     if not os.path.exists(cert_path) or not os.path.exists(key_path):
         return None
     
-    try:
-        context = ssl.create_default_context(ssl.Purpose.CLIENT_AUTH)
-        context.load_cert_chain(cert_path, key_path)
-        return context
-    except Exception:
-        return None
+    return (cert_path, key_path)
 
 
 def start_web_settings_server(data_handler, host="0.0.0.0", port=80):
