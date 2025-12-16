@@ -137,6 +137,23 @@ def start_web_settings_server(data_handler, host="0.0.0.0", port=443):
         except Exception:
             return "Unable to detect"
 
+    def _get_tailscale_address():
+        try:
+            result = subprocess.run(
+                ["tailscale", "status", "--json"],
+                capture_output=True,
+                text=True,
+                timeout=5
+            )
+            if result.returncode == 0 and result.stdout:
+                status_data = json.loads(result.stdout)
+                dns_name = status_data.get("Self", {}).get("DNSName", "")
+                if dns_name:
+                    return dns_name
+            return "Not available"
+        except (subprocess.TimeoutExpired, subprocess.SubprocessError, json.JSONDecodeError, KeyError, FileNotFoundError):
+            return "Not available"
+
     def _get_messages_last_saved():
         messages_path = getattr(message_handler, 'MESSAGES_FILE', 'messages.json')
         if os.path.exists(messages_path):
@@ -205,7 +222,7 @@ def start_web_settings_server(data_handler, host="0.0.0.0", port=443):
 
     @app.get("/")
     def index():
-        return render_template("index.html", device_ip=_get_device_ip(), ssl_enabled=_ssl_enabled)
+        return render_template("index.html", device_ip=_get_device_ip(), tailscale_address=_get_tailscale_address(), ssl_enabled=_ssl_enabled)
 
     @app.get("/update")
     def get_update():

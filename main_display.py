@@ -61,25 +61,40 @@ class TouchscreenComboViewFilter(QObject):
         return False
 
 class IPPopout(QWidget):
-    """A popout widget that displays the device IP address"""
-    def __init__(self, ip_address, parent=None):
+    """A popout widget that displays the device IP address and Tailscale address"""
+    def __init__(self, ip_address, tailscale_address, parent=None):
         super().__init__(parent)
         self.setWindowFlags(Qt.ToolTip | Qt.FramelessWindowHint)
         self.setAttribute(Qt.WA_TranslucentBackground, True)
         
-        # Create content layout with labels
-        content_layout = QHBoxLayout()
+        # Create content layout with labels (vertical layout for multiple lines)
+        content_layout = QVBoxLayout()
         content_layout.setContentsMargins(15, 10, 15, 10)
-        content_layout.setSpacing(10)
+        content_layout.setSpacing(8)
         
-        # Create labels
-        label = QLabel("Device IP:")
-        label.setStyleSheet("font-family: Quicksand; font-size: 16px; font-weight: bold; color: #333; border: none;")
-        content_layout.addWidget(label)
+        # First line: Device IP
+        ip_line = QHBoxLayout()
+        ip_line.setSpacing(10)
+        ip_label = QLabel("Device IP:")
+        ip_label.setStyleSheet("font-family: Quicksand; font-size: 16px; font-weight: bold; color: #333; border: none;")
+        ip_line.addWidget(ip_label)
         
-        ip_label = QLabel(ip_address)
-        ip_label.setStyleSheet("font-family: Quicksand; font-size: 16px; color: #666; border: none;")
-        content_layout.addWidget(ip_label)
+        ip_value = QLabel(ip_address)
+        ip_value.setStyleSheet("font-family: Quicksand; font-size: 16px; color: #666; border: none;")
+        ip_line.addWidget(ip_value)
+        content_layout.addLayout(ip_line)
+        
+        # Second line: Tailscale Address
+        tailscale_line = QHBoxLayout()
+        tailscale_line.setSpacing(10)
+        tailscale_label = QLabel("Tailscale Address:")
+        tailscale_label.setStyleSheet("font-family: Quicksand; font-size: 16px; font-weight: bold; color: #333; border: none;")
+        tailscale_line.addWidget(tailscale_label)
+        
+        tailscale_value = QLabel(tailscale_address)
+        tailscale_value.setStyleSheet("font-family: Quicksand; font-size: 16px; color: #666; border: none;")
+        tailscale_line.addWidget(tailscale_value)
+        content_layout.addLayout(tailscale_line)
         
         # Create a container widget for the border and background
         container = QWidget()
@@ -731,6 +746,25 @@ class MainWindow(QMainWindow):
             return ip_address
         except Exception:
             return "Unable to detect"
+    
+    def get_tailscale_address(self):
+        """Get the Tailscale address of the device"""
+        try:
+            import json
+            result = subprocess.run(
+                ["tailscale", "status", "--json"],
+                capture_output=True,
+                text=True,
+                timeout=5
+            )
+            if result.returncode == 0 and result.stdout:
+                status_data = json.loads(result.stdout)
+                dns_name = status_data.get("Self", {}).get("DNSName", "")
+                if dns_name:
+                    return dns_name
+            return "Not available"
+        except (subprocess.TimeoutExpired, subprocess.SubprocessError, json.JSONDecodeError, KeyError, FileNotFoundError):
+            return "Not available"
     
     def create_colored_circle_icon(self, color_hex):
         """Create a colored circle icon for dropdown items"""
@@ -1510,7 +1544,8 @@ class MainWindow(QMainWindow):
         """Show the IP popout near the IP button"""
         if not hasattr(self, 'ip_popout'):
             ip_address = self.get_device_ip()
-            self.ip_popout = IPPopout(ip_address, self.settings_page)
+            tailscale_address = self.get_tailscale_address()
+            self.ip_popout = IPPopout(ip_address, tailscale_address, self.settings_page)
         
         # Position the popout above the IP button
         button_pos = self.ip_button.mapTo(self.settings_page, self.ip_button.rect().topLeft())
