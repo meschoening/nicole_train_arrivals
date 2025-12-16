@@ -1,177 +1,226 @@
 <!doctype html>
 <html>
-  <head>
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Manage Authentication Keys</title>
-    <style>
-      body { font-family: sans-serif; margin: 0; padding: 0; }
-      .container { max-width: 720px; margin: 0 auto; padding: 24px; }
-      .row { margin-bottom: 12px; }
-      label { display: inline-block; min-width: 220px; font-weight: bold; }
-      input[type="text"], input[type="email"] { padding: 6px; font-size: 14px; width: 300px; }
-      button { padding: 8px 14px; font-weight: bold; cursor: pointer; }
-      a.btn { text-decoration: none; display: inline-block; padding: 8px 14px; border-radius: 6px; background: #f0f0f0; color: #000; font-weight: 700; border: 1px solid #ddd; }
-      a.btn:hover { background: #e6e6e6; }
-      
-      /* Section box for SSH key section */
-      .section-box {
-        background: #f5f5f5;
-        border-radius: 12px;
-        padding: 20px;
-        margin-top: 24px;
-      }
-      .section-box h3 {
-        margin-top: 0;
-        margin-bottom: 16px;
-        font-size: 16px;
-      }
-      
-      /* SSH public key textarea */
-      .ssh-key-display {
-        width: 100%;
-        max-width: 460px;
-        height: 60px;
-        padding: 8px;
-        font-family: monospace;
-        font-size: 12px;
-        background: #e0e0e0;
-        border: 1px solid #ccc;
-        border-radius: 6px;
-        resize: none;
-        color: #555;
-      }
-      
-      /* Status messages */
-      .status-message {
-        margin-top: 8px;
-        padding: 8px 12px;
-        border-radius: 6px;
-        font-size: 14px;
-      }
-      .status-message.success {
-        background: #d4edda;
-        color: #155724;
-      }
-      .status-message.error {
-        background: #f8d7da;
-        color: #721c24;
-      }
-      
-      /* Loading state */
-      button:disabled {
-        opacity: 0.6;
-        cursor: not-allowed;
-      }
-    </style>
-  </head>
-  <body>
-    <div class="container">
-      <div class="row">
-        <a href="{{ url_for('index') }}" class="btn">← Back</a>
-      </div>
-      <h2>Manage Authentication Keys</h2>
 
-      <!-- Metro API Key Section -->
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Manage Authentication Keys</title>
+  <style>
+    body {
+      font-family: sans-serif;
+      margin: 0;
+      padding: 0;
+    }
+
+    .container {
+      max-width: 720px;
+      margin: 0 auto;
+      padding: 24px;
+    }
+
+    .row {
+      margin-bottom: 12px;
+    }
+
+    label {
+      display: inline-block;
+      min-width: 220px;
+      font-weight: bold;
+    }
+
+    input[type="text"],
+    input[type="email"] {
+      padding: 6px;
+      font-size: 14px;
+      width: 300px;
+    }
+
+    button {
+      padding: 8px 14px;
+      font-weight: bold;
+      cursor: pointer;
+    }
+
+    a.btn {
+      text-decoration: none;
+      display: inline-block;
+      padding: 8px 14px;
+      border-radius: 6px;
+      background: #f0f0f0;
+      color: #000;
+      font-weight: 700;
+      border: 1px solid #ddd;
+    }
+
+    a.btn:hover {
+      background: #e6e6e6;
+    }
+
+    /* Section box for SSH key section */
+    .section-box {
+      background: #f5f5f5;
+      border-radius: 12px;
+      padding: 20px;
+      margin-top: 24px;
+    }
+
+    .section-box h3 {
+      margin-top: 0;
+      margin-bottom: 16px;
+      font-size: 16px;
+    }
+
+    /* SSH public key textarea */
+    .ssh-key-display {
+      width: 100%;
+      max-width: 460px;
+      height: 60px;
+      padding: 8px;
+      font-family: monospace;
+      font-size: 12px;
+      background: #e0e0e0;
+      border: 1px solid #ccc;
+      border-radius: 6px;
+      resize: none;
+      color: #555;
+    }
+
+    /* Status messages */
+    .status-message {
+      margin-top: 8px;
+      padding: 8px 12px;
+      border-radius: 6px;
+      font-size: 14px;
+    }
+
+    .status-message.success {
+      background: #d4edda;
+      color: #155724;
+    }
+
+    .status-message.error {
+      background: #f8d7da;
+      color: #721c24;
+    }
+
+    /* Loading state */
+    button:disabled {
+      opacity: 0.6;
+      cursor: not-allowed;
+    }
+  </style>
+</head>
+
+<body>
+  <div class="container">
+    <div class="row">
+      <a href="{{ url_for('index') }}" class="btn">← Back</a>
+    </div>
+    <h2>Manage Authentication Keys</h2>
+
+    <!-- Metro API Key Section -->
+    <div class="section-box">
+      <h3>Metro API Key</h3>
       <form method="post" action="/api-key" id="apiKeyForm">
-      <div class="row">
-        <label for="api_key">Metro API Key</label>
-        <input type="text" id="api_key" name="api_key" value="{{ api_key }}" placeholder="Enter your API key">
-      </div>
+        <div class="row">
+          <input type="text" id="api_key" name="api_key" value="{{ api_key }}" placeholder="Enter your API key"
+            style="width: 100%; max-width: 460px;">
+        </div>
 
-      <div class="row" style="display: flex; align-items: center; gap: 16px;">
-        <button type="submit">Save</button>
-        <span id="lastSaved" style="color:#666;">Last saved: {{ last_saved }}</span>
-      </div>
+        <div class="row" style="display: flex; align-items: center; gap: 16px;">
+          <button type="submit">Save</button>
+          <span id="lastSaved" style="color:#666;">Last saved: {{ last_saved }}</span>
+        </div>
       </form>
-
-      <!-- Git SSH Key Section -->
-      <div class="section-box" id="sshKeySection">
-        <h3>Git SSH Key</h3>
-        
-        {% if ssh_key_exists %}
-        <!-- Keys exist: show public key and copy button -->
-        <div id="sshKeyExists">
-          <div class="row">
-            <textarea class="ssh-key-display" id="sshPublicKey" readonly>{{ ssh_public_key }}</textarea>
-          </div>
-          <div class="row">
-            <button type="button" id="copyKeyBtn" onclick="copySSHKey()">Copy SSH Public Key</button>
-          </div>
-        </div>
-        {% else %}
-        <!-- Keys don't exist: show email input and generate button -->
-        <div id="sshKeyGenerate">
-          <div class="row">
-            <label for="sshEmail">Email</label>
-            <input type="email" id="sshEmail" placeholder="your@email.com">
-          </div>
-          <div class="row">
-            <button type="button" id="generateKeyBtn" onclick="generateSSHKey()">Generate SSH Keys</button>
-          </div>
-        </div>
-        {% endif %}
-        
-        <div id="sshStatusMessage"></div>
-      </div>
     </div>
 
-    <script>
-      const apiKeyForm = document.getElementById('apiKeyForm');
-      const lastSaved = document.getElementById('lastSaved');
-      function markUnsaved() {
-        if (lastSaved) lastSaved.style.color = '#cc6666';
+    <!-- Git SSH Key Section -->
+    <div class="section-box" id="sshKeySection">
+      <h3>Git SSH Key</h3>
+
+      {% if ssh_key_exists %}
+      <!-- Keys exist: show public key and copy button -->
+      <div id="sshKeyExists">
+        <div class="row">
+          <textarea class="ssh-key-display" id="sshPublicKey" readonly>{{ ssh_public_key }}</textarea>
+        </div>
+        <div class="row">
+          <button type="button" id="copyKeyBtn" onclick="copySSHKey()">Copy SSH Public Key</button>
+        </div>
+      </div>
+      {% else %}
+      <!-- Keys don't exist: show email input and generate button -->
+      <div id="sshKeyGenerate">
+        <div class="row">
+          <label for="sshEmail">Email</label>
+          <input type="email" id="sshEmail" placeholder="your@email.com">
+        </div>
+        <div class="row">
+          <button type="button" id="generateKeyBtn" onclick="generateSSHKey()">Generate SSH Keys</button>
+        </div>
+      </div>
+      {% endif %}
+
+      <div id="sshStatusMessage"></div>
+    </div>
+  </div>
+
+  <script>
+    const apiKeyForm = document.getElementById('apiKeyForm');
+    const lastSaved = document.getElementById('lastSaved');
+    function markUnsaved() {
+      if (lastSaved) lastSaved.style.color = '#cc6666';
+    }
+    // Mark unsaved when API key field changes
+    apiKeyForm.addEventListener('change', markUnsaved);
+    apiKeyForm.addEventListener('input', markUnsaved);
+
+    // SSH Key Functions
+    function showStatus(message, isError) {
+      const statusEl = document.getElementById('sshStatusMessage');
+      statusEl.className = 'status-message ' + (isError ? 'error' : 'success');
+      statusEl.textContent = message;
+      statusEl.style.display = 'block';
+    }
+
+    async function generateSSHKey() {
+      const emailInput = document.getElementById('sshEmail');
+      const generateBtn = document.getElementById('generateKeyBtn');
+      const email = emailInput.value.trim();
+
+      if (!email) {
+        showStatus('Please enter an email address.', true);
+        return;
       }
-      // Mark unsaved when API key field changes
-      apiKeyForm.addEventListener('change', markUnsaved);
-      apiKeyForm.addEventListener('input', markUnsaved);
 
-      // SSH Key Functions
-      function showStatus(message, isError) {
-        const statusEl = document.getElementById('sshStatusMessage');
-        statusEl.className = 'status-message ' + (isError ? 'error' : 'success');
-        statusEl.textContent = message;
-        statusEl.style.display = 'block';
+      // Basic email validation
+      if (!/^[\w.+-]+@[\w.-]+\.[a-zA-Z]{2,}$/.test(email)) {
+        showStatus('Please enter a valid email address.', true);
+        return;
       }
 
-      async function generateSSHKey() {
-        const emailInput = document.getElementById('sshEmail');
-        const generateBtn = document.getElementById('generateKeyBtn');
-        const email = emailInput.value.trim();
+      generateBtn.disabled = true;
+      generateBtn.textContent = 'Generating...';
 
-        if (!email) {
-          showStatus('Please enter an email address.', true);
-          return;
-        }
+      try {
+        const response = await fetch('/api/generate-ssh-key', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email: email })
+        });
 
-        // Basic email validation
-        if (!/^[\w.+-]+@[\w.-]+\.[a-zA-Z]{2,}$/.test(email)) {
-          showStatus('Please enter a valid email address.', true);
-          return;
-        }
+        const data = await response.json();
 
-        generateBtn.disabled = true;
-        generateBtn.textContent = 'Generating...';
+        if (data.success) {
+          showStatus('SSH keys generated successfully!', false);
+          // Update UI to show the public key
+          const sshSection = document.getElementById('sshKeySection');
+          const generateDiv = document.getElementById('sshKeyGenerate');
 
-        try {
-          const response = await fetch('/api/generate-ssh-key', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ email: email })
-          });
-
-          const data = await response.json();
-
-          if (data.success) {
-            showStatus('SSH keys generated successfully!', false);
-            // Update UI to show the public key
-            const sshSection = document.getElementById('sshKeySection');
-            const generateDiv = document.getElementById('sshKeyGenerate');
-            
-            // Create the "keys exist" UI
-            const existsDiv = document.createElement('div');
-            existsDiv.id = 'sshKeyExists';
-            existsDiv.innerHTML = `
+          // Create the "keys exist" UI
+          const existsDiv = document.createElement('div');
+          existsDiv.id = 'sshKeyExists';
+          existsDiv.innerHTML = `
               <div class="row">
                 <textarea class="ssh-key-display" id="sshPublicKey" readonly>${data.public_key}</textarea>
               </div>
@@ -179,40 +228,41 @@
                 <button type="button" id="copyKeyBtn" onclick="copySSHKey()">Copy SSH Public Key</button>
               </div>
             `;
-            
-            // Replace the generate UI with the exists UI
-            generateDiv.replaceWith(existsDiv);
-          } else {
-            showStatus('Error: ' + data.error, true);
-            generateBtn.disabled = false;
-            generateBtn.textContent = 'Generate SSH Keys';
-          }
-        } catch (error) {
-          showStatus('Error: ' + error.message, true);
+
+          // Replace the generate UI with the exists UI
+          generateDiv.replaceWith(existsDiv);
+        } else {
+          showStatus('Error: ' + data.error, true);
           generateBtn.disabled = false;
           generateBtn.textContent = 'Generate SSH Keys';
         }
+      } catch (error) {
+        showStatus('Error: ' + error.message, true);
+        generateBtn.disabled = false;
+        generateBtn.textContent = 'Generate SSH Keys';
       }
+    }
 
-      async function copySSHKey() {
-        const keyTextarea = document.getElementById('sshPublicKey');
-        const copyBtn = document.getElementById('copyKeyBtn');
-        const keyText = keyTextarea.value;
+    async function copySSHKey() {
+      const keyTextarea = document.getElementById('sshPublicKey');
+      const copyBtn = document.getElementById('copyKeyBtn');
+      const keyText = keyTextarea.value;
 
-        try {
-          await navigator.clipboard.writeText(keyText);
-          copyBtn.textContent = 'Copied!';
-          showStatus('SSH public key copied to clipboard!', false);
-          setTimeout(() => {
-            copyBtn.textContent = 'Copy SSH Public Key';
-          }, 2000);
-        } catch (error) {
-          // Fallback: select the text for manual copying
-          keyTextarea.select();
-          keyTextarea.setSelectionRange(0, 99999);
-          showStatus('Press Ctrl+C to copy the selected key.', false);
-        }
+      try {
+        await navigator.clipboard.writeText(keyText);
+        copyBtn.textContent = 'Copied!';
+        showStatus('SSH public key copied to clipboard!', false);
+        setTimeout(() => {
+          copyBtn.textContent = 'Copy SSH Public Key';
+        }, 2000);
+      } catch (error) {
+        // Fallback: select the text for manual copying
+        keyTextarea.select();
+        keyTextarea.setSelectionRange(0, 99999);
+        showStatus('Press Ctrl+C to copy the selected key.', false);
       }
-    </script>
-  </body>
-  </html>
+    }
+  </script>
+</body>
+
+</html>
