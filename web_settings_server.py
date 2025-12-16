@@ -104,6 +104,43 @@ def _get_directions_for_station(data_handler, station_code):
     return results
 
 
+def _get_available_timezones():
+    """Get list of available timezones from timedatectl."""
+    try:
+        result = subprocess.run(
+            ["timedatectl", "list-timezones"],
+            capture_output=True,
+            text=True,
+            timeout=10
+        )
+        if result.returncode == 0:
+            return [tz.strip() for tz in result.stdout.splitlines() if tz.strip()]
+    except Exception:
+        pass
+    # Fallback to common timezones if timedatectl fails (e.g., on Windows dev machine)
+    return [
+        "America/New_York", "America/Chicago", "America/Denver",
+        "America/Los_Angeles", "America/Phoenix", "America/Anchorage",
+        "Pacific/Honolulu", "UTC"
+    ]
+
+
+def _get_current_system_timezone():
+    """Get the current system timezone from timedatectl."""
+    try:
+        result = subprocess.run(
+            ["timedatectl", "show", "--property=Timezone", "--value"],
+            capture_output=True,
+            text=True,
+            timeout=5
+        )
+        if result.returncode == 0 and result.stdout.strip():
+            return result.stdout.strip()
+    except Exception:
+        pass
+    return "America/Chicago"  # Fallback default
+
+
 def start_web_settings_server(data_handler, host="0.0.0.0", port=443):
     global _ssl_enabled
     
@@ -196,6 +233,10 @@ def start_web_settings_server(data_handler, host="0.0.0.0", port=443):
     @app.get("/settings")
     def get_settings():
         config = config_handler.load_config()
+        
+        # Always get timezone from system, not config
+        current_timezone = _get_current_system_timezone()
+        
         with _data_lock:
             lines_df = _ensure_lines(data_handler)
         lines = []
@@ -217,6 +258,8 @@ def start_web_settings_server(data_handler, host="0.0.0.0", port=443):
             lines=lines,
             stations=stations,
             directions=directions,
+            timezones=_get_available_timezones(),
+            current_timezone=current_timezone,
             last_saved=_get_config_last_saved(),
         )
 
@@ -578,6 +621,19 @@ def start_web_settings_server(data_handler, host="0.0.0.0", port=443):
         title_text = form.get("title_text")
         if title_text is not None:
             config_handler.save_config("title_text", title_text)
+
+        # Handle timezone setting (system-only, not saved to config)
+        timezone = form.get("timezone")
+        if timezone:
+            # Apply timezone system-wide via timedatectl
+            try:
+                subprocess.run(
+                    ["sudo", "timedatectl", "set-timezone", timezone],
+                    capture_output=True,
+                    timeout=10
+                )
+            except Exception:
+                pass
 
         # Reboot time from three components
         reboot_hour = form.get("reboot_hour")
