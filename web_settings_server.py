@@ -105,7 +105,13 @@ def _get_directions_for_station(data_handler, station_code):
 
 
 def _get_available_timezones():
-    """Get list of available timezones from timedatectl."""
+    """Get list of available timezones from timedatectl, filtered to canonical names only."""
+    # Only include canonical timezone prefixes (excludes legacy names like US/Central, EST, etc.)
+    canonical_prefixes = (
+        "Africa/", "America/", "Antarctica/", "Arctic/", "Asia/",
+        "Atlantic/", "Australia/", "Europe/", "Indian/", "Pacific/"
+    )
+    
     try:
         result = subprocess.run(
             ["timedatectl", "list-timezones"],
@@ -114,7 +120,10 @@ def _get_available_timezones():
             timeout=10
         )
         if result.returncode == 0:
-            return [tz.strip() for tz in result.stdout.splitlines() if tz.strip()]
+            timezones = [tz.strip() for tz in result.stdout.splitlines() if tz.strip()]
+            # Filter to canonical timezones + UTC
+            filtered = [tz for tz in timezones if tz.startswith(canonical_prefixes) or tz == "UTC"]
+            return filtered if filtered else timezones  # Fall back to full list if filter is empty
     except Exception:
         pass
     # Fallback to common timezones if timedatectl fails (e.g., on Windows dev machine)
