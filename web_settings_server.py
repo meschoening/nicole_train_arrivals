@@ -149,7 +149,7 @@ def start_web_settings_server(data_handler, host="0.0.0.0", port=443):
                 status_data = json.loads(result.stdout)
                 dns_name = status_data.get("Self", {}).get("DNSName", "")
                 if dns_name:
-                    return dns_name
+                    return dns_name.rstrip('.')
             return "Not available"
         except (subprocess.TimeoutExpired, subprocess.SubprocessError, json.JSONDecodeError, KeyError, FileNotFoundError):
             return "Not available"
