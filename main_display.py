@@ -10,6 +10,7 @@ import sys
 import socket
 import subprocess
 import random
+import time
 import argparse
 from datetime import datetime, timedelta
 from web_settings_server import start_web_settings_server, get_pending_message_trigger, get_pending_settings_change
@@ -2148,6 +2149,9 @@ class MainWindow(QMainWindow):
     
     def handle_settings_changed(self):
         """Handle settings change from web interface - sync settings and refresh display"""
+        # Refresh Python's timezone cache in case timezone was changed
+        time.tzset()
+        
         # Sync all settings from config file
         self.sync_settings_from_config()
         

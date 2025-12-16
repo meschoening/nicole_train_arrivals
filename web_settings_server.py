@@ -647,6 +647,9 @@ def start_web_settings_server(data_handler, host="0.0.0.0", port=443):
                 print(f"[DEBUG] Return code: {result.returncode}")
                 print(f"[DEBUG] stdout: {result.stdout}")
                 print(f"[DEBUG] stderr: {result.stderr}")
+                # Refresh Python's timezone cache after setting system timezone
+                if result.returncode == 0:
+                    time.tzset()
             except Exception as e:
                 print(f"[DEBUG] Exception: {e}")
 
