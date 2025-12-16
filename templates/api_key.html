@@ -194,7 +194,7 @@
           <button type="button" id="copyKeyBtn" onclick="copySSHKey()">Copy SSH Public Key</button>
           <span class="regenerate-container">
             <input type="email" id="regenerateEmail" class="regenerate-email-input" placeholder="your@email.com">
-            <button type="button" id="regenerateKeyBtn" class="warning" onclick="handleRegenerateClick()">Regenerate SSH
+            <button type="button" id="regenerateKeyBtn" onclick="handleRegenerateClick()">Regenerate SSH
               Keypair</button>
           </span>
         </div>
@@ -355,7 +355,6 @@
       if (regenerateBtn) {
         regenerateBtn.textContent = 'Regenerate SSH Keypair';
         regenerateBtn.classList.remove('confirm-state');
-        regenerateBtn.classList.add('warning');
       }
       if (emailInput) {
         emailInput.classList.remove('visible');
