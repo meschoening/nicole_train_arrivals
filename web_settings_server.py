@@ -100,8 +100,8 @@ def _check_ssl_available():
     Returns:
         bool: True if both certificate and key files exist, False otherwise
     """
-    cert_path = "/var/lib/tailscale/certs/nicoletrains.tail45f1e5.ts.net.crt"
-    key_path = "/var/lib/tailscale/certs/nicoletrains.tail45f1e5.ts.net.key"
+    cert_path = os.path.expanduser("~/nicoletrains.tail45f1e5.ts.net.crt")
+    key_path = os.path.expanduser("~/nicoletrains.tail45f1e5.ts.net.key")
     return os.path.exists(cert_path) and os.path.exists(key_path)
 
 
@@ -112,8 +112,8 @@ def _get_ssl_context():
     Returns:
         ssl.SSLContext or None: SSL context if both files exist, None otherwise
     """
-    cert_path = "/var/lib/tailscale/certs/nicoletrains.tail45f1e5.ts.net.crt"
-    key_path = "/var/lib/tailscale/certs/nicoletrains.tail45f1e5.ts.net.key"
+    cert_path = os.path.expanduser("~/nicoletrains.tail45f1e5.ts.net.crt")
+    key_path = os.path.expanduser("~/nicoletrains.tail45f1e5.ts.net.key")
     
     if not os.path.exists(cert_path) or not os.path.exists(key_path):
         return None
