@@ -8,7 +8,6 @@ import subprocess
 import sys
 import time
 import json
-import ssl
 
 
 _data_lock = threading.Lock()
@@ -16,6 +15,18 @@ _message_trigger = {"message": None, "pending": False}
 _message_trigger_lock = threading.Lock()
 _settings_changed_trigger = {"pending": False}
 _settings_changed_lock = threading.Lock()
+
+# SSL certificate paths (expanded from ~)
+_SSL_CERT_PATH = os.path.expanduser("~/nicoletrains.tail45f1e5.ts.net.crt")
+_SSL_KEY_PATH = os.path.expanduser("~/nicoletrains.tail45f1e5.ts.net.key")
+
+# Track SSL status for warning display
+_ssl_enabled = False
+
+
+def _check_ssl_certs():
+    """Check if SSL certificate files exist."""
+    return os.path.exists(_SSL_CERT_PATH) and os.path.exists(_SSL_KEY_PATH)
 
 
 def get_pending_message_trigger():
@@ -93,35 +104,18 @@ def _get_directions_for_station(data_handler, station_code):
     return results
 
 
-def _check_ssl_available():
-    """
-    Check if SSL certificate files are available.
+def start_web_settings_server(data_handler, host="0.0.0.0", port=443):
+    global _ssl_enabled
     
-    Returns:
-        bool: True if both certificate and key files exist, False otherwise
-    """
-    cert_path = os.path.expanduser("~/nicoletrains.tail45f1e5.ts.net.crt")
-    key_path = os.path.expanduser("~/nicoletrains.tail45f1e5.ts.net.key")
-    return os.path.exists(cert_path) and os.path.exists(key_path)
-
-
-def _get_ssl_context():
-    """
-    Get SSL certificate file paths for Flask.
+    # Check for SSL certificates
+    ssl_context = None
+    if _check_ssl_certs():
+        ssl_context = (_SSL_CERT_PATH, _SSL_KEY_PATH)
+        _ssl_enabled = True
+    else:
+        _ssl_enabled = False
+        port = 80  # Fall back to HTTP port
     
-    Returns:
-        tuple or None: Tuple of (cert_path, key_path) if both files exist, None otherwise
-    """
-    cert_path = os.path.expanduser("~/nicoletrains.tail45f1e5.ts.net.crt")
-    key_path = os.path.expanduser("~/nicoletrains.tail45f1e5.ts.net.key")
-    
-    if not os.path.exists(cert_path) or not os.path.exists(key_path):
-        return None
-    
-    return (cert_path, key_path)
-
-
-def start_web_settings_server(data_handler, host="0.0.0.0", port=80):
     app = Flask(__name__, template_folder="templates")
 
     def _get_config_last_saved():
@@ -211,7 +205,7 @@ def start_web_settings_server(data_handler, host="0.0.0.0", port=80):
 
     @app.get("/")
     def index():
-        return render_template("index.html", device_ip=_get_device_ip(), ssl_available=_check_ssl_available())
+        return render_template("index.html", device_ip=_get_device_ip(), ssl_enabled=_ssl_enabled)
 
     @app.get("/update")
     def get_update():
@@ -445,18 +439,7 @@ def start_web_settings_server(data_handler, host="0.0.0.0", port=80):
         return jsonify(directions)
 
     def _run():
-        ssl_context = _get_ssl_context()
-        run_kwargs = {
-            "host": host,
-            "port": port,
-            "threaded": True,
-            "use_reloader": False,
-            "debug": False
-        }
-        if ssl_context is not None:
-            run_kwargs["ssl_context"] = ssl_context
-            print(ssl_context)
-        app.run(**run_kwargs)
+        app.run(host=host, port=port, threaded=True, use_reloader=False, debug=False, ssl_context=ssl_context)
 
     thread = threading.Thread(target=_run, daemon=True)
     thread.start()

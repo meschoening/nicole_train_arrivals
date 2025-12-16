@@ -15,19 +15,16 @@
         background: #f0f0f0; color: #000; font-weight: 700; border: 1px solid #ddd;
       }
       .btn:hover { background: #e6e6e6; }
-      .ssl-warning {
-        color: #d97706;
-        margin: 8px 0 16px;
-        font-weight: 500;
-      }
     </style>
   </head>
   <body>
     <div class="container">
       <h2>Nicole's Train Tracker: Remote Control Dashboard</h2>
       <div style="color:#666;margin:8px 0 16px;">Device IP: {{ device_ip }}</div>
-      {% if not ssl_available %}
-      <div class="ssl-warning">Warning: SSL certificates not found. Connection is not encrypted.</div>
+      {% if not ssl_enabled %}
+      <div style="background:#fff3cd;border:1px solid #ffc107;color:#856404;padding:10px 14px;border-radius:6px;margin-bottom:16px;">
+        <strong>Warning:</strong> SSL certificates not found. Running without HTTPS encryption.
+      </div>
       {% endif %}
       <div class="buttons">
         <a href="{{ url_for('get_settings') }}" class="btn">Display Settings</a>
