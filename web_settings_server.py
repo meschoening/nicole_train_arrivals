@@ -364,11 +364,26 @@ def start_web_settings_server(data_handler, host="0.0.0.0", port=443):
             finally:
                 exit_code = process.wait()
                 combined_output = "\n".join(all_output_lines)
+                has_updates = _has_updates(combined_output)
                 done_payload = {
                     "exit_code": exit_code,
                     "has_error": _has_git_error(combined_output) or (exit_code != 0),
-                    "has_updates": _has_updates(combined_output),
+                    "has_updates": has_updates,
                 }
+                # If update succeeded with changes, get the latest commit message
+                if has_updates and not done_payload["has_error"]:
+                    try:
+                        commit_result = subprocess.run(
+                            ["sudo", "-u", "max", "git", "log", "-1", "--format=%s"],
+                            cwd=cwd,
+                            capture_output=True,
+                            text=True,
+                            timeout=5
+                        )
+                        if commit_result.returncode == 0 and commit_result.stdout.strip():
+                            done_payload["commit_message"] = commit_result.stdout.strip()
+                    except Exception:
+                        pass
                 yield "event: done\n"
                 yield f"data: {json.dumps(done_payload)}\n\n"
 

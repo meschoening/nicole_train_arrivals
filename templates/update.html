@@ -1,103 +1,167 @@
 <!doctype html>
 <html>
-  <head>
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Update Software</title>
-    <style>
-      body { font-family: sans-serif; margin: 0; padding: 0; }
-      .container { max-width: 720px; margin: 0 auto; padding: 24px; }
-      .row { margin-bottom: 12px; }
-      button { padding: 8px 14px; font-weight: bold; }
-      a.btn { text-decoration: none; display: inline-block; padding: 8px 14px; border-radius: 6px; background: #f0f0f0; color: #000; font-weight: 700; border: 1px solid #ddd; }
-      a.btn:hover { background: #e6e6e6; }
-      #console { background: #111; color: #ddd; padding: 12px; border-radius: 6px; min-height: 220px; white-space: pre-wrap; overflow: auto; }
-      #status { margin-top: 8px; color: #666; }
-      #rebootBtn { display: none; }
-    </style>
-  </head>
-  <body>
-    <div class="container">
-      <div class="row">
-        <a href="{{ url_for('index') }}" class="btn">← Back</a>
-      </div>
-      <h2>Update Software</h2>
-      <div class="row">
-        <button id="runUpdate">Run Update</button>
-        <button id="rebootBtn">Reboot System</button>
-      </div>
-      <div id="status" class="row"></div>
-      <pre id="console" class="row"></pre>
+
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Update Software</title>
+  <style>
+    body {
+      font-family: sans-serif;
+      margin: 0;
+      padding: 0;
+    }
+
+    .container {
+      max-width: 720px;
+      margin: 0 auto;
+      padding: 24px;
+    }
+
+    .row {
+      margin-bottom: 12px;
+    }
+
+    button {
+      padding: 8px 14px;
+      font-weight: bold;
+    }
+
+    a.btn {
+      text-decoration: none;
+      display: inline-block;
+      padding: 8px 14px;
+      border-radius: 6px;
+      background: #f0f0f0;
+      color: #000;
+      font-weight: 700;
+      border: 1px solid #ddd;
+    }
+
+    a.btn:hover {
+      background: #e6e6e6;
+    }
+
+    #console {
+      background: #111;
+      color: #ddd;
+      padding: 12px;
+      border-radius: 6px;
+      min-height: 220px;
+      white-space: pre-wrap;
+      overflow: auto;
+    }
+
+    #status {
+      margin-top: 8px;
+      color: #666;
+    }
+
+    #rebootBtn {
+      display: none;
+    }
+
+    #successLabel {
+      display: none;
+      background: #e8f5e9;
+      color: #2a7a2a;
+      padding: 10px 12px;
+      border-radius: 6px;
+      font-weight: bold;
+      margin-bottom: 8px;
+    }
+  </style>
+</head>
+
+<body>
+  <div class="container">
+    <div class="row">
+      <a href="{{ url_for('index') }}" class="btn">← Back</a>
     </div>
+    <h2>Update Software</h2>
+    <div class="row">
+      <button id="runUpdate">Run Update</button>
+      <button id="rebootBtn">Reboot System</button>
+    </div>
+    <div id="status" class="row"></div>
+    <div id="successLabel" class="row"></div>
+    <pre id="console" class="row"></pre>
+  </div>
 
-    <script>
-      const runBtn = document.getElementById('runUpdate');
-      const rebootBtn = document.getElementById('rebootBtn');
-      const consoleEl = document.getElementById('console');
-      const statusEl = document.getElementById('status');
+  <script>
+    const runBtn = document.getElementById('runUpdate');
+    const rebootBtn = document.getElementById('rebootBtn');
+    const consoleEl = document.getElementById('console');
+    const statusEl = document.getElementById('status');
+    const successLabelEl = document.getElementById('successLabel');
 
-      let evtSource = null;
+    let evtSource = null;
 
-      function clearConsole() { consoleEl.textContent = ''; }
-      function appendLine(line) { consoleEl.textContent += (line.endsWith('\n')? line : line + '\n'); consoleEl.scrollTop = consoleEl.scrollHeight; }
-      function setStatus(text, color = '#666') { statusEl.textContent = text; statusEl.style.color = color; }
-      function disableRun(disabled) { runBtn.disabled = disabled; }
-      function showReboot(show) { rebootBtn.style.display = show ? 'inline-block' : 'none'; }
+    function clearConsole() { consoleEl.textContent = ''; }
+    function appendLine(line) { consoleEl.textContent += (line.endsWith('\n') ? line : line + '\n'); consoleEl.scrollTop = consoleEl.scrollHeight; }
+    function setStatus(text, color = '#666') { statusEl.textContent = text; statusEl.style.color = color; }
+    function disableRun(disabled) { runBtn.disabled = disabled; }
+    function showReboot(show) { rebootBtn.style.display = show ? 'inline-block' : 'none'; }
+    function showSuccessLabel(message) { successLabelEl.textContent = 'Installed Update: ' + message; successLabelEl.style.display = 'block'; }
+    function hideSuccessLabel() { successLabelEl.style.display = 'none'; }
 
-      function closeEventSource() {
-        if (evtSource) { evtSource.close(); evtSource = null; }
-      }
+    function closeEventSource() {
+      if (evtSource) { evtSource.close(); evtSource = null; }
+    }
 
-      runBtn.addEventListener('click', () => {
-        clearConsole();
-        showReboot(false);
-        setStatus('Running update...');
-        disableRun(true);
-        closeEventSource();
+    runBtn.addEventListener('click', () => {
+      clearConsole();
+      hideSuccessLabel();
+      showReboot(false);
+      setStatus('Running update...');
+      disableRun(true);
+      closeEventSource();
 
-        evtSource = new EventSource('/api/update/run');
-        evtSource.onmessage = (e) => {
-          if (e && typeof e.data === 'string' && e.data.length) {
-            appendLine(e.data);
-          }
-        };
-        evtSource.addEventListener('done', (e) => {
-          disableRun(false);
-          try {
-            const payload = JSON.parse(e.data || '{}');
-            if (payload.has_error) {
-              setStatus('Error updating. See console for details.', '#cc3333');
-              showReboot(false);
-            } else if (payload.has_updates) {
-              setStatus('Update completed. Reboot required.', '#d49200');
-              showReboot(true);
-            } else {
-              setStatus('Already up to date.', '#2a7a2a');
-              showReboot(false);
-            }
-          } catch {
-            setStatus('Update finished.');
-          }
-          closeEventSource();
-        });
-        evtSource.onerror = () => {
-          disableRun(false);
-          setStatus('Connection error during update.', '#cc3333');
-          closeEventSource();
-        };
-      });
-
-      rebootBtn.addEventListener('click', async () => {
-        setStatus('Rebooting system...');
-        try {
-          await fetch('/api/reboot', { method: 'POST' });
-          setStatus('System is rebooting... this page may become unreachable.', '#d49200');
-        } catch (e) {
-          setStatus('Failed to trigger reboot.', '#cc3333');
+      evtSource = new EventSource('/api/update/run');
+      evtSource.onmessage = (e) => {
+        if (e && typeof e.data === 'string' && e.data.length) {
+          appendLine(e.data);
         }
+      };
+      evtSource.addEventListener('done', (e) => {
+        disableRun(false);
+        try {
+          const payload = JSON.parse(e.data || '{}');
+          if (payload.has_error) {
+            setStatus('Error updating. See console for details.', '#cc3333');
+            showReboot(false);
+          } else if (payload.has_updates) {
+            setStatus('Update completed. Reboot required.', '#d49200');
+            showReboot(true);
+            if (payload.commit_message) {
+              showSuccessLabel(payload.commit_message);
+            }
+          } else {
+            setStatus('Already up to date.', '#2a7a2a');
+            showReboot(false);
+          }
+        } catch {
+          setStatus('Update finished.');
+        }
+        closeEventSource();
       });
-    </script>
-  </body>
-  </html>
+      evtSource.onerror = () => {
+        disableRun(false);
+        setStatus('Connection error during update.', '#cc3333');
+        closeEventSource();
+      };
+    });
 
+    rebootBtn.addEventListener('click', async () => {
+      setStatus('Rebooting system...');
+      try {
+        await fetch('/api/reboot', { method: 'POST' });
+        setStatus('System is rebooting... this page may become unreachable.', '#d49200');
+      } catch (e) {
+        setStatus('Failed to trigger reboot.', '#cc3333');
+      }
+    });
+  </script>
+</body>
 
+</html>

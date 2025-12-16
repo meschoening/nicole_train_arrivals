@@ -150,6 +150,23 @@ class UpdatePopout(QWidget):
         header.setLayout(header_layout)
         content_layout.addWidget(header)
         
+        # Create success label for displaying installed update info (hidden by default)
+        self.success_label = QLabel()
+        self.success_label.setStyleSheet("""
+            QLabel {
+                font-family: Quicksand;
+                font-size: 13px;
+                font-weight: bold;
+                color: #2a7a2a;
+                background-color: #e8f5e9;
+                border: none;
+                padding: 8px 10px;
+            }
+        """)
+        self.success_label.setWordWrap(True)
+        self.success_label.hide()
+        content_layout.addWidget(self.success_label)
+        
         # Create text area for terminal output
         self.output_text = QPlainTextEdit()
         self.output_text.setReadOnly(True)
@@ -194,8 +211,14 @@ class UpdatePopout(QWidget):
         )
     
     def clear_output(self):
-        """Clear the output area"""
+        """Clear the output area and hide success label"""
         self.output_text.clear()
+        self.success_label.hide()
+    
+    def show_success_message(self, commit_message):
+        """Show the installed update success message"""
+        self.success_label.setText(f"Installed Update: {commit_message}")
+        self.success_label.show()
 
 class RebootWarningOverlay(QWidget):
     """A fullscreen modal overlay that displays reboot countdown warning"""
@@ -1684,6 +1707,10 @@ class MainWindow(QMainWindow):
             if has_updates:
                 self.update_button.setText("Reboot")
                 self.set_update_button_color("orange")  # Stay orange to indicate action needed
+                # Get the latest commit message and display it
+                commit_message = self.get_latest_commit_message()
+                if commit_message:
+                    self.update_popout.show_success_message(commit_message)
             else:
                 self.update_button.setText("Up to date!")
                 self.set_update_button_color("green")
@@ -1737,6 +1764,22 @@ class MainWindow(QMainWindow):
                 return True
         
         return False
+    
+    def get_latest_commit_message(self):
+        """Get the message text of the latest commit"""
+        try:
+            result = subprocess.run(
+                ["git", "log", "-1", "--format=%s"],
+                cwd=os.path.dirname(os.path.abspath(__file__)),
+                capture_output=True,
+                text=True,
+                timeout=5
+            )
+            if result.returncode == 0 and result.stdout.strip():
+                return result.stdout.strip()
+        except Exception:
+            pass
+        return None
     
     def update_checking_animation(self):
         """Update the button text for checking animation"""
