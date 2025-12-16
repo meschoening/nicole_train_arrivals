@@ -108,6 +108,52 @@
       opacity: 0.6;
       cursor: not-allowed;
     }
+
+    /* Warning/destructive button */
+    button.warning {
+      background: #dc3545;
+      color: white;
+      border: 1px solid #c82333;
+    }
+
+    button.warning:hover {
+      background: #c82333;
+    }
+
+    button.warning:disabled {
+      background: #dc3545;
+      opacity: 0.6;
+    }
+
+    /* Confirm state button */
+    button.confirm-state {
+      background: #fd7e14;
+      color: white;
+      border: 1px solid #e66a00;
+    }
+
+    button.confirm-state:hover {
+      background: #e66a00;
+    }
+
+    /* Regenerate container */
+    .regenerate-container {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      margin-left: 8px;
+    }
+
+    .regenerate-email-input {
+      padding: 6px;
+      font-size: 14px;
+      width: 200px;
+      display: none;
+    }
+
+    .regenerate-email-input.visible {
+      display: inline-block;
+    }
   </style>
 </head>
 
@@ -146,6 +192,11 @@
         </div>
         <div class="row">
           <button type="button" id="copyKeyBtn" onclick="copySSHKey()">Copy SSH Public Key</button>
+          <span class="regenerate-container">
+            <input type="email" id="regenerateEmail" class="regenerate-email-input" placeholder="your@email.com">
+            <button type="button" id="regenerateKeyBtn" class="warning" onclick="handleRegenerateClick()">Regenerate SSH
+              Keypair</button>
+          </span>
         </div>
       </div>
       {% else %}
@@ -275,6 +326,138 @@
         showStatus('Press Ctrl+C to copy the selected key.', false);
       }
     }
+
+    // Regenerate SSH Key Functions
+    let regenerateConfirmState = false;
+    let regenerateTimeout = null;
+
+    function extractEmailFromPublicKey() {
+      const keyTextarea = document.getElementById('sshPublicKey');
+      if (!keyTextarea) return '';
+      const keyText = keyTextarea.value || '';
+      // SSH public keys typically end with a comment (email)
+      // Format: ssh-ed25519 AAAA... user@email.com
+      const parts = keyText.trim().split(' ');
+      if (parts.length >= 3) {
+        const email = parts[parts.length - 1];
+        // Check if it looks like an email
+        if (/^[\w.+-]+@[\w.-]+\.[a-zA-Z]{2,}$/.test(email)) {
+          return email;
+        }
+      }
+      return '';
+    }
+
+    function resetRegenerateState() {
+      regenerateConfirmState = false;
+      const regenerateBtn = document.getElementById('regenerateKeyBtn');
+      const emailInput = document.getElementById('regenerateEmail');
+      if (regenerateBtn) {
+        regenerateBtn.textContent = 'Regenerate SSH Keypair';
+        regenerateBtn.classList.remove('confirm-state');
+        regenerateBtn.classList.add('warning');
+      }
+      if (emailInput) {
+        emailInput.classList.remove('visible');
+      }
+      if (regenerateTimeout) {
+        clearTimeout(regenerateTimeout);
+        regenerateTimeout = null;
+      }
+    }
+
+    function handleRegenerateClick() {
+      const regenerateBtn = document.getElementById('regenerateKeyBtn');
+      const emailInput = document.getElementById('regenerateEmail');
+
+      if (!regenerateConfirmState) {
+        // First click: enter confirmation state
+        regenerateConfirmState = true;
+        regenerateBtn.textContent = 'Confirm Regenerate?';
+        regenerateBtn.classList.remove('warning');
+        regenerateBtn.classList.add('confirm-state');
+        emailInput.classList.add('visible');
+        // Pre-fill email from existing public key
+        const existingEmail = extractEmailFromPublicKey();
+        if (existingEmail) {
+          emailInput.value = existingEmail;
+        }
+        emailInput.focus();
+        // Set 5 second timeout to reset
+        regenerateTimeout = setTimeout(resetRegenerateState, 5000);
+      } else {
+        // Second click: perform regeneration
+        regenerateSSHKey();
+      }
+    }
+
+    async function regenerateSSHKey() {
+      const regenerateBtn = document.getElementById('regenerateKeyBtn');
+      const emailInput = document.getElementById('regenerateEmail');
+      const email = emailInput.value.trim();
+
+      if (!email) {
+        showStatus('Please enter an email address.', true);
+        return;
+      }
+
+      // Basic email validation
+      if (!/^[\w.+-]+@[\w.-]+\.[a-zA-Z]{2,}$/.test(email)) {
+        showStatus('Please enter a valid email address.', true);
+        return;
+      }
+
+      // Clear the timeout since we're proceeding
+      if (regenerateTimeout) {
+        clearTimeout(regenerateTimeout);
+        regenerateTimeout = null;
+      }
+
+      regenerateBtn.disabled = true;
+      regenerateBtn.textContent = 'Regenerating...';
+
+      try {
+        const response = await fetch('/api/regenerate-ssh-key', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email: email })
+        });
+
+        const data = await response.json();
+
+        if (data.success) {
+          showStatus('SSH keys regenerated successfully!', false);
+          // Update the public key textarea
+          const keyTextarea = document.getElementById('sshPublicKey');
+          if (keyTextarea) {
+            keyTextarea.textContent = data.public_key;
+            keyTextarea.value = data.public_key;
+          }
+          // Reset state
+          resetRegenerateState();
+          regenerateBtn.disabled = false;
+        } else {
+          showStatus('Error: ' + data.error, true);
+          regenerateBtn.disabled = false;
+          resetRegenerateState();
+        }
+      } catch (error) {
+        showStatus('Error: ' + error.message, true);
+        regenerateBtn.disabled = false;
+        resetRegenerateState();
+      }
+    }
+
+    // Reset regenerate state when clicking elsewhere
+    document.addEventListener('click', function (e) {
+      if (regenerateConfirmState) {
+        const regenerateBtn = document.getElementById('regenerateKeyBtn');
+        const emailInput = document.getElementById('regenerateEmail');
+        if (e.target !== regenerateBtn && e.target !== emailInput) {
+          resetRegenerateState();
+        }
+      }
+    });
   </script>
 </body>
 

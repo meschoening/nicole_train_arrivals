@@ -329,6 +329,52 @@ def start_web_settings_server(data_handler, host="0.0.0.0", port=443):
         except Exception as e:
             return jsonify({"success": False, "error": str(e)}), 500
 
+    @app.post("/api/regenerate-ssh-key")
+    def api_regenerate_ssh_key():
+        """Delete existing SSH keys and generate new ones."""
+        data = request.get_json() or {}
+        email = data.get("email", "").strip()
+        
+        # Sanitize email to prevent command injection
+        import re
+        if not email or not re.match(r'^[\w.+-]+@[\w.-]+\.[a-zA-Z]{2,}$', email):
+            return jsonify({"success": False, "error": "Invalid email address format"}), 400
+        
+        ssh_dir, private_key, public_key = _get_ssh_key_paths()
+        
+        # Check if keys exist - we need them to exist to regenerate
+        if not os.path.exists(private_key) and not os.path.exists(public_key):
+            return jsonify({"success": False, "error": "No existing SSH keys to regenerate"}), 400
+        
+        try:
+            # Delete existing keys
+            if os.path.exists(private_key):
+                os.remove(private_key)
+            if os.path.exists(public_key):
+                os.remove(public_key)
+            
+            # Generate new SSH key with no passphrase
+            result = subprocess.run(
+                ["ssh-keygen", "-t", "ed25519", "-C", email, "-N", "", "-f", private_key],
+                capture_output=True,
+                text=True
+            )
+            
+            if result.returncode != 0:
+                error_msg = result.stderr.strip() or result.stdout.strip() or "Unknown error"
+                return jsonify({"success": False, "error": error_msg}), 500
+            
+            # Read and return the new public key
+            if os.path.exists(public_key):
+                with open(public_key, "r") as f:
+                    pub_key_content = f.read().strip()
+                return jsonify({"success": True, "public_key": pub_key_content})
+            else:
+                return jsonify({"success": False, "error": "Key generation succeeded but public key file not found"}), 500
+                
+        except Exception as e:
+            return jsonify({"success": False, "error": str(e)}), 500
+
     def _has_git_error(output_text):
         if not output_text:
             return False
