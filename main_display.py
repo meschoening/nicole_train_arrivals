@@ -646,6 +646,9 @@ class MainWindow(QMainWindow):
         if not self.initial_load_triggered:
             self.initial_load_triggered = True
             print("Window shown at time:", datetime.now().strftime("%H:%M:%S"))
+            # Show a brief loading state while UI finishes drawing
+            self.startup_status_label.setText("Loading Visuals...")
+            self.startup_status_label.setStyleSheet("font-family: Quicksand; font-size: 24px; color: #666;")
             # Now start the delay for initial load (1 second)
             QTimer.singleShot(1000, self.perform_initial_load)
     
@@ -677,6 +680,10 @@ class MainWindow(QMainWindow):
     def perform_initial_load(self):
         """Perform initial API data load after window is shown"""
         try:
+            # Switch subtitle when we actually begin the API call
+            self.startup_status_label.setText("Connecting to Metro API...")
+            self.startup_status_label.setStyleSheet("font-family: Quicksand; font-size: 24px; color: #666;")
+
             config = config_handler.load_config()
             api_key = config.get('api_key')
             if not api_key:
