@@ -215,13 +215,102 @@ def start_web_settings_server(data_handler, host="0.0.0.0", port=443):
     @app.get("/api-key")
     def get_api_key():
         config = config_handler.load_config()
-        return render_template("api_key.html", api_key=config.get("api_key", ""), last_saved=_get_config_last_saved())
+        # Check SSH key status for initial page render
+        home = os.path.expanduser("~")
+        ssh_private = os.path.join(home, ".ssh", "id_ed25519")
+        ssh_public = os.path.join(home, ".ssh", "id_ed25519.pub")
+        ssh_key_exists = os.path.exists(ssh_private) and os.path.exists(ssh_public)
+        ssh_public_key = ""
+        if ssh_key_exists:
+            try:
+                with open(ssh_public, "r") as f:
+                    ssh_public_key = f.read().strip()
+            except Exception:
+                pass
+        return render_template(
+            "api_key.html",
+            api_key=config.get("api_key", ""),
+            last_saved=_get_config_last_saved(),
+            ssh_key_exists=ssh_key_exists,
+            ssh_public_key=ssh_public_key
+        )
 
     @app.post("/api-key")
     def post_api_key():
         api_key = request.form.get("api_key", "")
         config_handler.save_config("api_key", api_key)
         return redirect(url_for("index"))
+
+    def _get_ssh_key_paths():
+        """Get the paths to SSH key files, dynamically detecting home directory."""
+        home = os.path.expanduser("~")
+        ssh_dir = os.path.join(home, ".ssh")
+        private_key = os.path.join(ssh_dir, "id_ed25519")
+        public_key = os.path.join(ssh_dir, "id_ed25519.pub")
+        return ssh_dir, private_key, public_key
+
+    def _check_ssh_keys_exist():
+        """Check if SSH keys exist and return public key content if they do."""
+        _, private_key, public_key = _get_ssh_key_paths()
+        if os.path.exists(private_key) and os.path.exists(public_key):
+            try:
+                with open(public_key, "r") as f:
+                    return True, f.read().strip()
+            except Exception:
+                return True, ""
+        return False, ""
+
+    @app.get("/api/ssh-key-status")
+    def api_ssh_key_status():
+        exists, public_key = _check_ssh_keys_exist()
+        return jsonify({
+            "exists": exists,
+            "public_key": public_key if exists else ""
+        })
+
+    @app.post("/api/generate-ssh-key")
+    def api_generate_ssh_key():
+        data = request.get_json() or {}
+        email = data.get("email", "").strip()
+        
+        # Sanitize email to prevent command injection
+        # Only allow alphanumeric, @, ., -, _, +
+        import re
+        if not email or not re.match(r'^[\w.+-]+@[\w.-]+\.[a-zA-Z]{2,}$', email):
+            return jsonify({"success": False, "error": "Invalid email address format"}), 400
+        
+        ssh_dir, private_key, public_key = _get_ssh_key_paths()
+        
+        # Check if keys already exist
+        if os.path.exists(private_key) or os.path.exists(public_key):
+            return jsonify({"success": False, "error": "SSH keys already exist"}), 400
+        
+        try:
+            # Ensure .ssh directory exists with proper permissions
+            if not os.path.exists(ssh_dir):
+                os.makedirs(ssh_dir, mode=0o700)
+            
+            # Generate SSH key with no passphrase
+            result = subprocess.run(
+                ["ssh-keygen", "-t", "ed25519", "-C", email, "-N", "", "-f", private_key],
+                capture_output=True,
+                text=True
+            )
+            
+            if result.returncode != 0:
+                error_msg = result.stderr.strip() or result.stdout.strip() or "Unknown error"
+                return jsonify({"success": False, "error": error_msg}), 500
+            
+            # Read and return the public key
+            if os.path.exists(public_key):
+                with open(public_key, "r") as f:
+                    pub_key_content = f.read().strip()
+                return jsonify({"success": True, "public_key": pub_key_content})
+            else:
+                return jsonify({"success": False, "error": "Key generation succeeded but public key file not found"}), 500
+                
+        except Exception as e:
+            return jsonify({"success": False, "error": str(e)}), 500
 
     def _has_git_error(output_text):
         if not output_text:
