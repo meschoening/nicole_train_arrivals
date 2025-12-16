@@ -8,6 +8,7 @@ import subprocess
 import sys
 import time
 import json
+import ssl
 
 
 _data_lock = threading.Lock()
@@ -90,6 +91,39 @@ def _get_directions_for_station(data_handler, station_code):
     ]
     results.sort(key=lambda d: d["name"])  # sort alphabetically by destination name
     return results
+
+
+def _check_ssl_available():
+    """
+    Check if SSL certificate files are available.
+    
+    Returns:
+        bool: True if both certificate and key files exist, False otherwise
+    """
+    cert_path = "/var/lib/tailscale/certs/nicoletrains.tail45f1e5.ts.net.crt"
+    key_path = "/var/lib/tailscale/certs/nicoletrains.tail45f1e5.ts.net.key"
+    return os.path.exists(cert_path) and os.path.exists(key_path)
+
+
+def _get_ssl_context():
+    """
+    Create SSL context from Tailscale certificate files.
+    
+    Returns:
+        ssl.SSLContext or None: SSL context if both files exist, None otherwise
+    """
+    cert_path = "/var/lib/tailscale/certs/nicoletrains.tail45f1e5.ts.net.crt"
+    key_path = "/var/lib/tailscale/certs/nicoletrains.tail45f1e5.ts.net.key"
+    
+    if not os.path.exists(cert_path) or not os.path.exists(key_path):
+        return None
+    
+    try:
+        context = ssl.create_default_context(ssl.Purpose.CLIENT_AUTH)
+        context.load_cert_chain(cert_path, key_path)
+        return context
+    except Exception:
+        return None
 
 
 def start_web_settings_server(data_handler, host="0.0.0.0", port=80):
@@ -182,7 +216,7 @@ def start_web_settings_server(data_handler, host="0.0.0.0", port=80):
 
     @app.get("/")
     def index():
-        return render_template("index.html", device_ip=_get_device_ip())
+        return render_template("index.html", device_ip=_get_device_ip(), ssl_available=_check_ssl_available())
 
     @app.get("/update")
     def get_update():
@@ -416,7 +450,17 @@ def start_web_settings_server(data_handler, host="0.0.0.0", port=80):
         return jsonify(directions)
 
     def _run():
-        app.run(host=host, port=port, threaded=True, use_reloader=False)
+        ssl_context = _get_ssl_context()
+        run_kwargs = {
+            "host": host,
+            "port": port,
+            "threaded": True,
+            "use_reloader": False,
+            "debug": False
+        }
+        if ssl_context is not None:
+            run_kwargs["ssl_context"] = ssl_context
+        app.run(**run_kwargs)
 
     thread = threading.Thread(target=_run, daemon=True)
     thread.start()
