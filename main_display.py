@@ -150,6 +150,21 @@ class UpdatePopout(QWidget):
         header.setLayout(header_layout)
         content_layout.addWidget(header)
         
+        # Create text area for terminal output
+        self.output_text = QPlainTextEdit()
+        self.output_text.setReadOnly(True)
+        self.output_text.setStyleSheet("""
+            QPlainTextEdit {
+                font-family: Consolas, Monaco, monospace;
+                font-size: 12px;
+                background-color: #1e1e1e;
+                color: #d4d4d4;
+                border: none;
+                padding: 10px;
+            }
+        """)
+        content_layout.addWidget(self.output_text)
+        
         # Create success label for displaying installed update info (hidden by default)
         self.success_label = QLabel()
         self.success_label.setStyleSheet("""
@@ -166,21 +181,6 @@ class UpdatePopout(QWidget):
         self.success_label.setWordWrap(True)
         self.success_label.hide()
         content_layout.addWidget(self.success_label)
-        
-        # Create text area for terminal output
-        self.output_text = QPlainTextEdit()
-        self.output_text.setReadOnly(True)
-        self.output_text.setStyleSheet("""
-            QPlainTextEdit {
-                font-family: Consolas, Monaco, monospace;
-                font-size: 12px;
-                background-color: #1e1e1e;
-                color: #d4d4d4;
-                border: none;
-                padding: 10px;
-            }
-        """)
-        content_layout.addWidget(self.output_text)
         
         # Create a container widget for the border
         container = QWidget()
