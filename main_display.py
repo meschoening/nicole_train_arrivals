@@ -347,29 +347,6 @@ class ShutdownPopout(QWidget):
         layout.setContentsMargins(15, 10, 15, 10)
         layout.setSpacing(10)
         
-        # Create Exit to Desktop button
-        self.exit_button = QPushButton("Exit to Desktop")
-        self.exit_button.setMinimumWidth(200)
-        self.exit_button.setStyleSheet("""
-            QPushButton {
-                font-family: Quicksand;
-                font-size: 18px;
-                font-weight: bold;
-                padding: 10px 20px;
-                background-color: #e0e0e0;
-                border: none;
-                border-radius: 5px;
-            }
-            QPushButton:hover {
-                background-color: #d0d0d0;
-            }
-            QPushButton:pressed {
-                background-color: #c0c0c0;
-                padding-bottom: 9px;
-            }
-        """)
-        layout.addWidget(self.exit_button)
-        
         # Create Reboot button
         self.reboot_button = QPushButton("Reboot")
         self.reboot_button.setMinimumWidth(200)
@@ -1923,7 +1900,6 @@ class MainWindow(QMainWindow):
         if not hasattr(self, 'shutdown_popout'):
             self.shutdown_popout = ShutdownPopout(self.settings_page)
             # Connect button signals
-            self.shutdown_popout.exit_button.clicked.connect(self.exit_to_desktop)
             self.shutdown_popout.reboot_button.clicked.connect(self.on_reboot_button_clicked)
             self.shutdown_popout.shutdown_button.clicked.connect(self.on_shutdown_button_clicked)
         
