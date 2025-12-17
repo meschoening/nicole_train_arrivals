@@ -4,7 +4,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Settings</title>
+  <title>Display Settings - {{ display_name }}</title>
   <style>
     body {
       font-family: sans-serif;
@@ -67,7 +67,7 @@
     <div class="row">
       <a href="{{ url_for('index') }}" class="btn">← Back</a>
     </div>
-    <h2>Nicole's Train Tracker Settings</h2>
+    <h2>Schedule Display Settings</h2>
     <div class="row" style="color:#666;">
       <span id="lastSaved">Last saved: {{ last_saved }}</span>
       <span style="margin-left:16px;color:#cc6666;">Changes are saved only when you click Save.</span>

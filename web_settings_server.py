@@ -208,6 +208,11 @@ def start_web_settings_server(data_handler, host="0.0.0.0", port=443):
             return dt.strftime("%m/%d/%Y %I:%M:%S %p")
         return "Never"
 
+    def _get_display_name():
+        """Get the display name (title_text) from config for page titles."""
+        config = config_handler.load_config()
+        return config.get("title_text", "Nicole's Train Tracker!")
+
     @app.get("/messages")
     def get_messages():
         config = message_handler.load_messages()
@@ -217,6 +222,7 @@ def start_web_settings_server(data_handler, host="0.0.0.0", port=443):
             config=config,
             messages_json=json.dumps(messages_list),
             last_saved=_get_messages_last_saved(),
+            display_name=_get_display_name(),
         )
 
     @app.post("/messages")
@@ -270,16 +276,17 @@ def start_web_settings_server(data_handler, host="0.0.0.0", port=443):
             timezones=_get_available_timezones(),
             current_timezone=current_timezone,
             last_saved=_get_config_last_saved(),
+            display_name=_get_display_name(),
         )
 
     @app.get("/")
     def index():
-        return render_template("index.html", device_ip=_get_device_ip(), tailscale_address=_get_tailscale_address(), ssl_enabled=_ssl_enabled)
+        return render_template("index.html", device_ip=_get_device_ip(), tailscale_address=_get_tailscale_address(), ssl_enabled=_ssl_enabled, display_name=_get_display_name())
 
     @app.get("/update")
     def get_update():
         # Simple page render; live behavior wired via JS
-        return render_template("update.html")
+        return render_template("update.html", display_name=_get_display_name())
 
     @app.get("/api-key")
     def get_api_key():
@@ -301,7 +308,8 @@ def start_web_settings_server(data_handler, host="0.0.0.0", port=443):
             api_key=config.get("api_key", ""),
             last_saved=_get_config_last_saved(),
             ssh_key_exists=ssh_key_exists,
-            ssh_public_key=ssh_public_key
+            ssh_public_key=ssh_public_key,
+            display_name=_get_display_name(),
         )
 
     @app.post("/api-key")
@@ -524,7 +532,7 @@ def start_web_settings_server(data_handler, host="0.0.0.0", port=443):
     @app.get("/system-management")
     def get_system_management():
         config = config_handler.load_config()
-        return render_template("system_management.html", config=config)
+        return render_template("system_management.html", config=config, display_name=_get_display_name())
 
     @app.post("/api/reboot")
     def api_reboot():
