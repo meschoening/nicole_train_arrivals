@@ -3383,8 +3383,8 @@ class MainWindow(QMainWindow):
         bottom_row_layout.addLayout(center_section_layout)
         bottom_row_layout.addStretch()
         
-        # Right section: Shutdown/Exit button
-        self.shutdown_exit_button = QPushButton("Shutdown / Exit")
+        # Right section: Shutdown button
+        self.shutdown_exit_button = QPushButton("Shutdown")
         self.shutdown_exit_button.setStyleSheet("""
             QPushButton {
                 font-family: Quicksand;
