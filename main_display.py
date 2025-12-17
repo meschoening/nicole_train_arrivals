@@ -649,8 +649,25 @@ class MainWindow(QMainWindow):
             # Show a brief loading state while UI finishes drawing
             self.startup_status_label.setText("Loading Visuals...")
             self.startup_status_label.setStyleSheet("font-family: Quicksand; font-size: 24px; color: #666;")
-            # Now start the delay for initial load (1 second)
-            QTimer.singleShot(1000, self.perform_initial_load)
+            # Now start the delay, then check WiFi first
+            QTimer.singleShot(1000, self.check_wifi_and_load)
+    
+    def check_wifi_and_load(self):
+        """Check WiFi connection before attempting API load."""
+        self.startup_status_label.setText("Checking WiFi connection...")
+        self.startup_status_label.setStyleSheet("font-family: Quicksand; font-size: 24px; color: #666;")
+        
+        if not self.check_wifi_connection():
+            # No WiFi connection - show error and WiFi setup buttons
+            self.startup_status_label.setText("WiFi connection not configured. Launch network setup?")
+            self.startup_status_label.setStyleSheet("font-family: Quicksand; font-size: 24px; color: #cc0000;")
+            # Show WiFi-specific buttons
+            self.startup_wifi_buttons_container.show()
+            return
+        
+        # WiFi connected - proceed to normal API load
+        self.perform_initial_load()
+
     
     def eventFilter(self, obj, event):
         """Event filter to handle hover events on IP button and clicks outside shutdown popout"""
@@ -741,6 +758,62 @@ class MainWindow(QMainWindow):
             
             # Retry the initial load
             self.perform_initial_load()
+    
+    def check_wifi_connection(self):
+        """Check if WiFi is connected using NetworkManager.
+        
+        Returns:
+            bool: True if connected to a WiFi network, False otherwise
+        """
+        try:
+            result = subprocess.run(
+                ["nmcli", "-t", "-f", "WIFI", "general"],
+                capture_output=True,
+                text=True,
+                timeout=5
+            )
+            if result.returncode != 0:
+                return False
+            
+            # Check if WiFi is enabled
+            if "enabled" not in result.stdout.lower():
+                return False
+            
+            # Check actual connection status
+            conn_result = subprocess.run(
+                ["nmcli", "-t", "-f", "TYPE,STATE", "device"],
+                capture_output=True,
+                text=True,
+                timeout=5
+            )
+            if conn_result.returncode == 0:
+                for line in conn_result.stdout.strip().split('\n'):
+                    if line.startswith('wifi:') and 'connected' in line.lower():
+                        return True
+            return False
+        except Exception as e:
+            print(f"WiFi check error: {e}")
+            return False
+    
+    def launch_wifi_setup(self):
+        """Launch the WiFi setup application and terminate main display."""
+        try:
+            # Get the directory of this script
+            script_dir = os.path.dirname(os.path.abspath(__file__))
+            wifi_setup_script = os.path.join(script_dir, "wifi_setup.py")
+            
+            # Launch wifi_setup.py with fullscreen argument
+            subprocess.Popen(
+                ["python3", wifi_setup_script, "--fullscreen"],
+                cwd=script_dir
+            )
+            
+            # Terminate this application
+            QApplication.instance().quit()
+        except Exception as e:
+            print(f"Error launching WiFi setup: {e}")
+            self.startup_status_label.setText(f"Failed to launch WiFi setup: {e}")
+            self.startup_status_label.setStyleSheet("font-family: Quicksand; font-size: 24px; color: #cc0000;")
     
     def get_device_ip(self):
         """Get the local IP address of the device"""
@@ -2524,6 +2597,90 @@ class MainWindow(QMainWindow):
         self.startup_buttons_container.setLayout(buttons_layout)
         self.startup_buttons_container.hide()  # Initially hidden
         center_layout.addWidget(self.startup_buttons_container)
+        
+        # WiFi-specific buttons container (for no WiFi connection state)
+        self.startup_wifi_buttons_container = QWidget()
+        wifi_buttons_layout = QHBoxLayout()
+        wifi_buttons_layout.setContentsMargins(0, 20, 0, 0)
+        wifi_buttons_layout.setSpacing(20)
+        wifi_buttons_layout.setAlignment(Qt.AlignCenter)
+        
+        # Launch Setup button (left)
+        self.startup_launch_setup_button = QPushButton("Launch Setup")
+        self.startup_launch_setup_button.setMinimumWidth(180)
+        self.startup_launch_setup_button.setStyleSheet("""
+            QPushButton {
+                font-family: Quicksand;
+                font-size: 18px;
+                font-weight: bold;
+                padding: 10px 20px;
+                background-color: #e0e0e0;
+                border: none;
+                border-radius: 5px;
+            }
+            QPushButton:hover {
+                background-color: #d0d0d0;
+            }
+            QPushButton:pressed {
+                background-color: #c0c0c0;
+                padding-bottom: 9px;
+            }
+        """)
+        self.startup_launch_setup_button.clicked.connect(self.launch_wifi_setup)
+        wifi_buttons_layout.addWidget(self.startup_launch_setup_button)
+        
+        # Reboot button (middle)
+        self.startup_wifi_reboot_button = QPushButton("Reboot")
+        self.startup_wifi_reboot_button.setMinimumWidth(180)
+        self.startup_wifi_reboot_button.setStyleSheet("""
+            QPushButton {
+                font-family: Quicksand;
+                font-size: 18px;
+                font-weight: bold;
+                padding: 10px 20px;
+                background-color: #e0e0e0;
+                border: none;
+                border-radius: 5px;
+            }
+            QPushButton:hover {
+                background-color: #d0d0d0;
+            }
+            QPushButton:pressed {
+                background-color: #c0c0c0;
+                padding-bottom: 9px;
+            }
+        """)
+        self.startup_wifi_reboot_button.clicked.connect(self.perform_system_reboot)
+        wifi_buttons_layout.addWidget(self.startup_wifi_reboot_button)
+        
+        # Shutdown button (right)
+        self.startup_wifi_shutdown_button = QPushButton("Shutdown")
+        self.startup_wifi_shutdown_button.setMinimumWidth(180)
+        self.startup_wifi_shutdown_button.setStyleSheet("""
+            QPushButton {
+                font-family: Quicksand;
+                font-size: 18px;
+                font-weight: bold;
+                padding: 10px 20px;
+                background-color: #e0e0e0;
+                border: none;
+                border-radius: 5px;
+            }
+            QPushButton:hover {
+                background-color: #d0d0d0;
+            }
+            QPushButton:pressed {
+                background-color: #c0c0c0;
+                padding-bottom: 9px;
+            }
+        """)
+        self.startup_wifi_shutdown_button.clicked.connect(self.perform_system_shutdown)
+        wifi_buttons_layout.addWidget(self.startup_wifi_shutdown_button)
+        
+        self.startup_wifi_buttons_container.setLayout(wifi_buttons_layout)
+        self.startup_wifi_buttons_container.hide()  # Initially hidden
+        center_layout.addWidget(self.startup_wifi_buttons_container)
+
         
         center_container.setLayout(center_layout)
         main_layout.addWidget(center_container)

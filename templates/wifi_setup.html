@@ -1,0 +1,390 @@
+<!doctype html>
+<html>
+
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>WiFi Configuration</title>
+    <style>
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: sans-serif;
+            margin: 0;
+            padding: 0;
+            background: #f5f5f5;
+        }
+
+        .container {
+            max-width: 720px;
+            margin: 0 auto;
+            padding: 24px;
+        }
+
+        h2 {
+            margin: 16px 0 24px;
+        }
+
+        h3 {
+            margin: 24px 0 16px;
+            color: #333;
+        }
+
+        .section {
+            background: #fff;
+            border-radius: 8px;
+            padding: 20px;
+            margin-bottom: 20px;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+        }
+
+        .form-group {
+            margin-bottom: 16px;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 6px;
+            font-weight: 600;
+        }
+
+        .form-group input,
+        .form-group select {
+            width: 100%;
+            padding: 10px 12px;
+            border: 1px solid #ddd;
+            border-radius: 6px;
+            font-size: 16px;
+        }
+
+        .form-group input:focus,
+        .form-group select:focus {
+            outline: none;
+            border-color: #2196F3;
+        }
+
+        .btn {
+            display: inline-block;
+            padding: 12px 24px;
+            border-radius: 6px;
+            background: #f0f0f0;
+            color: #000;
+            font-weight: 700;
+            border: 1px solid #ddd;
+            cursor: pointer;
+            font-size: 16px;
+        }
+
+        .btn:hover {
+            background: #e6e6e6;
+        }
+
+        .btn:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+        }
+
+        .btn-primary {
+            background: #2196F3;
+            color: white;
+            border-color: #1976D2;
+        }
+
+        .btn-primary:hover {
+            background: #1976D2;
+        }
+
+        .btn-danger {
+            background: #f44336;
+            color: white;
+            border-color: #d32f2f;
+        }
+
+        .btn-danger:hover {
+            background: #d32f2f;
+        }
+
+        .network-list {
+            list-style: none;
+            padding: 0;
+            margin: 0;
+        }
+
+        .network-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 12px 16px;
+            background: #f9f9f9;
+            border-radius: 6px;
+            margin-bottom: 8px;
+        }
+
+        .network-item:hover {
+            background: #f0f0f0;
+        }
+
+        .network-name {
+            font-weight: 600;
+        }
+
+        .network-signal {
+            color: #666;
+            font-size: 14px;
+        }
+
+        .network-security {
+            color: #888;
+            font-size: 12px;
+        }
+
+        .status-message {
+            padding: 12px 16px;
+            border-radius: 6px;
+            margin-bottom: 16px;
+        }
+
+        .status-success {
+            background: #e8f5e9;
+            color: #2e7d32;
+            border: 1px solid #a5d6a7;
+        }
+
+        .status-error {
+            background: #ffebee;
+            color: #c62828;
+            border: 1px solid #ef9a9a;
+        }
+
+        .status-info {
+            background: #e3f2fd;
+            color: #1565c0;
+            border: 1px solid #90caf9;
+        }
+
+        .manual-entry {
+            display: none;
+            margin-top: 16px;
+            padding-top: 16px;
+            border-top: 1px solid #eee;
+        }
+
+        .manual-entry.active {
+            display: block;
+        }
+
+        .loading {
+            opacity: 0.6;
+            pointer-events: none;
+        }
+
+        .actions {
+            margin-top: 16px;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <h2>WiFi Configuration</h2>
+
+        <div id="statusMessage" class="status-message status-info" style="display:none;"></div>
+
+        <!-- Available Networks Section -->
+        <div class="section">
+            <h3>Available Networks</h3>
+            <button id="scanBtn" class="btn" onclick="scanNetworks()">Scan for Networks</button>
+            <ul id="networkList" class="network-list" style="margin-top: 16px;"></ul>
+        </div>
+
+        <!-- Connect to Network Section -->
+        <div class="section">
+            <h3>Connect to Network</h3>
+            <form id="connectForm" onsubmit="return connectToNetwork(event)">
+                <div class="form-group">
+                    <label for="ssid">Network Name (SSID)</label>
+                    <input type="text" id="ssid" name="ssid" placeholder="Select from above or enter manually" required>
+                </div>
+                <div class="form-group">
+                    <label for="password">Password (leave empty for open networks)</label>
+                    <input type="password" id="password" name="password" placeholder="WiFi password">
+                </div>
+                <div class="actions">
+                    <button type="submit" class="btn btn-primary">Save Network</button>
+                </div>
+            </form>
+        </div>
+
+        <!-- Saved Networks Section -->
+        <div class="section">
+            <h3>Saved Networks</h3>
+            <button class="btn" onclick="loadSavedNetworks()">Refresh List</button>
+            <ul id="savedList" class="network-list" style="margin-top: 16px;"></ul>
+        </div>
+
+        <div class="section" style="background: #fff3cd; border: 1px solid #ffc107;">
+            <strong>Note:</strong> After saving a network, tap "Stop Broadcasting" on the device screen to connect to
+            the configured network.
+        </div>
+    </div>
+
+    <script>
+        // Show status message
+        function showStatus(message, type) {
+            const el = document.getElementById('statusMessage');
+            el.textContent = message;
+            el.className = 'status-message status-' + type;
+            el.style.display = 'block';
+            setTimeout(() => { el.style.display = 'none'; }, 5000);
+        }
+
+        // Scan for available networks
+        async function scanNetworks() {
+            const btn = document.getElementById('scanBtn');
+            const list = document.getElementById('networkList');
+
+            btn.disabled = true;
+            btn.textContent = 'Scanning...';
+            list.innerHTML = '<li class="network-item">Scanning for networks...</li>';
+
+            try {
+                const resp = await fetch('/api/scan');
+                const data = await resp.json();
+
+                if (data.success && data.networks.length > 0) {
+                    list.innerHTML = data.networks.map(n => `
+              <li class="network-item" onclick="selectNetwork('${escapeHtml(n.ssid)}')">
+                <div>
+                  <div class="network-name">${escapeHtml(n.ssid)}</div>
+                  <div class="network-security">${escapeHtml(n.security) || 'Open'}</div>
+                </div>
+                <div class="network-signal">${n.signal}%</div>
+              </li>
+            `).join('');
+                } else if (data.success) {
+                    list.innerHTML = '<li class="network-item">No networks found</li>';
+                } else {
+                    showStatus('Error scanning: ' + data.error, 'error');
+                    list.innerHTML = '';
+                }
+            } catch (e) {
+                showStatus('Error scanning networks: ' + e.message, 'error');
+                list.innerHTML = '';
+            }
+
+            btn.disabled = false;
+            btn.textContent = 'Scan for Networks';
+        }
+
+        // Select a network from the list
+        function selectNetwork(ssid) {
+            document.getElementById('ssid').value = ssid;
+            document.getElementById('password').focus();
+        }
+
+        // Connect to a network
+        async function connectToNetwork(e) {
+            e.preventDefault();
+
+            const ssid = document.getElementById('ssid').value.trim();
+            const password = document.getElementById('password').value;
+
+            if (!ssid) {
+                showStatus('Please enter a network name', 'error');
+                return false;
+            }
+
+            const form = document.getElementById('connectForm');
+            form.classList.add('loading');
+
+            try {
+                const resp = await fetch('/api/connect', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ ssid, password })
+                });
+                const data = await resp.json();
+
+                if (data.success) {
+                    showStatus(data.message, 'success');
+                    document.getElementById('ssid').value = '';
+                    document.getElementById('password').value = '';
+                    loadSavedNetworks();
+                } else {
+                    showStatus('Error: ' + data.error, 'error');
+                }
+            } catch (e) {
+                showStatus('Error saving network: ' + e.message, 'error');
+            }
+
+            form.classList.remove('loading');
+            return false;
+        }
+
+        // Load saved networks
+        async function loadSavedNetworks() {
+            const list = document.getElementById('savedList');
+            list.innerHTML = '<li class="network-item">Loading...</li>';
+
+            try {
+                const resp = await fetch('/api/saved');
+                const data = await resp.json();
+
+                if (data.success && data.networks.length > 0) {
+                    list.innerHTML = data.networks.map(n => `
+              <li class="network-item">
+                <div class="network-name">${escapeHtml(n.name)}</div>
+                <button class="btn btn-danger" onclick="deleteNetwork('${escapeHtml(n.name)}')" style="padding: 6px 12px; font-size: 14px;">Delete</button>
+              </li>
+            `).join('');
+                } else if (data.success) {
+                    list.innerHTML = '<li class="network-item">No saved networks</li>';
+                } else {
+                    list.innerHTML = '<li class="network-item">Error loading saved networks</li>';
+                }
+            } catch (e) {
+                list.innerHTML = '<li class="network-item">Error loading saved networks</li>';
+            }
+        }
+
+        // Delete a saved network
+        async function deleteNetwork(name) {
+            if (!confirm('Delete saved network "' + name + '"?')) return;
+
+            try {
+                const resp = await fetch('/api/delete', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ name })
+                });
+                const data = await resp.json();
+
+                if (data.success) {
+                    showStatus(data.message, 'success');
+                    loadSavedNetworks();
+                } else {
+                    showStatus('Error: ' + data.error, 'error');
+                }
+            } catch (e) {
+                showStatus('Error deleting network: ' + e.message, 'error');
+            }
+        }
+
+        // Escape HTML to prevent XSS
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
+        // Load saved networks on page load
+        document.addEventListener('DOMContentLoaded', function () {
+            loadSavedNetworks();
+            scanNetworks();
+        });
+    </script>
+</body>
+
+</html>

@@ -1,3 +1,12 @@
+Install NetworkManager for better cli network management:
+    apt install network-manager
+    sudo nano /etc/NetworkManager/conf.d/10-managed.conf
+        [keyfile]
+        unmanaged-devices=
+    sudo systemctl restart NetworkManager
+    sudo mv /etc/network/interfaces /etc/network/interfaces.ifupdown.bak
+    reboot
+
 Install tailscale for remote access:
     curl -fsSL https://tailscale.com/install.sh | sh
 
