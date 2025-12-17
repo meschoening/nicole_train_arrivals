@@ -31,6 +31,9 @@ class WiFiSetupWindow(QMainWindow):
         self.title_text = "WiFi Configuration"
         self.setWindowTitle(self.title_text)
         
+        # Hide cursor for touchscreen kiosk mode
+        self.setCursor(Qt.BlankCursor)
+        
         # AP state tracking
         self.is_broadcasting = False
         self.portal_server_thread = None

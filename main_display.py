@@ -528,6 +528,9 @@ class MainWindow(QMainWindow):
         # self.setFixedSize(QSize(1024,600))  # Commented out for fullscreen mode
         self.setWindowTitle(self.default_title_text)
 
+        # Hide cursor for touchscreen kiosk mode
+        self.setCursor(Qt.BlankCursor)
+
         # Set window icon to train emoji
         pixmap = QPixmap(128, 128)
         pixmap.fill(Qt.transparent)
