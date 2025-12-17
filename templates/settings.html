@@ -68,10 +68,6 @@
       <a href="{{ url_for('index') }}" class="btn">← Back</a>
     </div>
     <h2>Schedule Display Settings</h2>
-    <div class="row" style="color:#666;">
-      <span id="lastSaved">Last saved: {{ last_saved }}</span>
-      <span style="margin-left:16px;color:#cc6666;">Changes are saved only when you click Save.</span>
-    </div>
 
     <form method="post" action="/settings" id="settingsForm">
       <div class="row">
@@ -172,6 +168,11 @@
         <label>Screen Sleep Timeout (minutes)</label>
         <input type="number" min="0" max="240" step="1" name="screen_sleep_minutes"
           value="{{ config.get('screen_sleep_minutes', 5) }}">
+      </div>
+
+      <div class="row" style="color:#666;">
+        <span id="lastSaved">Last saved: {{ last_saved }}</span>
+        <span style="margin-left:16px;color:#cc6666;">Changes are saved only when you click Save.</span>
       </div>
 
       <div class="row">

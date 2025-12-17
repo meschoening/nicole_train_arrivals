@@ -197,10 +197,6 @@
       <a href="{{ url_for('index') }}" class="btn">← Back</a>
     </div>
     <h2>Title Message Display Settings</h2>
-    <div class="row" style="color:#666;">
-      <span id="lastSaved">Last saved: {{ last_saved }}</span>
-      <span style="margin-left:16px;color:#cc6666;">Changes are saved only when you click Save.</span>
-    </div>
 
     <form id="messagesForm">
       <div class="message-list-container">
@@ -292,6 +288,11 @@
       </div>
 
       <hr>
+
+      <div class="row" style="color:#666;">
+        <span id="lastSaved">Last saved: {{ last_saved }}</span>
+        <span style="margin-left:16px;color:#cc6666;">Changes are saved only when you click Save.</span>
+      </div>
 
       <div class="row">
         <button type="submit"
