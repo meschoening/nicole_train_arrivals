@@ -8,7 +8,8 @@ Launched from main_display.py when no WiFi connection is detected.
 
 from PyQt5.QtWidgets import (
     QApplication, QMainWindow, QVBoxLayout, QHBoxLayout, QGridLayout,
-    QLabel, QWidget, QPushButton, QSizePolicy, QComboBox, QPlainTextEdit
+    QLabel, QWidget, QPushButton, QSizePolicy, QComboBox, QPlainTextEdit,
+    QScrollArea
 )
 from PyQt5.QtCore import Qt, QTimer, QProcess
 from PyQt5.QtGui import QFontDatabase
@@ -57,9 +58,14 @@ class WiFiSetupWindow(QMainWindow):
         header = self.create_header_bar()
         main_layout.addWidget(header)
         
-        # Content area
+        # Content area (wrapped in scroll area for safety)
         content = self.create_content_area()
-        main_layout.addWidget(content, 1)  # stretch factor 1
+        scroll_area = QScrollArea()
+        scroll_area.setWidget(content)
+        scroll_area.setWidgetResizable(True)
+        scroll_area.setFrameShape(QScrollArea.NoFrame)
+        scroll_area.setStyleSheet("background-color: #f0f0f0;")
+        main_layout.addWidget(scroll_area, 1)  # stretch factor 1
         
         # Footer bar
         footer = self.create_footer_bar()
@@ -271,7 +277,6 @@ class WiFiSetupWindow(QMainWindow):
                 padding: 10px;
             }
         """)
-        self.connection_console.setMinimumHeight(120)
         manual_layout.addWidget(self.connection_console, 1)  # stretch factor 1
         
         manual_container.setLayout(manual_layout)
