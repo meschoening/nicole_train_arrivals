@@ -324,9 +324,10 @@ class WiFiSetupWindow(QMainWindow):
         manual_container.setLayout(manual_layout)
         columns_layout.addWidget(manual_container, 1)  # stretch factor 1
         
-        # Add the columns to the outer layout
+        # Add the columns to the outer layout with stretches above and below for vertical centering
+        outer_layout.addStretch()  # Space above
         outer_layout.addLayout(columns_layout)
-        outer_layout.addStretch()  # Push content up, keep footer at bottom
+        outer_layout.addStretch()  # Space below
         
         # Load saved networks on startup
         QTimer.singleShot(500, self.load_saved_networks)
