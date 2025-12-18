@@ -746,18 +746,28 @@ class MainWindow(QMainWindow):
             bool: True if connected to a WiFi network, False otherwise
         """
         try:
+            print("[WiFi Check] Running: nmcli -t -f WIFI general")
             result = subprocess.run(
                 ["nmcli", "-t", "-f", "WIFI", "general"],
                 capture_output=True,
                 text=True,
                 timeout=5
             )
+            print(f"[WiFi Check] Return code: {result.returncode}")
+            print(f"[WiFi Check] stdout: {result.stdout.strip()}")
+            print(f"[WiFi Check] stderr: {result.stderr.strip()}")
+            
             if result.returncode != 0:
+                print("[WiFi Check] Command failed, returning False")
                 return False
             
             # Check if WiFi is enabled
             if "enabled" not in result.stdout.lower():
+                print("[WiFi Check] WiFi not enabled in output, returning False")
                 return False
+            
+            print("[WiFi Check] WiFi is enabled, checking connection status...")
+            print("[WiFi Check] Running: nmcli -t -f TYPE,STATE device")
             
             # Check actual connection status
             conn_result = subprocess.run(
@@ -766,13 +776,20 @@ class MainWindow(QMainWindow):
                 text=True,
                 timeout=5
             )
+            print(f"[WiFi Check] Return code: {conn_result.returncode}")
+            print(f"[WiFi Check] stdout: {conn_result.stdout.strip()}")
+            print(f"[WiFi Check] stderr: {conn_result.stderr.strip()}")
+            
             if conn_result.returncode == 0:
                 for line in conn_result.stdout.strip().split('\n'):
+                    print(f"[WiFi Check] Checking line: {line}")
                     if line.startswith('wifi:') and 'connected' in line.lower():
+                        print(f"[WiFi Check] Found connected WiFi! Returning True")
                         return True
+            print("[WiFi Check] No connected WiFi found, returning False")
             return False
         except Exception as e:
-            print(f"WiFi check error: {e}")
+            print(f"[WiFi Check] Exception: {e}")
             return False
     
     def launch_wifi_setup(self):
