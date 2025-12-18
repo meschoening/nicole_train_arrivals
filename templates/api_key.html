@@ -103,6 +103,25 @@
       color: #721c24;
     }
 
+    /* Git remote type colors */
+    .remote-ssh {
+      color: #155724;
+      background: #d4edda;
+      padding: 2px 8px;
+      border-radius: 4px;
+    }
+
+    .remote-https {
+      color: #856404;
+      background: #fff3cd;
+      padding: 2px 8px;
+      border-radius: 4px;
+    }
+
+    .remote-unknown {
+      color: #666;
+    }
+
     /* Loading state */
     button:disabled {
       opacity: 0.6;
@@ -184,8 +203,9 @@
     <div class="section-box" id="sshKeySection">
       <h3>Git SSH Key</h3>
       <p id="gitRemoteStatus" style="margin-top: 0; margin-bottom: 16px; color: #666; font-size: 14px;">
-        Git remote: <span id="gitRemoteType" style="font-weight: bold; text-transform: uppercase;">{{ git_remote_type
-          }}</span>
+        Git remote: <span id="gitRemoteType"
+          class="{% if git_remote_type == 'ssh' %}remote-ssh{% elif git_remote_type == 'https' %}remote-https{% else %}remote-unknown{% endif %}"
+          style="font-weight: bold; text-transform: uppercase;">{{ git_remote_type }}</span>
       </p>
 
       {% if ssh_key_exists %}
@@ -325,6 +345,9 @@
             const remoteTypeSpan = document.getElementById('gitRemoteType');
             if (remoteTypeSpan) {
               remoteTypeSpan.textContent = data.remote_type.toUpperCase();
+              // Update color class
+              remoteTypeSpan.classList.remove('remote-ssh', 'remote-https', 'remote-unknown');
+              remoteTypeSpan.classList.add('remote-' + data.remote_type);
             }
             if (data.remote_converted) {
               showStatus('SSH keys generated and git remote converted to SSH!', false);
@@ -472,6 +495,9 @@
             const remoteTypeSpan = document.getElementById('gitRemoteType');
             if (remoteTypeSpan) {
               remoteTypeSpan.textContent = data.remote_type.toUpperCase();
+              // Update color class
+              remoteTypeSpan.classList.remove('remote-ssh', 'remote-https', 'remote-unknown');
+              remoteTypeSpan.classList.add('remote-' + data.remote_type);
             }
             if (data.remote_converted) {
               showStatus('SSH keys regenerated and git remote converted to SSH!', false);
