@@ -183,6 +183,10 @@
     <!-- Git SSH Key Section -->
     <div class="section-box" id="sshKeySection">
       <h3>Git SSH Key</h3>
+      <p id="gitRemoteStatus" style="margin-top: 0; margin-bottom: 16px; color: #666; font-size: 14px;">
+        Git remote: <span id="gitRemoteType" style="font-weight: bold; text-transform: uppercase;">{{ git_remote_type
+          }}</span>
+      </p>
 
       {% if ssh_key_exists %}
       <!-- Keys exist: show public key and copy button -->
@@ -315,6 +319,17 @@
 
           // Replace the generate UI with the exists UI
           generateDiv.replaceWith(existsDiv);
+
+          // Update remote type label if remote was converted
+          if (data.remote_type) {
+            const remoteTypeSpan = document.getElementById('gitRemoteType');
+            if (remoteTypeSpan) {
+              remoteTypeSpan.textContent = data.remote_type.toUpperCase();
+            }
+            if (data.remote_converted) {
+              showStatus('SSH keys generated and git remote converted to SSH!', false);
+            }
+          }
         } else {
           showStatus('Error: ' + data.error, true);
           generateBtn.disabled = false;
@@ -451,6 +466,16 @@
           if (keyTextarea) {
             keyTextarea.textContent = data.public_key;
             keyTextarea.value = data.public_key;
+          }
+          // Update remote type label if remote was converted
+          if (data.remote_type) {
+            const remoteTypeSpan = document.getElementById('gitRemoteType');
+            if (remoteTypeSpan) {
+              remoteTypeSpan.textContent = data.remote_type.toUpperCase();
+            }
+            if (data.remote_converted) {
+              showStatus('SSH keys regenerated and git remote converted to SSH!', false);
+            }
           }
           // Reset state
           resetRegenerateState();

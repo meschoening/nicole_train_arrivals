@@ -303,12 +303,16 @@ def start_web_settings_server(data_handler, host="0.0.0.0", port=443):
                     ssh_public_key = f.read().strip()
             except Exception:
                 pass
+        # Get git remote type for initial page render
+        git_remote_info = _get_git_remote_info()
+        git_remote_type = git_remote_info["type"]
         return render_template(
             "api_key.html",
             api_key=config.get("api_key", ""),
             last_saved=_get_config_last_saved(),
             ssh_key_exists=ssh_key_exists,
             ssh_public_key=ssh_public_key,
+            git_remote_type=git_remote_type,
             display_name=_get_display_name(),
         )
 
@@ -382,7 +386,14 @@ def start_web_settings_server(data_handler, host="0.0.0.0", port=443):
             if os.path.exists(public_key):
                 with open(public_key, "r") as f:
                     pub_key_content = f.read().strip()
-                return jsonify({"success": True, "public_key": pub_key_content})
+                # Convert git remote to SSH if it was HTTPS
+                convert_result = _convert_git_remote_to_ssh()
+                return jsonify({
+                    "success": True,
+                    "public_key": pub_key_content,
+                    "remote_type": convert_result["type"],
+                    "remote_converted": convert_result.get("converted", False)
+                })
             else:
                 return jsonify({"success": False, "error": "Key generation succeeded but public key file not found"}), 500
                 
@@ -428,12 +439,88 @@ def start_web_settings_server(data_handler, host="0.0.0.0", port=443):
             if os.path.exists(public_key):
                 with open(public_key, "r") as f:
                     pub_key_content = f.read().strip()
-                return jsonify({"success": True, "public_key": pub_key_content})
+                # Convert git remote to SSH if it was HTTPS
+                convert_result = _convert_git_remote_to_ssh()
+                return jsonify({
+                    "success": True,
+                    "public_key": pub_key_content,
+                    "remote_type": convert_result["type"],
+                    "remote_converted": convert_result.get("converted", False)
+                })
             else:
                 return jsonify({"success": False, "error": "Key generation succeeded but public key file not found"}), 500
                 
         except Exception as e:
             return jsonify({"success": False, "error": str(e)}), 500
+
+    def _get_git_remote_info():
+        """Get git remote origin URL and determine if it's HTTPS or SSH."""
+        cwd = os.path.dirname(os.path.abspath(__file__))
+        try:
+            result = subprocess.run(
+                ["sudo", "-u", "max", "git", "remote", "-v"],
+                cwd=cwd,
+                capture_output=True,
+                text=True,
+                timeout=10
+            )
+            if result.returncode == 0 and result.stdout:
+                # Parse first line (origin fetch URL)
+                for line in result.stdout.splitlines():
+                    if "origin" in line and "(fetch)" in line:
+                        parts = line.split()
+                        if len(parts) >= 2:
+                            url = parts[1]
+                            if url.startswith("https://"):
+                                return {"type": "https", "url": url}
+                            elif url.startswith("git@") or url.startswith("ssh://"):
+                                return {"type": "ssh", "url": url}
+                            else:
+                                return {"type": "unknown", "url": url}
+        except Exception:
+            pass
+        return {"type": "unknown", "url": ""}
+
+    def _convert_git_remote_to_ssh():
+        """Convert HTTPS remote URL to SSH format for GitHub."""
+        remote_info = _get_git_remote_info()
+        if remote_info["type"] != "https":
+            return {"converted": False, "type": remote_info["type"]}
+        
+        url = remote_info["url"]
+        # Parse GitHub HTTPS URL: https://github.com/user/repo.git
+        import re
+        match = re.match(r'https://github\.com/([^/]+)/(.+?)(?:\.git)?$', url)
+        if not match:
+            return {"converted": False, "type": "https", "error": "Could not parse GitHub URL"}
+        
+        user, repo = match.groups()
+        # Ensure .git suffix
+        if not repo.endswith('.git'):
+            repo = repo + '.git'
+        ssh_url = f"git@github.com:{user}/{repo}"
+        
+        cwd = os.path.dirname(os.path.abspath(__file__))
+        try:
+            result = subprocess.run(
+                ["sudo", "-u", "max", "git", "remote", "set-url", "origin", ssh_url],
+                cwd=cwd,
+                capture_output=True,
+                text=True,
+                timeout=10
+            )
+            if result.returncode == 0:
+                return {"converted": True, "type": "ssh", "new_url": ssh_url}
+            else:
+                return {"converted": False, "type": "https", "error": result.stderr.strip()}
+        except Exception as e:
+            return {"converted": False, "type": "https", "error": str(e)}
+
+    @app.get("/api/git-remote-status")
+    def api_git_remote_status():
+        """Get current git remote type (https or ssh)."""
+        info = _get_git_remote_info()
+        return jsonify({"type": info["type"]})
 
     def _has_git_error(output_text):
         if not output_text:
