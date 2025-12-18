@@ -108,7 +108,7 @@ class WiFiSetupWindow(QMainWindow):
         
         # Outer vertical layout to control expansion
         outer_layout = QVBoxLayout()
-        outer_layout.setContentsMargins(40, 40, 40, 40)
+        outer_layout.setContentsMargins(40, 0, 40, 0)
         outer_layout.setSpacing(20)
         
         # Inner horizontal layout for two columns
@@ -260,9 +260,6 @@ class WiFiSetupWindow(QMainWindow):
         manual_layout.addWidget(self.connect_button)
         
         # Console output
-        console_title = QLabel("Connection Output")
-        console_title.setStyleSheet("font-family: Quicksand; font-size: 18px; font-weight: bold;")
-        manual_layout.addWidget(console_title)
         
         self.connection_console = QPlainTextEdit()
         self.connection_console.setReadOnly(True)
