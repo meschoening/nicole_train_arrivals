@@ -67,10 +67,6 @@ class WiFiSetupWindow(QMainWindow):
         scroll_area.setStyleSheet("background-color: #f0f0f0;")
         main_layout.addWidget(scroll_area, 1)  # stretch factor 1
         
-        # Footer bar
-        footer = self.create_footer_bar()
-        main_layout.addWidget(footer)
-        
         main_widget.setLayout(main_layout)
         main_widget.setStyleSheet("background-color: lightgray;")
         
@@ -97,6 +93,30 @@ class WiFiSetupWindow(QMainWindow):
         layout.addWidget(title_label, alignment=Qt.AlignVCenter | Qt.AlignLeft)
         
         layout.addStretch()
+        
+        # Return to Main Display button (right-aligned)
+        return_button = QPushButton("Return to Main Display")
+        return_button.setStyleSheet("""
+            QPushButton {
+                font-family: Quicksand;
+                font-size: 18px;
+                font-weight: bold;
+                padding: 10px 25px;
+                background-color: #e0e0e0;
+                border: none;
+                border-radius: 5px;
+            }
+            QPushButton:hover {
+                background-color: #d0d0d0;
+            }
+            QPushButton:pressed {
+                background-color: #c0c0c0;
+                padding-bottom: 9px;
+            }
+        """)
+        return_button.setFixedHeight(45)
+        return_button.clicked.connect(self.return_to_main_display)
+        layout.addWidget(return_button, alignment=Qt.AlignVCenter | Qt.AlignRight)
         
         header.setLayout(layout)
         return header
@@ -169,6 +189,31 @@ class WiFiSetupWindow(QMainWindow):
         status_layout.addWidget(self.connection_result_label)
         
         status_layout.addStretch()
+        
+        # Broadcast button at bottom of left column
+        self.broadcast_button = QPushButton("Broadcast Config Network")
+        self.broadcast_button.setStyleSheet("""
+            QPushButton {
+                font-family: Quicksand;
+                font-size: 18px;
+                font-weight: bold;
+                padding: 10px 25px;
+                background-color: #e0e0e0;
+                border: none;
+                border-radius: 5px;
+            }
+            QPushButton:hover {
+                background-color: #d0d0d0;
+            }
+            QPushButton:pressed {
+                background-color: #c0c0c0;
+                padding-bottom: 9px;
+            }
+        """)
+        self.broadcast_button.setFixedHeight(45)
+        self.broadcast_button.clicked.connect(self.toggle_broadcast)
+        status_layout.addWidget(self.broadcast_button)
+        
         status_container.setLayout(status_layout)
         columns_layout.addWidget(status_container, 1)  # stretch factor 1
         
@@ -288,69 +333,6 @@ class WiFiSetupWindow(QMainWindow):
         
         content.setLayout(outer_layout)
         return content
-    
-    def create_footer_bar(self):
-        """Create the footer bar with action buttons."""
-        footer = QWidget()
-        footer.setStyleSheet("background-color: lightgray;")
-        footer.setFixedHeight(75)
-        
-        layout = QHBoxLayout()
-        layout.setContentsMargins(20, 0, 20, 0)
-        layout.setSpacing(20)
-        
-        # Broadcast button (left-aligned)
-        self.broadcast_button = QPushButton("Broadcast")
-        self.broadcast_button.setStyleSheet("""
-            QPushButton {
-                font-family: Quicksand;
-                font-size: 18px;
-                font-weight: bold;
-                padding: 10px 25px;
-                background-color: #e0e0e0;
-                border: none;
-                border-radius: 5px;
-            }
-            QPushButton:hover {
-                background-color: #d0d0d0;
-            }
-            QPushButton:pressed {
-                background-color: #c0c0c0;
-                padding-bottom: 9px;
-            }
-        """)
-        self.broadcast_button.setFixedHeight(45)
-        self.broadcast_button.clicked.connect(self.toggle_broadcast)
-        layout.addWidget(self.broadcast_button, alignment=Qt.AlignVCenter | Qt.AlignLeft)
-        
-        layout.addStretch()
-        
-        # Return to Main Display button (right-aligned)
-        return_button = QPushButton("Return to Main Display")
-        return_button.setStyleSheet("""
-            QPushButton {
-                font-family: Quicksand;
-                font-size: 18px;
-                font-weight: bold;
-                padding: 10px 25px;
-                background-color: #e0e0e0;
-                border: none;
-                border-radius: 5px;
-            }
-            QPushButton:hover {
-                background-color: #d0d0d0;
-            }
-            QPushButton:pressed {
-                background-color: #c0c0c0;
-                padding-bottom: 9px;
-            }
-        """)
-        return_button.setFixedHeight(45)
-        return_button.clicked.connect(self.return_to_main_display)
-        layout.addWidget(return_button, alignment=Qt.AlignVCenter | Qt.AlignRight)
-        
-        footer.setLayout(layout)
-        return footer
     
     def update_status_labels(self):
         """Update the status labels based on current network state."""
@@ -627,7 +609,7 @@ class WiFiSetupWindow(QMainWindow):
         """Start AP mode and captive portal."""
         try:
             self.broadcast_button.setEnabled(False)
-            self.broadcast_button.setText("Starting...")
+            self.broadcast_button.setText("Starting Access Point...")
             QApplication.processEvents()
             
             # Get script directory for config files
@@ -665,7 +647,7 @@ class WiFiSetupWindow(QMainWindow):
             self.start_portal_server()
             
             self.is_broadcasting = True
-            self.broadcast_button.setText("Stop Broadcasting")
+            self.broadcast_button.setText("Close Config Network")
             self.broadcast_button.setEnabled(True)
             
             # Hide any previous connection result
@@ -675,7 +657,7 @@ class WiFiSetupWindow(QMainWindow):
             
         except Exception as e:
             print(f"Error starting broadcast: {e}")
-            self.broadcast_button.setText("Broadcast")
+            self.broadcast_button.setText("Broadcast Config Network")
             self.broadcast_button.setEnabled(True)
             self.connection_result_label.setText(f"Error starting broadcast: {e}")
             self.connection_result_label.setStyleSheet("font-family: Quicksand; font-size: 20px; color: #cc0000;")
@@ -685,7 +667,7 @@ class WiFiSetupWindow(QMainWindow):
         """Stop AP mode and attempt to reconnect to WiFi."""
         try:
             self.broadcast_button.setEnabled(False)
-            self.broadcast_button.setText("Stopping...")
+            self.broadcast_button.setText("Shutting Down...")
             QApplication.processEvents()
             
             # Step 1: Stop Flask portal
@@ -721,7 +703,7 @@ class WiFiSetupWindow(QMainWindow):
             ], capture_output=True, text=True, timeout=30)
             
             self.is_broadcasting = False
-            self.broadcast_button.setText("Broadcast")
+            self.broadcast_button.setText("Broadcast Config Network")
             self.broadcast_button.setEnabled(True)
             
             # Check connection result
