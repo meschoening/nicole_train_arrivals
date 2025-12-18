@@ -76,7 +76,7 @@ Add openbox autostart command:
         xset s off
         xset s noblank
         xset -dpms
-        python3 /home/max/nicole_train_arrivals/main_display.py > /home/max/display.log 2>&1 &
+        python3 /home/max/nicole_train_arrivals/main_display.py >> /home/max/display.log 2>&1
 
 Remove window bars and borders:
     nano ~/.config/openbox/rc.xml

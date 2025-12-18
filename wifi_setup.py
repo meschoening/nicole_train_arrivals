@@ -8,9 +8,9 @@ Launched from main_display.py when no WiFi connection is detected.
 
 from PyQt5.QtWidgets import (
     QApplication, QMainWindow, QVBoxLayout, QHBoxLayout, QGridLayout,
-    QLabel, QWidget, QPushButton, QSizePolicy
+    QLabel, QWidget, QPushButton, QSizePolicy, QComboBox, QPlainTextEdit
 )
-from PyQt5.QtCore import Qt, QTimer
+from PyQt5.QtCore import Qt, QTimer, QProcess
 from PyQt5.QtGui import QFontDatabase
 import os
 import sys
@@ -38,6 +38,11 @@ class WiFiSetupWindow(QMainWindow):
         self.is_broadcasting = False
         self.portal_server_thread = None
         self.portal_server_running = False
+        
+        # Manual connection state tracking
+        self.is_connecting = False
+        self.is_manually_connected = False
+        self.connection_process = None
         
         # Create main widget
         main_widget = QWidget()
@@ -155,7 +160,134 @@ class WiFiSetupWindow(QMainWindow):
         status_container.setLayout(status_layout)
         layout.addWidget(status_container)
         
+        # Manual Connection section
+        manual_container = QWidget()
+        manual_container.setStyleSheet("""
+            background-color: #e8e8e8;
+            border-radius: 10px;
+        """)
+        manual_layout = QHBoxLayout()
+        manual_layout.setContentsMargins(30, 30, 30, 30)
+        manual_layout.setSpacing(20)
+        
+        # Left side: dropdown and buttons
+        left_column = QVBoxLayout()
+        left_column.setSpacing(15)
+        
+        # Section title
+        manual_title = QLabel("Manual Connection")
+        manual_title.setStyleSheet("font-family: Quicksand; font-size: 22px; font-weight: bold;")
+        left_column.addWidget(manual_title)
+        
+        # Saved networks dropdown
+        self.saved_networks_combo = QComboBox()
+        self.saved_networks_combo.setStyleSheet("""
+            QComboBox {
+                font-family: Quicksand;
+                font-size: 18px;
+                padding: 10px;
+                border: 1px solid #ccc;
+                border-radius: 5px;
+                background-color: white;
+            }
+            QComboBox:hover {
+                border: 1px solid #999;
+            }
+            QComboBox QAbstractItemView {
+                font-family: Quicksand;
+                font-size: 18px;
+                background-color: white;
+                selection-background-color: #e0e0e0;
+            }
+        """)
+        self.saved_networks_combo.setMinimumWidth(280)
+        left_column.addWidget(self.saved_networks_combo)
+        
+        # Refresh List button
+        self.refresh_networks_button = QPushButton("Refresh List")
+        self.refresh_networks_button.setStyleSheet("""
+            QPushButton {
+                font-family: Quicksand;
+                font-size: 16px;
+                font-weight: bold;
+                padding: 10px 20px;
+                background-color: #e0e0e0;
+                border: none;
+                border-radius: 5px;
+            }
+            QPushButton:hover {
+                background-color: #d0d0d0;
+            }
+            QPushButton:pressed {
+                background-color: #c0c0c0;
+            }
+        """)
+        self.refresh_networks_button.clicked.connect(self.load_saved_networks)
+        left_column.addWidget(self.refresh_networks_button)
+        
+        # Connect/Disconnect button
+        self.connect_button = QPushButton("Connect to Network")
+        self.connect_button.setStyleSheet("""
+            QPushButton {
+                font-family: Quicksand;
+                font-size: 16px;
+                font-weight: bold;
+                padding: 10px 20px;
+                background-color: #4CAF50;
+                color: white;
+                border: none;
+                border-radius: 5px;
+            }
+            QPushButton:hover {
+                background-color: #45a049;
+            }
+            QPushButton:pressed {
+                background-color: #3d8b40;
+            }
+            QPushButton:disabled {
+                background-color: #cccccc;
+                color: #666666;
+            }
+        """)
+        self.connect_button.clicked.connect(self.toggle_manual_connection)
+        left_column.addWidget(self.connect_button)
+        
+        left_column.addStretch()
+        manual_layout.addLayout(left_column)
+        
+        # Right side: Console output
+        right_column = QVBoxLayout()
+        right_column.setSpacing(10)
+        
+        console_title = QLabel("Connection Output")
+        console_title.setStyleSheet("font-family: Quicksand; font-size: 18px; font-weight: bold;")
+        right_column.addWidget(console_title)
+        
+        self.connection_console = QPlainTextEdit()
+        self.connection_console.setReadOnly(True)
+        self.connection_console.setStyleSheet("""
+            QPlainTextEdit {
+                font-family: monospace;
+                font-size: 14px;
+                background-color: #1e1e1e;
+                color: #d4d4d4;
+                border: 1px solid #333;
+                border-radius: 5px;
+                padding: 10px;
+            }
+        """)
+        self.connection_console.setMinimumHeight(150)
+        right_column.addWidget(self.connection_console)
+        
+        manual_layout.addLayout(right_column, 1)  # stretch factor 1
+        
+        manual_container.setLayout(manual_layout)
+        layout.addWidget(manual_container)
+        
         layout.addStretch()
+        
+        # Load saved networks on startup
+        QTimer.singleShot(500, self.load_saved_networks)
         
         content.setLayout(layout)
         return content
@@ -290,6 +422,203 @@ class WiFiSetupWindow(QMainWindow):
         except Exception:
             return None
     
+    def load_saved_networks(self):
+        """Load saved WiFi networks into the dropdown."""
+        try:
+            self.saved_networks_combo.clear()
+            result = subprocess.run(
+                ["nmcli", "-t", "-f", "NAME,TYPE", "connection", "show"],
+                capture_output=True,
+                text=True,
+                timeout=10
+            )
+            
+            if result.returncode == 0:
+                networks = []
+                for line in result.stdout.strip().split('\n'):
+                    if not line.strip():
+                        continue
+                    parts = line.split(':')
+                    if len(parts) >= 2 and parts[1] == "802-11-wireless":
+                        networks.append(parts[0])
+                
+                if networks:
+                    self.saved_networks_combo.addItems(networks)
+                    self.connection_console.appendPlainText(f"Found {len(networks)} saved network(s)")
+                else:
+                    self.saved_networks_combo.addItem("(No saved networks)")
+                    self.connection_console.appendPlainText("No saved WiFi networks found")
+            else:
+                self.saved_networks_combo.addItem("(Error loading)")
+                self.connection_console.appendPlainText(f"Error: {result.stderr.strip()}")
+                
+        except Exception as e:
+            self.saved_networks_combo.addItem("(Error loading)")
+            self.connection_console.appendPlainText(f"Exception: {e}")
+    
+    def toggle_manual_connection(self):
+        """Toggle between connect and disconnect based on current state."""
+        if self.is_connecting:
+            return  # Already in progress
+        
+        if self.is_manually_connected:
+            self.disconnect_network()
+        else:
+            self.attempt_connection()
+    
+    def attempt_connection(self):
+        """Attempt to connect to the selected network asynchronously."""
+        selected = self.saved_networks_combo.currentText()
+        if not selected or selected.startswith("("):
+            self.connection_console.appendPlainText("No valid network selected")
+            return
+        
+        self.is_connecting = True
+        self.connect_button.setEnabled(False)
+        self.connect_button.setText("Connecting...")
+        self.connect_button.setStyleSheet("""
+            QPushButton {
+                font-family: Quicksand;
+                font-size: 16px;
+                font-weight: bold;
+                padding: 10px 20px;
+                background-color: #cccccc;
+                color: #666666;
+                border: none;
+                border-radius: 5px;
+            }
+        """)
+        
+        self.connection_console.clear()
+        self.connection_console.appendPlainText(f"$ nmcli connection up \"{selected}\"")
+        self.connection_console.appendPlainText("Connecting...")
+        
+        # Use QProcess for async execution
+        self.connection_process = QProcess()
+        self.connection_process.readyReadStandardOutput.connect(self.on_connection_output)
+        self.connection_process.readyReadStandardError.connect(self.on_connection_error)
+        self.connection_process.finished.connect(self.on_connection_finished)
+        
+        self.connection_process.start("nmcli", ["connection", "up", selected])
+    
+    def disconnect_network(self):
+        """Disconnect from the current WiFi network."""
+        self.is_connecting = True
+        self.connect_button.setEnabled(False)
+        self.connect_button.setText("Disconnecting...")
+        
+        self.connection_console.appendPlainText("\n$ nmcli device disconnect wlan0")
+        self.connection_console.appendPlainText("Disconnecting...")
+        
+        # Use QProcess for async execution
+        self.connection_process = QProcess()
+        self.connection_process.readyReadStandardOutput.connect(self.on_connection_output)
+        self.connection_process.readyReadStandardError.connect(self.on_connection_error)
+        self.connection_process.finished.connect(self.on_disconnect_finished)
+        
+        self.connection_process.start("nmcli", ["device", "disconnect", "wlan0"])
+    
+    def on_connection_output(self):
+        """Handle stdout from connection process."""
+        if self.connection_process:
+            output = self.connection_process.readAllStandardOutput().data().decode()
+            if output.strip():
+                self.connection_console.appendPlainText(output.strip())
+    
+    def on_connection_error(self):
+        """Handle stderr from connection process."""
+        if self.connection_process:
+            output = self.connection_process.readAllStandardError().data().decode()
+            if output.strip():
+                self.connection_console.appendPlainText(f"Error: {output.strip()}")
+    
+    def on_connection_finished(self, exit_code, exit_status):
+        """Handle connection attempt completion."""
+        self.is_connecting = False
+        self.connect_button.setEnabled(True)
+        
+        if exit_code == 0:
+            self.is_manually_connected = True
+            self.connection_console.appendPlainText("\n✓ Connection successful!")
+            self.connect_button.setText("Disconnect")
+            self.connect_button.setStyleSheet("""
+                QPushButton {
+                    font-family: Quicksand;
+                    font-size: 16px;
+                    font-weight: bold;
+                    padding: 10px 20px;
+                    background-color: #f44336;
+                    color: white;
+                    border: none;
+                    border-radius: 5px;
+                }
+                QPushButton:hover {
+                    background-color: #da190b;
+                }
+                QPushButton:pressed {
+                    background-color: #c41409;
+                }
+            """)
+        else:
+            self.is_manually_connected = False
+            self.connection_console.appendPlainText(f"\n✗ Connection failed (exit code: {exit_code})")
+            self.connect_button.setText("Connect to Network")
+            self.connect_button.setStyleSheet("""
+                QPushButton {
+                    font-family: Quicksand;
+                    font-size: 16px;
+                    font-weight: bold;
+                    padding: 10px 20px;
+                    background-color: #4CAF50;
+                    color: white;
+                    border: none;
+                    border-radius: 5px;
+                }
+                QPushButton:hover {
+                    background-color: #45a049;
+                }
+                QPushButton:pressed {
+                    background-color: #3d8b40;
+                }
+            """)
+        
+        # Update status labels
+        self.update_status_labels()
+    
+    def on_disconnect_finished(self, exit_code, exit_status):
+        """Handle disconnect completion."""
+        self.is_connecting = False
+        self.is_manually_connected = False
+        self.connect_button.setEnabled(True)
+        
+        if exit_code == 0:
+            self.connection_console.appendPlainText("\n✓ Disconnected successfully")
+        else:
+            self.connection_console.appendPlainText(f"\n✗ Disconnect failed (exit code: {exit_code})")
+        
+        self.connect_button.setText("Connect to Network")
+        self.connect_button.setStyleSheet("""
+            QPushButton {
+                font-family: Quicksand;
+                font-size: 16px;
+                font-weight: bold;
+                padding: 10px 20px;
+                background-color: #4CAF50;
+                color: white;
+                border: none;
+                border-radius: 5px;
+            }
+            QPushButton:hover {
+                background-color: #45a049;
+            }
+            QPushButton:pressed {
+                background-color: #3d8b40;
+            }
+        """)
+        
+        # Update status labels
+        self.update_status_labels()
+
     def toggle_broadcast(self):
         """Toggle between broadcast and normal mode."""
         if self.is_broadcasting:
