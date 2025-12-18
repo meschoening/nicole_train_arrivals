@@ -33,6 +33,10 @@ sudo -u max git pull
 sudo -u max git log -1 --format=%s
 sudo timedatectl set-timezone <timezone>
 
+## SSL Certificate Generation (web_settings_server.py)
+
+sudo tailscale cert --cert-file <path> --key-file <path> <hostname>
+
 ---
 
 # Sudoers Configuration
@@ -49,6 +53,7 @@ max ALL=(ALL) NOPASSWD: /usr/sbin/hostapd
 max ALL=(ALL) NOPASSWD: /usr/bin/killall hostapd
 max ALL=(ALL) NOPASSWD: /sbin/shutdown
 max ALL=(ALL) NOPASSWD: /usr/bin/timedatectl
+max ALL=(ALL) NOPASSWD: /usr/bin/tailscale cert *
 ```
 
 Replace "max" with your application user.

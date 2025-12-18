@@ -173,6 +173,31 @@
     .regenerate-email-input.visible {
       display: inline-block;
     }
+
+    /* SSL status styling */
+    .ssl-status-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 8px;
+    }
+
+    .ssl-label {
+      font-weight: bold;
+      min-width: 160px;
+    }
+
+    .ssl-not-found {
+      color: #dc3545;
+    }
+
+    .ssl-found {
+      color: #155724;
+    }
+
+    .ssl-value {
+      color: #666;
+    }
   </style>
 </head>
 
@@ -237,6 +262,53 @@
       {% endif %}
 
       <div id="sshStatusMessage"></div>
+    </div>
+
+    <!-- SSL Certificate and Key Section -->
+    <div class="section-box" id="sslSection">
+      <h3>SSL (HTTPS) Certificate and Key</h3>
+      {% if not ssl_status.tailscale_installed %}
+      <!-- Tailscale not installed warning -->
+      <div style="color: #dc3545; font-weight: bold; padding: 8px 0;">
+        ⚠️ Tailscale is not installed and is required for configuring HTTPS.
+      </div>
+      {% else %}
+      <!-- Tailscale installed: show cert/key status -->
+      <div id="sslStatusRows">
+        <div class="row ssl-status-row">
+          <span class="ssl-label {% if ssl_status.cert_found %}ssl-found{% else %}ssl-not-found{% endif %}">
+            Certificate (.crt):
+          </span>
+          <span class="ssl-value">
+            {% if ssl_status.cert_found %}
+            ✓ Found
+            {% else %}
+            ✗ Not found
+            {% endif %}
+          </span>
+        </div>
+        <div class="row ssl-status-row">
+          <span class="ssl-label {% if ssl_status.key_found %}ssl-found{% else %}ssl-not-found{% endif %}">
+            Private Key (.key):
+          </span>
+          <span class="ssl-value">
+            {% if ssl_status.key_found %}
+            ✓ Found
+            {% else %}
+            ✗ Not found
+            {% endif %}
+          </span>
+        </div>
+      </div>
+      <div class="row" style="margin-top: 16px;">
+        {% if ssl_status.cert_found and ssl_status.key_found %}
+        <button type="button" id="generateSslBtn" onclick="generateSslCert()">Regenerate SSL Certificates</button>
+        {% else %}
+        <button type="button" id="generateSslBtn" onclick="generateSslCert()">Generate SSL Certificates</button>
+        {% endif %}
+      </div>
+      <div id="sslStatusMessage"></div>
+      {% endif %}
     </div>
   </div>
 
@@ -528,6 +600,63 @@
         }
       }
     });
+
+    // SSL Certificate Functions
+    function showSslStatus(message, isError) {
+      const statusEl = document.getElementById('sslStatusMessage');
+      if (!statusEl) return;
+      statusEl.className = 'status-message ' + (isError ? 'error' : 'success');
+      statusEl.textContent = message;
+      statusEl.style.display = 'block';
+    }
+
+    async function generateSslCert() {
+      const generateBtn = document.getElementById('generateSslBtn');
+      if (!generateBtn) return;
+
+      const originalText = generateBtn.textContent;
+      generateBtn.disabled = true;
+      generateBtn.textContent = 'Generating...';
+
+      try {
+        const response = await fetch('/api/generate-ssl-cert', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' }
+        });
+
+        const data = await response.json();
+
+        if (data.success) {
+          showSslStatus(data.message || 'SSL certificates generated successfully!', false);
+          // Update button text since we now have certs
+          generateBtn.textContent = 'Regenerate SSL Certificates';
+          generateBtn.disabled = false;
+
+          // Update status rows to show found
+          const statusRows = document.getElementById('sslStatusRows');
+          if (statusRows) {
+            statusRows.innerHTML = `
+              <div class="row ssl-status-row">
+                <span class="ssl-label ssl-found">Certificate (.crt):</span>
+                <span class="ssl-value">✓ Found</span>
+              </div>
+              <div class="row ssl-status-row">
+                <span class="ssl-label ssl-found">Private Key (.key):</span>
+                <span class="ssl-value">✓ Found</span>
+              </div>
+            `;
+          }
+        } else {
+          showSslStatus('Error: ' + data.error, true);
+          generateBtn.disabled = false;
+          generateBtn.textContent = originalText;
+        }
+      } catch (error) {
+        showSslStatus('Error: ' + error.message, true);
+        generateBtn.disabled = false;
+        generateBtn.textContent = originalText;
+      }
+    }
   </script>
 </body>
 

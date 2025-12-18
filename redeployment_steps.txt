@@ -26,6 +26,9 @@ Install NetworkManager for cli network management:
 Verify NetworkManager is working:
     nmcli connection show
 
+Install tailscale for remote access:
+    curl -fsSL https://tailscale.com/install.sh | sh
+
 Run following commands to install Python addon packages:
     apt install python3-pyqt5 python3-requests python3-pandas python3-flask git openssh-client openbox xserver-xorg-legacy
     setcap 'cap_net_bind_service=+ep' $(readlink -f $(which python3))
@@ -59,9 +62,6 @@ Add the following to "visudo" to enable reboot/shutdown buttons:
     max ALL=(ALL) NOPASSWD: /usr/bin/killall hostapd
     max ALL=(ALL) NOPASSWD: /sbin/shutdown
     max ALL=(ALL) NOPASSWD: /usr/bin/timedatectl
-
-Install tailscale for remote access:
-    curl -fsSL https://tailscale.com/install.sh | sh
 
 Start configure startx to start the window server:
     nano ~/.xinitrc

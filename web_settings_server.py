@@ -16,17 +16,37 @@ _message_trigger_lock = threading.Lock()
 _settings_changed_trigger = {"pending": False}
 _settings_changed_lock = threading.Lock()
 
-# SSL certificate paths (expanded from ~)
-_SSL_CERT_PATH = os.path.expanduser("~/nicoletrains.tail45f1e5.ts.net.crt")
-_SSL_KEY_PATH = os.path.expanduser("~/nicoletrains.tail45f1e5.ts.net.key")
+# SSL certificate directory (expanded from ~)
+_SSL_CERT_DIR = os.path.expanduser("~/https")
 
 # Track SSL status for warning display
 _ssl_enabled = False
 
 
+def _get_ssl_cert_paths():
+    """
+    Auto-detect SSL certificate and key files in ~/https directory.
+    Returns tuple of (cert_path, key_path) or (None, None) if not found.
+    """
+    cert_path = None
+    key_path = None
+    
+    if os.path.isdir(_SSL_CERT_DIR):
+        for filename in os.listdir(_SSL_CERT_DIR):
+            filepath = os.path.join(_SSL_CERT_DIR, filename)
+            if os.path.isfile(filepath):
+                if filename.endswith('.crt') and cert_path is None:
+                    cert_path = filepath
+                elif filename.endswith('.key') and key_path is None:
+                    key_path = filepath
+    
+    return cert_path, key_path
+
+
 def _check_ssl_certs():
     """Check if SSL certificate files exist."""
-    return os.path.exists(_SSL_CERT_PATH) and os.path.exists(_SSL_KEY_PATH)
+    cert_path, key_path = _get_ssl_cert_paths()
+    return cert_path is not None and key_path is not None
 
 
 def get_pending_message_trigger():
@@ -155,8 +175,9 @@ def start_web_settings_server(data_handler, host="0.0.0.0", port=443):
     
     # Check for SSL certificates
     ssl_context = None
-    if _check_ssl_certs():
-        ssl_context = (_SSL_CERT_PATH, _SSL_KEY_PATH)
+    cert_path, key_path = _get_ssl_cert_paths()
+    if cert_path and key_path:
+        ssl_context = (cert_path, key_path)
         _ssl_enabled = True
     else:
         _ssl_enabled = False
@@ -199,6 +220,39 @@ def start_web_settings_server(data_handler, host="0.0.0.0", port=443):
             return "Not available"
         except (subprocess.TimeoutExpired, subprocess.SubprocessError, json.JSONDecodeError, KeyError, FileNotFoundError):
             return "Not available"
+
+    def _check_tailscale_installed():
+        """Check if tailscale is installed on the system."""
+        try:
+            result = subprocess.run(
+                ["which", "tailscale"],
+                capture_output=True,
+                text=True,
+                timeout=5
+            )
+            return result.returncode == 0
+        except (subprocess.TimeoutExpired, subprocess.SubprocessError, FileNotFoundError):
+            return False
+
+    def _get_ssl_status():
+        """Get SSL certificate status including tailscale info."""
+        cert_path, key_path = _get_ssl_cert_paths()
+        tailscale_installed = _check_tailscale_installed()
+        tailscale_hostname = ""
+        
+        if tailscale_installed:
+            tailscale_hostname = _get_tailscale_address()
+            if tailscale_hostname == "Not available":
+                tailscale_hostname = ""
+        
+        return {
+            "tailscale_installed": tailscale_installed,
+            "tailscale_hostname": tailscale_hostname,
+            "cert_found": cert_path is not None,
+            "cert_path": cert_path or "",
+            "key_found": key_path is not None,
+            "key_path": key_path or "",
+        }
 
     def _get_messages_last_saved():
         messages_path = getattr(message_handler, 'MESSAGES_FILE', 'messages.json')
@@ -306,6 +360,8 @@ def start_web_settings_server(data_handler, host="0.0.0.0", port=443):
         # Get git remote type for initial page render
         git_remote_info = _get_git_remote_info()
         git_remote_type = git_remote_info["type"]
+        # Get SSL status for initial page render
+        ssl_status = _get_ssl_status()
         return render_template(
             "api_key.html",
             api_key=config.get("api_key", ""),
@@ -314,6 +370,7 @@ def start_web_settings_server(data_handler, host="0.0.0.0", port=443):
             ssh_public_key=ssh_public_key,
             git_remote_type=git_remote_type,
             display_name=_get_display_name(),
+            ssl_status=ssl_status,
         )
 
     @app.post("/api-key")
@@ -521,6 +578,70 @@ def start_web_settings_server(data_handler, host="0.0.0.0", port=443):
         """Get current git remote type (https or ssh)."""
         info = _get_git_remote_info()
         return jsonify({"type": info["type"]})
+
+    @app.get("/api/ssl-status")
+    def api_ssl_status():
+        """Get SSL certificate status."""
+        return jsonify(_get_ssl_status())
+
+    @app.post("/api/generate-ssl-cert")
+    def api_generate_ssl_cert():
+        """Generate or regenerate SSL certificates using tailscale cert."""
+        import shutil
+        
+        # Check if tailscale is installed
+        if not _check_tailscale_installed():
+            return jsonify({"success": False, "error": "Tailscale is not installed"}), 400
+        
+        # Get tailscale hostname
+        hostname = _get_tailscale_address()
+        if hostname == "Not available" or not hostname:
+            return jsonify({"success": False, "error": "Could not determine Tailscale hostname"}), 400
+        
+        try:
+            # Ensure ~/https directory exists
+            if not os.path.isdir(_SSL_CERT_DIR):
+                os.makedirs(_SSL_CERT_DIR, mode=0o755)
+            else:
+                # Clear existing contents of ~/https directory
+                for filename in os.listdir(_SSL_CERT_DIR):
+                    filepath = os.path.join(_SSL_CERT_DIR, filename)
+                    if os.path.isfile(filepath):
+                        os.remove(filepath)
+                    elif os.path.isdir(filepath):
+                        shutil.rmtree(filepath)
+            
+            # Define output paths
+            cert_file = os.path.join(_SSL_CERT_DIR, f"{hostname}.crt")
+            key_file = os.path.join(_SSL_CERT_DIR, f"{hostname}.key")
+            
+            # Generate certificates using tailscale cert
+            result = subprocess.run(
+                ["sudo", "tailscale", "cert", "--cert-file", cert_file, "--key-file", key_file, hostname],
+                capture_output=True,
+                text=True,
+                timeout=60
+            )
+            
+            if result.returncode != 0:
+                error_msg = result.stderr.strip() or result.stdout.strip() or "Unknown error"
+                return jsonify({"success": False, "error": error_msg}), 500
+            
+            # Verify files were created
+            if os.path.exists(cert_file) and os.path.exists(key_file):
+                return jsonify({
+                    "success": True,
+                    "cert_path": cert_file,
+                    "key_path": key_file,
+                    "message": "SSL certificates generated successfully. Restart the application to use HTTPS."
+                })
+            else:
+                return jsonify({"success": False, "error": "Certificate generation succeeded but files not found"}), 500
+                
+        except subprocess.TimeoutExpired:
+            return jsonify({"success": False, "error": "Certificate generation timed out"}), 500
+        except Exception as e:
+            return jsonify({"success": False, "error": str(e)}), 500
 
     def _has_git_error(output_text):
         if not output_text:
