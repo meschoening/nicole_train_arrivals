@@ -108,7 +108,7 @@ class WiFiSetupWindow(QMainWindow):
         
         # Outer vertical layout to control expansion
         outer_layout = QVBoxLayout()
-        outer_layout.setContentsMargins(40, 0, 40, 0)
+        outer_layout.setContentsMargins(40, 5, 40, 5)
         outer_layout.setSpacing(20)
         
         # Inner horizontal layout for two columns
