@@ -96,15 +96,16 @@ class WiFiSetupWindow(QMainWindow):
         return header
     
     def create_content_area(self):
-        """Create the main content area with status labels."""
+        """Create the main content area with status labels and manual connection."""
         content = QWidget()
         content.setStyleSheet("background-color: #f0f0f0;")
         
-        layout = QVBoxLayout()
+        # Main layout - horizontal for two columns
+        layout = QHBoxLayout()
         layout.setContentsMargins(40, 40, 40, 40)
         layout.setSpacing(20)
         
-        # Status container
+        # ===== LEFT COLUMN: Status Section =====
         status_container = QWidget()
         status_container.setStyleSheet("""
             background-color: #e8e8e8;
@@ -118,7 +119,7 @@ class WiFiSetupWindow(QMainWindow):
         status_row = QHBoxLayout()
         status_title = QLabel("Status:")
         status_title.setStyleSheet("font-family: Quicksand; font-size: 24px; font-weight: bold;")
-        status_title.setFixedWidth(200)
+        status_title.setFixedWidth(150)
         self.status_value = QLabel("Checking...")
         self.status_value.setStyleSheet("font-family: Quicksand; font-size: 24px;")
         status_row.addWidget(status_title)
@@ -130,7 +131,7 @@ class WiFiSetupWindow(QMainWindow):
         ap_row = QHBoxLayout()
         ap_title = QLabel("AP Name:")
         ap_title.setStyleSheet("font-family: Quicksand; font-size: 24px; font-weight: bold;")
-        ap_title.setFixedWidth(200)
+        ap_title.setFixedWidth(150)
         self.ap_name_value = QLabel("—")
         self.ap_name_value.setStyleSheet("font-family: Quicksand; font-size: 24px;")
         ap_row.addWidget(ap_title)
@@ -142,7 +143,7 @@ class WiFiSetupWindow(QMainWindow):
         ip_row = QHBoxLayout()
         ip_title = QLabel("IP Address:")
         ip_title.setStyleSheet("font-family: Quicksand; font-size: 24px; font-weight: bold;")
-        ip_title.setFixedWidth(200)
+        ip_title.setFixedWidth(150)
         self.ip_value = QLabel("—")
         self.ip_value.setStyleSheet("font-family: Quicksand; font-size: 24px;")
         ip_row.addWidget(ip_title)
@@ -157,27 +158,24 @@ class WiFiSetupWindow(QMainWindow):
         self.connection_result_label.hide()
         status_layout.addWidget(self.connection_result_label)
         
+        status_layout.addStretch()
         status_container.setLayout(status_layout)
-        layout.addWidget(status_container)
+        layout.addWidget(status_container, 1)  # stretch factor 1
         
-        # Manual Connection section
+        # ===== RIGHT COLUMN: Manual Connection Section =====
         manual_container = QWidget()
         manual_container.setStyleSheet("""
             background-color: #e8e8e8;
             border-radius: 10px;
         """)
-        manual_layout = QHBoxLayout()
+        manual_layout = QVBoxLayout()
         manual_layout.setContentsMargins(30, 30, 30, 30)
-        manual_layout.setSpacing(20)
-        
-        # Left side: dropdown and buttons
-        left_column = QVBoxLayout()
-        left_column.setSpacing(15)
+        manual_layout.setSpacing(15)
         
         # Section title
         manual_title = QLabel("Manual Connection")
         manual_title.setStyleSheet("font-family: Quicksand; font-size: 22px; font-weight: bold;")
-        left_column.addWidget(manual_title)
+        manual_layout.addWidget(manual_title)
         
         # Saved networks dropdown
         self.saved_networks_combo = QComboBox()
@@ -200,8 +198,7 @@ class WiFiSetupWindow(QMainWindow):
                 selection-background-color: #e0e0e0;
             }
         """)
-        self.saved_networks_combo.setMinimumWidth(280)
-        left_column.addWidget(self.saved_networks_combo)
+        manual_layout.addWidget(self.saved_networks_combo)
         
         # Refresh List button
         self.refresh_networks_button = QPushButton("Refresh List")
@@ -223,7 +220,7 @@ class WiFiSetupWindow(QMainWindow):
             }
         """)
         self.refresh_networks_button.clicked.connect(self.load_saved_networks)
-        left_column.addWidget(self.refresh_networks_button)
+        manual_layout.addWidget(self.refresh_networks_button)
         
         # Connect/Disconnect button
         self.connect_button = QPushButton("Connect to Network")
@@ -250,18 +247,12 @@ class WiFiSetupWindow(QMainWindow):
             }
         """)
         self.connect_button.clicked.connect(self.toggle_manual_connection)
-        left_column.addWidget(self.connect_button)
+        manual_layout.addWidget(self.connect_button)
         
-        left_column.addStretch()
-        manual_layout.addLayout(left_column)
-        
-        # Right side: Console output
-        right_column = QVBoxLayout()
-        right_column.setSpacing(10)
-        
+        # Console output
         console_title = QLabel("Connection Output")
         console_title.setStyleSheet("font-family: Quicksand; font-size: 18px; font-weight: bold;")
-        right_column.addWidget(console_title)
+        manual_layout.addWidget(console_title)
         
         self.connection_console = QPlainTextEdit()
         self.connection_console.setReadOnly(True)
@@ -276,15 +267,11 @@ class WiFiSetupWindow(QMainWindow):
                 padding: 10px;
             }
         """)
-        self.connection_console.setMinimumHeight(150)
-        right_column.addWidget(self.connection_console)
-        
-        manual_layout.addLayout(right_column, 1)  # stretch factor 1
+        self.connection_console.setMinimumHeight(120)
+        manual_layout.addWidget(self.connection_console, 1)  # stretch factor 1
         
         manual_container.setLayout(manual_layout)
-        layout.addWidget(manual_container)
-        
-        layout.addStretch()
+        layout.addWidget(manual_container, 1)  # stretch factor 1
         
         # Load saved networks on startup
         QTimer.singleShot(500, self.load_saved_networks)
