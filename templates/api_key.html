@@ -290,6 +290,26 @@
           copyBtn.onclick = copySSHKey;
           row2.appendChild(copyBtn);
 
+          // Add regenerate container with email input and button
+          const regenerateContainer = document.createElement('span');
+          regenerateContainer.className = 'regenerate-container';
+
+          const regenerateEmailInput = document.createElement('input');
+          regenerateEmailInput.type = 'email';
+          regenerateEmailInput.id = 'regenerateEmail';
+          regenerateEmailInput.className = 'regenerate-email-input';
+          regenerateEmailInput.placeholder = 'your@email.com';
+          regenerateContainer.appendChild(regenerateEmailInput);
+
+          const regenerateBtn = document.createElement('button');
+          regenerateBtn.type = 'button';
+          regenerateBtn.id = 'regenerateKeyBtn';
+          regenerateBtn.textContent = 'Regenerate SSH Keypair';
+          regenerateBtn.onclick = handleRegenerateClick;
+          regenerateContainer.appendChild(regenerateBtn);
+
+          row2.appendChild(regenerateContainer);
+
           existsDiv.appendChild(row1);
           existsDiv.appendChild(row2);
 
