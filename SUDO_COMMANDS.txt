@@ -36,6 +36,7 @@ sudo timedatectl set-timezone <timezone>
 ## SSL Certificate Generation (web_settings_server.py)
 
 sudo tailscale cert --cert-file <path> --key-file <path> <hostname>
+sudo chown <user> <cert_file> <key_file>
 
 ---
 
@@ -54,6 +55,7 @@ max ALL=(ALL) NOPASSWD: /usr/bin/killall hostapd
 max ALL=(ALL) NOPASSWD: /sbin/shutdown
 max ALL=(ALL) NOPASSWD: /usr/bin/timedatectl
 max ALL=(ALL) NOPASSWD: /usr/bin/tailscale cert *
+max ALL=(ALL) NOPASSWD: /bin/chown *
 ```
 
 Replace "max" with your application user.

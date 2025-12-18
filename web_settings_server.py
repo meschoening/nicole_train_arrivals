@@ -627,8 +627,16 @@ def start_web_settings_server(data_handler, host="0.0.0.0", port=443):
                 error_msg = result.stderr.strip() or result.stdout.strip() or "Unknown error"
                 return jsonify({"success": False, "error": error_msg}), 500
             
-            # Verify files were created
+            # Verify files were created and change ownership to current user
             if os.path.exists(cert_file) and os.path.exists(key_file):
+                # Change ownership of generated files to current user
+                import pwd
+                current_user = pwd.getpwuid(os.getuid()).pw_name
+                subprocess.run(
+                    ["sudo", "chown", current_user, cert_file, key_file],
+                    capture_output=True,
+                    timeout=10
+                )
                 return jsonify({
                     "success": True,
                     "cert_path": cert_file,
