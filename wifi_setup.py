@@ -100,10 +100,14 @@ class WiFiSetupWindow(QMainWindow):
         content = QWidget()
         content.setStyleSheet("background-color: #f0f0f0;")
         
-        # Main layout - horizontal for two columns
-        layout = QHBoxLayout()
-        layout.setContentsMargins(40, 40, 40, 40)
-        layout.setSpacing(20)
+        # Outer vertical layout to control expansion
+        outer_layout = QVBoxLayout()
+        outer_layout.setContentsMargins(40, 40, 40, 40)
+        outer_layout.setSpacing(20)
+        
+        # Inner horizontal layout for two columns
+        columns_layout = QHBoxLayout()
+        columns_layout.setSpacing(20)
         
         # ===== LEFT COLUMN: Status Section =====
         status_container = QWidget()
@@ -160,7 +164,7 @@ class WiFiSetupWindow(QMainWindow):
         
         status_layout.addStretch()
         status_container.setLayout(status_layout)
-        layout.addWidget(status_container, 1)  # stretch factor 1
+        columns_layout.addWidget(status_container, 1)  # stretch factor 1
         
         # ===== RIGHT COLUMN: Manual Connection Section =====
         manual_container = QWidget()
@@ -271,12 +275,16 @@ class WiFiSetupWindow(QMainWindow):
         manual_layout.addWidget(self.connection_console, 1)  # stretch factor 1
         
         manual_container.setLayout(manual_layout)
-        layout.addWidget(manual_container, 1)  # stretch factor 1
+        columns_layout.addWidget(manual_container, 1)  # stretch factor 1
+        
+        # Add the columns to the outer layout
+        outer_layout.addLayout(columns_layout)
+        outer_layout.addStretch()  # Push content up, keep footer at bottom
         
         # Load saved networks on startup
         QTimer.singleShot(500, self.load_saved_networks)
         
-        content.setLayout(layout)
+        content.setLayout(outer_layout)
         return content
     
     def create_footer_bar(self):
