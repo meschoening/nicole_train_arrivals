@@ -394,9 +394,9 @@ class WiFiSetupWindow(QMainWindow):
                                 break
                 
                 if connected:
-                    self.status_value.setText(f"Connected ({connection_name})")
+                    self.status_value.setText("Connected")
                     self.status_value.setStyleSheet("font-family: Quicksand; font-size: 24px; color: #4CAF50;")
-                    self.ap_name_value.setText("—")
+                    self.ap_name_value.setText(connection_name if connection_name else "—")
                     # Get current IP
                     ip = self.get_current_ip()
                     self.ip_value.setText(ip if ip else "—")
@@ -767,19 +767,46 @@ class WiFiSetupWindow(QMainWindow):
             import time
             time.sleep(2)
             
-            # Wait for NetworkManager to auto-connect to a saved network (5 seconds with countdown)
-            for remaining in range(5, 0, -1):
-                # Get current text block, update countdown on same line
+            # Wait for NetworkManager to auto-connect to a saved network (5 seconds max with polling)
+            max_wait = 5  # seconds
+            poll_interval = 0.5  # seconds
+            waited = 0
+            connected = False
+            
+            while waited < max_wait:
+                remaining = int(max_wait - waited)
+                
+                # Update countdown display on same line
                 cursor = self.connection_console.textCursor()
                 cursor.movePosition(cursor.End)
-                # Clear last line if it's a countdown
                 cursor.select(cursor.LineUnderCursor)
                 if cursor.selectedText().startswith("Waiting for connection"):
                     cursor.removeSelectedText()
                     cursor.deletePreviousChar()  # Remove newline
                 self.connection_console.appendPlainText(f"Waiting for connection... {remaining}s")
                 QApplication.processEvents()
-                time.sleep(1)
+                
+                # Check if WiFi is connected
+                try:
+                    result = subprocess.run(
+                        ["nmcli", "-t", "-f", "TYPE,STATE", "device"],
+                        capture_output=True,
+                        text=True,
+                        timeout=2
+                    )
+                    if result.returncode == 0:
+                        for line in result.stdout.strip().split('\n'):
+                            if line.startswith('wifi:') and ':connected' in line.lower():
+                                connected = True
+                                break
+                except Exception:
+                    pass
+                
+                if connected:
+                    break
+                
+                time.sleep(poll_interval)
+                waited += poll_interval
             
             self.is_broadcasting = False
             self.broadcast_button.setText("Broadcast Setup Network")

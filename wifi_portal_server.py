@@ -131,6 +131,33 @@ def start_wifi_portal_server(host="0.0.0.0", port=80):
             )
             
             if result.returncode == 0:
+                # Wait for NetworkManager to fully persist the connection
+                # before returning success. This prevents race conditions
+                # where the frontend requests saved networks before it's visible.
+                import time
+                max_wait = 5  # seconds
+                poll_interval = 0.2  # seconds
+                waited = 0
+                connection_visible = False
+                
+                while waited < max_wait:
+                    check_result = subprocess.run(
+                        ["nmcli", "-t", "-f", "NAME,TYPE", "connection", "show"],
+                        capture_output=True,
+                        text=True,
+                        timeout=5
+                    )
+                    if check_result.returncode == 0:
+                        for line in check_result.stdout.strip().split('\n'):
+                            parts = line.split(':')
+                            if len(parts) >= 2 and parts[0] == ssid and parts[1] == "802-11-wireless":
+                                connection_visible = True
+                                break
+                    if connection_visible:
+                        break
+                    time.sleep(poll_interval)
+                    waited += poll_interval
+                
                 return jsonify({
                     "success": True, 
                     "message": f"Network '{ssid}' saved. Stop broadcasting to connect."
