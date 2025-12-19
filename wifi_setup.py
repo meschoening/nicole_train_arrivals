@@ -198,15 +198,16 @@ class WiFiSetupWindow(QMainWindow):
                 font-size: 18px;
                 font-weight: bold;
                 padding: 10px 25px;
-                background-color: #e0e0e0;
+                background-color: #4CAF50;
+                color: white;
                 border: none;
                 border-radius: 5px;
             }
             QPushButton:hover {
-                background-color: #d0d0d0;
+                background-color: #45a049;
             }
             QPushButton:pressed {
-                background-color: #c0c0c0;
+                background-color: #3d8b40;
                 padding-bottom: 9px;
             }
         """)
