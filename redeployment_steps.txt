@@ -33,6 +33,12 @@ Run following commands to install Python addon packages:
     apt install python3-pyqt5 python3-requests python3-pandas python3-flask git openssh-client openbox xserver-xorg-legacy dnsmasq hostapd
     setcap 'cap_net_bind_service=+ep' $(readlink -f $(which python3))
 
+Setup provisioning mode config:
+    nano /etc/dnmasq.d/provisioning.conf
+        interface=wlan0
+        dhcp-range=192.168.4.10,192.168.4.50,255.255.255.0,12h
+
+
 Make new sudo user:
     useradd -m max
     chsh -s /usr/bin/bash max

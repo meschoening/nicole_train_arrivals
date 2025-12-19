@@ -186,7 +186,7 @@ class WiFiSetupWindow(QMainWindow):
         status_layout.addLayout(ip_row)
         
         # Broadcast button right under IP Address
-        self.broadcast_button = QPushButton("Broadcast Config Network")
+        self.broadcast_button = QPushButton("Broadcast Setup Network")
         self.broadcast_button.setStyleSheet("""
             QPushButton {
                 font-family: Quicksand;
@@ -696,7 +696,7 @@ class WiFiSetupWindow(QMainWindow):
             self.start_portal_server()
             
             self.is_broadcasting = True
-            self.broadcast_button.setText("Close Config Network")
+            self.broadcast_button.setText("Close Setup Network")
             self.broadcast_button.setEnabled(True)
             
             # Hide any previous connection result
@@ -711,7 +711,7 @@ class WiFiSetupWindow(QMainWindow):
         except Exception as e:
             print(f"Error starting broadcast: {e}")
             self.connection_console.appendPlainText(f"\n✗ Error: {e}")
-            self.broadcast_button.setText("Broadcast Config Network")
+            self.broadcast_button.setText("Broadcast Setup Network")
             self.broadcast_button.setEnabled(True)
             self.connection_result_label.setText(f"Error starting broadcast: {e}")
             self.connection_result_label.setStyleSheet("font-family: Quicksand; font-size: 20px; color: #cc0000;")
@@ -767,15 +767,22 @@ class WiFiSetupWindow(QMainWindow):
             import time
             time.sleep(2)
             
-            # Wait for NetworkManager to auto-connect to a saved network (10 seconds with countdown)
-            self.connection_console.appendPlainText("Waiting for connection...")
-            for remaining in range(10, 0, -1):
-                self.connection_console.appendPlainText(f"  {remaining}s remaining...")
+            # Wait for NetworkManager to auto-connect to a saved network (5 seconds with countdown)
+            for remaining in range(5, 0, -1):
+                # Get current text block, update countdown on same line
+                cursor = self.connection_console.textCursor()
+                cursor.movePosition(cursor.End)
+                # Clear last line if it's a countdown
+                cursor.select(cursor.LineUnderCursor)
+                if cursor.selectedText().startswith("Waiting for connection"):
+                    cursor.removeSelectedText()
+                    cursor.deletePreviousChar()  # Remove newline
+                self.connection_console.appendPlainText(f"Waiting for connection... {remaining}s")
                 QApplication.processEvents()
                 time.sleep(1)
             
             self.is_broadcasting = False
-            self.broadcast_button.setText("Broadcast Config Network")
+            self.broadcast_button.setText("Broadcast Setup Network")
             self.broadcast_button.setEnabled(True)
             
             # Check connection result
@@ -796,7 +803,7 @@ class WiFiSetupWindow(QMainWindow):
             print(f"Error stopping broadcast: {e}")
             self.connection_console.appendPlainText(f"\n✗ Error: {e}")
             self.is_broadcasting = False
-            self.broadcast_button.setText("Broadcast")
+            self.broadcast_button.setText("Broadcast Setup Network")
             self.broadcast_button.setEnabled(True)
             self.connection_result_label.setText(f"Error stopping broadcast: {e}")
             self.connection_result_label.setStyleSheet("font-family: Quicksand; font-size: 20px; color: #cc0000;")

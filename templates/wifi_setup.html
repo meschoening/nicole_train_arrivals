@@ -225,7 +225,7 @@
         </div>
 
         <div class="section" style="background: #fff3cd; border: 1px solid #ffc107;">
-            <strong>Note:</strong> After saving a network, tap "Stop Broadcasting" on the device screen to connect to
+            <strong>Note:</strong> After saving a network, tap "Close Setup Network" on the device screen to connect to
             the configured network.
         </div>
     </div>
@@ -254,15 +254,7 @@
                 const data = await resp.json();
 
                 if (data.success && data.networks.length > 0) {
-                    list.innerHTML = data.networks.map(n => `
-              <li class="network-item" onclick="selectNetwork('${escapeHtml(n.ssid)}')">
-                <div>
-                  <div class="network-name">${escapeHtml(n.ssid)}</div>
-                  <div class="network-security">${escapeHtml(n.security) || 'Open'}</div>
-                </div>
-                <div class="network-signal">${n.signal}%</div>
-              </li>
-            `).join('');
+                    renderNetworkList(data.networks);
                 } else if (data.success) {
                     list.innerHTML = '<li class="network-item">No networks found</li>';
                 } else {
@@ -276,6 +268,57 @@
 
             btn.disabled = false;
             btn.textContent = 'Scan for Networks';
+        }
+
+        // Render the network list with expand/collapse
+        function renderNetworkList(networks) {
+            const list = document.getElementById('networkList');
+            const maxVisible = 5;
+            const hasMore = networks.length > maxVisible;
+
+            let html = networks.slice(0, maxVisible).map(n => `
+              <li class="network-item" onclick="selectNetwork('${escapeHtml(n.ssid)}')">
+                <div>
+                  <div class="network-name">${escapeHtml(n.ssid)}</div>
+                  <div class="network-security">${escapeHtml(n.security) || 'Open'}</div>
+                </div>
+                <div class="network-signal">${n.signal}%</div>
+              </li>
+            `).join('');
+
+            if (hasMore) {
+                // Hidden networks
+                html += `<div id="hiddenNetworks" style="display: none;">`;
+                html += networks.slice(maxVisible).map(n => `
+                  <li class="network-item" onclick="selectNetwork('${escapeHtml(n.ssid)}')">
+                    <div>
+                      <div class="network-name">${escapeHtml(n.ssid)}</div>
+                      <div class="network-security">${escapeHtml(n.security) || 'Open'}</div>
+                    </div>
+                    <div class="network-signal">${n.signal}%</div>
+                  </li>
+                `).join('');
+                html += `</div>`;
+                html += `<li class="network-item" id="showMoreBtn" onclick="toggleNetworkList()" style="justify-content: center; cursor: pointer; color: #2196F3;">
+                    Show ${networks.length - maxVisible} more networks
+                </li>`;
+            }
+
+            list.innerHTML = html;
+        }
+
+        // Toggle showing all networks
+        function toggleNetworkList() {
+            const hidden = document.getElementById('hiddenNetworks');
+            const btn = document.getElementById('showMoreBtn');
+
+            if (hidden.style.display === 'none') {
+                hidden.style.display = 'block';
+                btn.innerHTML = 'Show less';
+            } else {
+                hidden.style.display = 'none';
+                btn.innerHTML = btn.dataset.originalText || 'Show more networks';
+            }
         }
 
         // Select a network from the list
