@@ -135,7 +135,11 @@ class WiFiSetupWindow(QMainWindow):
         columns_layout = QHBoxLayout()
         columns_layout.setSpacing(20)
         
-        # ===== LEFT COLUMN: Status Section =====
+        # ===== LEFT COLUMN: Two stacked boxes =====
+        left_column_layout = QVBoxLayout()
+        left_column_layout.setSpacing(20)
+        
+        # --- Status Box ---
         status_container = QWidget()
         status_container.setStyleSheet("""
             background-color: #e8e8e8;
@@ -181,16 +185,7 @@ class WiFiSetupWindow(QMainWindow):
         ip_row.addStretch()
         status_layout.addLayout(ip_row)
         
-        # Connection result (shown after stopping broadcast)
-        self.connection_result_label = QLabel("")
-        self.connection_result_label.setStyleSheet("font-family: Quicksand; font-size: 20px; color: #666;")
-        self.connection_result_label.setWordWrap(True)
-        self.connection_result_label.hide()
-        status_layout.addWidget(self.connection_result_label)
-        
-        status_layout.addStretch()
-        
-        # Broadcast button at bottom of left column
+        # Broadcast button right under IP Address
         self.broadcast_button = QPushButton("Broadcast Config Network")
         self.broadcast_button.setStyleSheet("""
             QPushButton {
@@ -215,10 +210,17 @@ class WiFiSetupWindow(QMainWindow):
         self.broadcast_button.clicked.connect(self.toggle_broadcast)
         status_layout.addWidget(self.broadcast_button)
         
-        status_container.setLayout(status_layout)
-        columns_layout.addWidget(status_container, 1)  # stretch factor 1
+        # Connection result (shown after stopping broadcast)
+        self.connection_result_label = QLabel("")
+        self.connection_result_label.setStyleSheet("font-family: Quicksand; font-size: 20px; color: #666;")
+        self.connection_result_label.setWordWrap(True)
+        self.connection_result_label.hide()
+        status_layout.addWidget(self.connection_result_label)
         
-        # ===== RIGHT COLUMN: Manual Connection Section =====
+        status_container.setLayout(status_layout)
+        left_column_layout.addWidget(status_container)
+        
+        # --- Manual Connection Box ---
         manual_container = QWidget()
         manual_container.setStyleSheet("""
             background-color: #e8e8e8;
@@ -256,6 +258,10 @@ class WiFiSetupWindow(QMainWindow):
         """)
         manual_layout.addWidget(self.saved_networks_combo)
         
+        # Buttons row (Refresh and Connect side by side)
+        buttons_row = QHBoxLayout()
+        buttons_row.setSpacing(10)
+        
         # Refresh List button
         self.refresh_networks_button = QPushButton("Refresh List")
         self.refresh_networks_button.setStyleSheet("""
@@ -276,7 +282,7 @@ class WiFiSetupWindow(QMainWindow):
             }
         """)
         self.refresh_networks_button.clicked.connect(self.load_saved_networks)
-        manual_layout.addWidget(self.refresh_networks_button)
+        buttons_row.addWidget(self.refresh_networks_button)
         
         # Connect/Disconnect button
         self.connect_button = QPushButton("Connect to Network")
@@ -303,10 +309,34 @@ class WiFiSetupWindow(QMainWindow):
             }
         """)
         self.connect_button.clicked.connect(self.toggle_manual_connection)
-        manual_layout.addWidget(self.connect_button)
+        buttons_row.addWidget(self.connect_button)
         
-        # Console output
+        manual_layout.addLayout(buttons_row)
         
+        manual_container.setLayout(manual_layout)
+        left_column_layout.addWidget(manual_container)
+        
+        # Add stretch at bottom to push boxes to top
+        left_column_layout.addStretch()
+        
+        columns_layout.addLayout(left_column_layout, 1)  # stretch factor 1
+        
+        # ===== RIGHT COLUMN: Console Output Section =====
+        console_container = QWidget()
+        console_container.setStyleSheet("""
+            background-color: #e8e8e8;
+            border-radius: 10px;
+        """)
+        console_layout = QVBoxLayout()
+        console_layout.setContentsMargins(30, 30, 30, 30)
+        console_layout.setSpacing(15)
+        
+        # Console Output label
+        console_title = QLabel("Console Output:")
+        console_title.setStyleSheet("font-family: Quicksand; font-size: 22px; font-weight: bold;")
+        console_layout.addWidget(console_title)
+        
+        # Console output (fills remaining space)
         self.connection_console = QPlainTextEdit()
         self.connection_console.setReadOnly(True)
         self.connection_console.setStyleSheet("""
@@ -320,15 +350,13 @@ class WiFiSetupWindow(QMainWindow):
                 padding: 10px;
             }
         """)
-        manual_layout.addWidget(self.connection_console, 1)  # stretch factor 1
+        console_layout.addWidget(self.connection_console, 1)  # stretch factor 1
         
-        manual_container.setLayout(manual_layout)
-        columns_layout.addWidget(manual_container, 1)  # stretch factor 1
+        console_container.setLayout(console_layout)
+        columns_layout.addWidget(console_container, 1)  # stretch factor 1
         
-        # Add the columns to the outer layout with stretches above and below for vertical centering
-        outer_layout.addStretch()  # Space above
-        outer_layout.addLayout(columns_layout)
-        outer_layout.addStretch()  # Space below
+        # Add the columns to the outer layout
+        outer_layout.addLayout(columns_layout, 1)  # stretch factor 1 to fill height
         
         # Load saved networks on startup
         QTimer.singleShot(500, self.load_saved_networks)
@@ -488,7 +516,8 @@ class WiFiSetupWindow(QMainWindow):
         self.connect_button.setEnabled(False)
         self.connect_button.setText("Disconnecting...")
         
-        self.connection_console.appendPlainText("\n$ nmcli device disconnect wlan0")
+        self.connection_console.clear()
+        self.connection_console.appendPlainText("$ nmcli device disconnect wlan0")
         self.connection_console.appendPlainText("Disconnecting...")
         
         # Use QProcess for async execution
@@ -610,6 +639,10 @@ class WiFiSetupWindow(QMainWindow):
     def start_broadcasting(self):
         """Start AP mode and captive portal."""
         try:
+            # Clear console and start logging
+            self.connection_console.clear()
+            self.connection_console.appendPlainText("Starting Access Point...")
+            
             self.broadcast_button.setEnabled(False)
             self.broadcast_button.setText("Starting Access Point...")
             QApplication.processEvents()
@@ -619,33 +652,47 @@ class WiFiSetupWindow(QMainWindow):
             hostapd_conf = os.path.join(script_dir, "hostapd_provisioning.conf")
             
             # Step 1: Disconnect from any existing WiFi connection
+            self.connection_console.appendPlainText("$ sudo nmcli device disconnect wlan0")
+            QApplication.processEvents()
             subprocess.run(["sudo", "nmcli", "device", "disconnect", "wlan0"], 
                           capture_output=True, timeout=10)
             
             # Step 2: Set static IP on wlan0
+            self.connection_console.appendPlainText("$ sudo ip addr flush dev wlan0")
+            QApplication.processEvents()
             subprocess.run([
                 "sudo", "ip", "addr", "flush", "dev", "wlan0"
             ], capture_output=True, timeout=5)
             
+            self.connection_console.appendPlainText("$ sudo ip addr add 192.168.4.1/24 dev wlan0")
+            QApplication.processEvents()
             subprocess.run([
                 "sudo", "ip", "addr", "add", "192.168.4.1/24", "dev", "wlan0"
             ], capture_output=True, timeout=5)
             
+            self.connection_console.appendPlainText("$ sudo ip link set wlan0 up")
+            QApplication.processEvents()
             subprocess.run([
                 "sudo", "ip", "link", "set", "wlan0", "up"
             ], capture_output=True, timeout=5)
             
             # Step 3: Start dnsmasq
+            self.connection_console.appendPlainText("$ sudo systemctl start dnsmasq")
+            QApplication.processEvents()
             subprocess.run([
                 "sudo", "systemctl", "start", "dnsmasq"
             ], capture_output=True, timeout=10)
             
             # Step 4: Start hostapd with our config
+            self.connection_console.appendPlainText(f"$ sudo hostapd -B {hostapd_conf}")
+            QApplication.processEvents()
             subprocess.run([
                 "sudo", "hostapd", "-B", hostapd_conf
             ], capture_output=True, timeout=10)
             
             # Step 5: Start Flask captive portal
+            self.connection_console.appendPlainText("Starting captive portal server...")
+            QApplication.processEvents()
             self.start_portal_server()
             
             self.is_broadcasting = True
@@ -655,10 +702,15 @@ class WiFiSetupWindow(QMainWindow):
             # Hide any previous connection result
             self.connection_result_label.hide()
             
+            self.connection_console.appendPlainText("\n✓ Access Point started successfully!")
+            self.connection_console.appendPlainText("SSID: NicoleTrains-Setup")
+            self.connection_console.appendPlainText("IP: 192.168.4.1")
+            
             self.update_status_labels()
             
         except Exception as e:
             print(f"Error starting broadcast: {e}")
+            self.connection_console.appendPlainText(f"\n✗ Error: {e}")
             self.broadcast_button.setText("Broadcast Config Network")
             self.broadcast_button.setEnabled(True)
             self.connection_result_label.setText(f"Error starting broadcast: {e}")
@@ -668,38 +720,57 @@ class WiFiSetupWindow(QMainWindow):
     def stop_broadcasting(self):
         """Stop AP mode and attempt to reconnect to WiFi."""
         try:
+            # Clear console and start logging
+            self.connection_console.clear()
+            self.connection_console.appendPlainText("Shutting down Access Point...")
+            
             self.broadcast_button.setEnabled(False)
             self.broadcast_button.setText("Shutting Down...")
             QApplication.processEvents()
             
             # Step 1: Stop Flask portal
+            self.connection_console.appendPlainText("Stopping captive portal server...")
+            QApplication.processEvents()
             self.stop_portal_server()
             
             # Step 2: Stop hostapd
+            self.connection_console.appendPlainText("$ sudo killall hostapd")
+            QApplication.processEvents()
             subprocess.run([
                 "sudo", "killall", "hostapd"
             ], capture_output=True, timeout=10)
             
             # Step 3: Stop dnsmasq
+            self.connection_console.appendPlainText("$ sudo systemctl stop dnsmasq")
+            QApplication.processEvents()
             subprocess.run([
                 "sudo", "systemctl", "stop", "dnsmasq"
             ], capture_output=True, timeout=10)
             
             # Step 4: Flush IP and return interface to managed mode
+            self.connection_console.appendPlainText("$ sudo ip addr flush dev wlan0")
+            QApplication.processEvents()
             subprocess.run([
                 "sudo", "ip", "addr", "flush", "dev", "wlan0"
             ], capture_output=True, timeout=5)
             
             # Step 5: Restart NetworkManager to take control
+            self.connection_console.appendPlainText("$ sudo systemctl restart NetworkManager")
+            QApplication.processEvents()
             subprocess.run([
                 "sudo", "systemctl", "restart", "NetworkManager"
             ], capture_output=True, timeout=15)
             
             # Wait a moment for NetworkManager to initialize
+            self.connection_console.appendPlainText("Waiting for NetworkManager to initialize...")
+            QApplication.processEvents()
             import time
             time.sleep(2)
             
             # Step 6: Try to auto-connect to a saved network
+            self.connection_console.appendPlainText("$ nmcli device wifi connect")
+            self.connection_console.appendPlainText("Attempting to connect to saved network...")
+            QApplication.processEvents()
             result = subprocess.run([
                 "nmcli", "device", "wifi", "connect"
             ], capture_output=True, text=True, timeout=30)
@@ -713,15 +784,18 @@ class WiFiSetupWindow(QMainWindow):
             
             # Show result message
             if self.status_value.text().startswith("Connected"):
+                self.connection_console.appendPlainText("\n✓ Successfully connected to WiFi network!")
                 self.connection_result_label.setText("Successfully connected to WiFi network.")
                 self.connection_result_label.setStyleSheet("font-family: Quicksand; font-size: 20px; color: #4CAF50;")
             else:
+                self.connection_console.appendPlainText("\n✗ Could not connect to a WiFi network.")
                 self.connection_result_label.setText("Could not connect to a WiFi network. Check saved networks or try broadcasting again.")
                 self.connection_result_label.setStyleSheet("font-family: Quicksand; font-size: 20px; color: #cc0000;")
             self.connection_result_label.show()
             
         except Exception as e:
             print(f"Error stopping broadcast: {e}")
+            self.connection_console.appendPlainText(f"\n✗ Error: {e}")
             self.is_broadcasting = False
             self.broadcast_button.setText("Broadcast")
             self.broadcast_button.setEnabled(True)
