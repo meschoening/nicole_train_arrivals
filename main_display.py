@@ -783,7 +783,7 @@ class MainWindow(QMainWindow):
             if conn_result.returncode == 0:
                 for line in conn_result.stdout.strip().split('\n'):
                     print(f"[WiFi Check] Checking line: {line}")
-                    if line.startswith('wifi:') and 'connected' in line.lower():
+                    if line.startswith('wifi:') and ':connected' in line.lower():
                         print(f"[WiFi Check] Found connected WiFi! Returning True")
                         return True
             print("[WiFi Check] No connected WiFi found, returning False")
