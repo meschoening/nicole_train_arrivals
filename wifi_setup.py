@@ -767,13 +767,12 @@ class WiFiSetupWindow(QMainWindow):
             import time
             time.sleep(2)
             
-            # Step 6: Try to auto-connect to a saved network
-            self.connection_console.appendPlainText("$ nmcli device wifi connect")
-            self.connection_console.appendPlainText("Attempting to connect to saved network...")
-            QApplication.processEvents()
-            result = subprocess.run([
-                "nmcli", "device", "wifi", "connect"
-            ], capture_output=True, text=True, timeout=30)
+            # Wait for NetworkManager to auto-connect to a saved network (10 seconds with countdown)
+            self.connection_console.appendPlainText("Waiting for connection...")
+            for remaining in range(10, 0, -1):
+                self.connection_console.appendPlainText(f"  {remaining}s remaining...")
+                QApplication.processEvents()
+                time.sleep(1)
             
             self.is_broadcasting = False
             self.broadcast_button.setText("Broadcast Config Network")
@@ -789,7 +788,7 @@ class WiFiSetupWindow(QMainWindow):
                 self.connection_result_label.setStyleSheet("font-family: Quicksand; font-size: 20px; color: #4CAF50;")
             else:
                 self.connection_console.appendPlainText("\n✗ Could not connect to a WiFi network.")
-                self.connection_result_label.setText("Could not connect to a WiFi network. Check saved networks or try broadcasting again.")
+                self.connection_result_label.setText("Could not connect to a WiFi network.")
                 self.connection_result_label.setStyleSheet("font-family: Quicksand; font-size: 20px; color: #cc0000;")
             self.connection_result_label.show()
             

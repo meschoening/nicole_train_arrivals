@@ -30,7 +30,7 @@ Install tailscale for remote access:
     curl -fsSL https://tailscale.com/install.sh | sh
 
 Run following commands to install Python addon packages:
-    apt install python3-pyqt5 python3-requests python3-pandas python3-flask git openssh-client openbox xserver-xorg-legacy
+    apt install python3-pyqt5 python3-requests python3-pandas python3-flask git openssh-client openbox xserver-xorg-legacy dnsmasq hostapd
     setcap 'cap_net_bind_service=+ep' $(readlink -f $(which python3))
 
 Make new sudo user:
