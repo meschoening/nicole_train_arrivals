@@ -702,8 +702,20 @@ class WiFiSetupWindow(QMainWindow):
             # Hide any previous connection result
             self.connection_result_label.hide()
             
+            # Read the hotspot password from config file
+            hotspot_password = ""
+            try:
+                with open(hostapd_conf, 'r') as f:
+                    for line in f:
+                        if line.startswith('wpa_passphrase='):
+                            hotspot_password = line.strip().split('=', 1)[1]
+                            break
+            except Exception:
+                hotspot_password = "(unknown)"
+            
             self.connection_console.appendPlainText("\n✓ Access Point started successfully!")
             self.connection_console.appendPlainText("SSID: NicoleTrains-Setup")
+            self.connection_console.appendPlainText(f"Password: {hotspot_password}" if hotspot_password else "Password: (none - open network)")
             self.connection_console.appendPlainText("IP: 192.168.4.1")
             
             self.update_status_labels()
