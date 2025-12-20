@@ -342,6 +342,10 @@
             const form = document.getElementById('connectForm');
             form.classList.add('loading');
 
+            // Clear fields immediately
+            document.getElementById('ssid').value = '';
+            document.getElementById('password').value = '';
+
             try {
                 const resp = await fetch('/api/connect', {
                     method: 'POST',
@@ -352,8 +356,6 @@
 
                 if (data.success) {
                     showStatus(data.message, 'success');
-                    document.getElementById('ssid').value = '';
-                    document.getElementById('password').value = '';
                     loadSavedNetworks();
                 } else {
                     showStatus('Error: ' + data.error, 'error');
