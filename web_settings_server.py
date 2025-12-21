@@ -267,6 +267,51 @@ def start_web_settings_server(data_handler, host="0.0.0.0", port=443):
         config = config_handler.load_config()
         return config.get("title_text", "Nicole's Train Tracker!")
 
+    def _check_for_updates():
+        """
+        Check if git updates are available by comparing local and remote HEADs.
+        Returns True if updates are available, False otherwise.
+        Does NOT run git fetch - relies on fetch having been run recently (by the display app).
+        """
+        cwd = os.path.dirname(os.path.abspath(__file__))
+        
+        try:
+            # Get local HEAD
+            local_result = subprocess.run(
+                ["git", "rev-parse", "HEAD"],
+                cwd=cwd,
+                capture_output=True,
+                text=True,
+                timeout=5
+            )
+            
+            if local_result.returncode != 0:
+                return False
+            
+            local_head = local_result.stdout.strip()
+            
+            # Get remote HEAD (try origin/main first, then origin/master)
+            remote_head = None
+            for branch in ["origin/main", "origin/master"]:
+                remote_result = subprocess.run(
+                    ["git", "rev-parse", branch],
+                    cwd=cwd,
+                    capture_output=True,
+                    text=True,
+                    timeout=5
+                )
+                if remote_result.returncode == 0:
+                    remote_head = remote_result.stdout.strip()
+                    break
+            
+            if remote_head is None:
+                return False
+            
+            return local_head != remote_head
+            
+        except Exception:
+            return False
+
     @app.get("/messages")
     def get_messages():
         config = message_handler.load_messages()
@@ -335,7 +380,14 @@ def start_web_settings_server(data_handler, host="0.0.0.0", port=443):
 
     @app.get("/")
     def index():
-        return render_template("index.html", device_ip=_get_device_ip(), tailscale_address=_get_tailscale_address(), ssl_enabled=_ssl_enabled, display_name=_get_display_name())
+        return render_template(
+            "index.html",
+            device_ip=_get_device_ip(),
+            tailscale_address=_get_tailscale_address(),
+            ssl_enabled=_ssl_enabled,
+            display_name=_get_display_name(),
+            update_available=_check_for_updates()
+        )
 
     @app.get("/update")
     def get_update():
