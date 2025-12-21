@@ -1682,7 +1682,19 @@ class MainWindow(QMainWindow):
         
         # Position the popout above the Update button
         button_pos = self.update_button.mapTo(self.settings_page, self.update_button.rect().topLeft())
+        button_right = self.update_button.mapTo(self.settings_page, self.update_button.rect().topRight())
+        
+        # Default: align left edge of popout with left edge of button
         popout_x = button_pos.x()
+        
+        # Check if popout would extend past the right edge of the settings page
+        popout_right_edge = popout_x + self.update_popout.width()
+        page_width = self.settings_page.width()
+        
+        if popout_right_edge > page_width - 20:  # 20px margin from edge
+            # Shift the popout left so its right edge aligns with button's right edge
+            popout_x = button_right.x() - self.update_popout.width()
+        
         popout_y = button_pos.y() - self.update_popout.height() - 10  # 10px gap above button
         
         self.update_popout.move(popout_x, popout_y)
@@ -2841,7 +2853,7 @@ class MainWindow(QMainWindow):
         self.clock_timer.start(1000)
         
         # Create update notification label (initially hidden)
-        self.update_notification_label = QLabel("Update Available ↓")
+        self.update_notification_label = QLabel("Update Available")
         self.update_notification_label.setStyleSheet("""
             font-family: Quicksand;
             font-size: 14px;
