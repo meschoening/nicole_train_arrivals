@@ -499,7 +499,7 @@ class WiFiSetupWindow(QMainWindow):
         """)
         
         self.connection_console.clear()
-        self.connection_console.appendPlainText(f"$ nmcli connection up \"{selected}\"")
+        self.connection_console.appendPlainText(f"$ sudo nmcli connection up \"{selected}\"")
         self.connection_console.appendPlainText("Connecting...")
         
         # Use QProcess for async execution
@@ -508,7 +508,7 @@ class WiFiSetupWindow(QMainWindow):
         self.connection_process.readyReadStandardError.connect(self.on_connection_error)
         self.connection_process.finished.connect(self.on_connection_finished)
         
-        self.connection_process.start("nmcli", ["connection", "up", selected])
+        self.connection_process.start("sudo", ["nmcli", "connection", "up", selected])
     
     def disconnect_network(self):
         """Disconnect from the current WiFi network."""
@@ -517,7 +517,7 @@ class WiFiSetupWindow(QMainWindow):
         self.connect_button.setText("Disconnecting...")
         
         self.connection_console.clear()
-        self.connection_console.appendPlainText("$ nmcli device disconnect wlan0")
+        self.connection_console.appendPlainText("$ sudo nmcli device disconnect wlan0")
         self.connection_console.appendPlainText("Disconnecting...")
         
         # Use QProcess for async execution
@@ -526,7 +526,7 @@ class WiFiSetupWindow(QMainWindow):
         self.connection_process.readyReadStandardError.connect(self.on_connection_error)
         self.connection_process.finished.connect(self.on_disconnect_finished)
         
-        self.connection_process.start("nmcli", ["device", "disconnect", "wlan0"])
+        self.connection_process.start("sudo", ["nmcli", "device", "disconnect", "wlan0"])
     
     def on_connection_output(self):
         """Handle stdout from connection process."""
@@ -778,6 +778,15 @@ class WiFiSetupWindow(QMainWindow):
             QApplication.processEvents()
             import time
             time.sleep(2)
+            
+            # Explicitly request connection to a saved WiFi network
+            # This is needed because the earlier "nmcli device disconnect" is remembered
+            # by NetworkManager as a user-requested disconnect, preventing auto-reconnect
+            self.connection_console.appendPlainText("$ sudo nmcli connection up ifname wlan0")
+            QApplication.processEvents()
+            subprocess.run([
+                "sudo", "nmcli", "--wait", "5", "connection", "up", "ifname", "wlan0"
+            ], capture_output=True, timeout=10)
             
             # Wait for NetworkManager to auto-connect to a saved network (5 seconds max with polling)
             max_wait = 5  # seconds
