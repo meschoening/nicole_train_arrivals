@@ -3329,6 +3329,28 @@ class MainWindow(QMainWindow):
         self.ip_button.installEventFilter(self)
         left_buttons_layout.addWidget(self.ip_button, alignment=Qt.AlignBottom)
         
+        self.wifi_button = QPushButton("WiFi")
+        self.wifi_button.setStyleSheet("""
+            QPushButton {
+                font-family: Quicksand;
+                font-size: 20px;
+                font-weight: bold;
+                padding: 8px 12px;
+                background-color: #e0e0e0;
+                border: none;
+                border-radius: 5px;
+            }
+            QPushButton:hover {
+                background-color: #d0d0d0;
+            }
+            QPushButton:pressed {
+                background-color: #c0c0c0;
+                padding-bottom: 7px;
+            }
+        """)
+        self.wifi_button.clicked.connect(self.launch_wifi_setup)
+        left_buttons_layout.addWidget(self.wifi_button, alignment=Qt.AlignBottom)
+        
         self.update_button = QPushButton("Update")
         self.update_button.setStyleSheet("""
             QPushButton {
@@ -3351,6 +3373,7 @@ class MainWindow(QMainWindow):
         """)
         self.update_button.clicked.connect(self.on_update_button_clicked)
         left_buttons_layout.addWidget(self.update_button, alignment=Qt.AlignBottom)
+
         
         bottom_row_layout.addLayout(left_buttons_layout)
         bottom_row_layout.addStretch()
