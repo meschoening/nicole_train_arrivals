@@ -221,6 +221,23 @@ def start_web_settings_server(data_handler, host="0.0.0.0", port=443):
         except (subprocess.TimeoutExpired, subprocess.SubprocessError, json.JSONDecodeError, KeyError, FileNotFoundError):
             return "Not available"
 
+    def _get_commit_version():
+        """Get the latest git commit version info (short hash, message, author date)."""
+        cwd = os.path.dirname(os.path.abspath(__file__))
+        try:
+            result = subprocess.run(
+                ["git", "log", "-1", "--format=%h - %s (%ad)", "--date=format:%b %d, %Y %I:%M %p"],
+                cwd=cwd,
+                capture_output=True,
+                text=True,
+                timeout=5
+            )
+            if result.returncode == 0 and result.stdout.strip():
+                return result.stdout.strip()
+            return "Not available"
+        except (subprocess.TimeoutExpired, subprocess.SubprocessError, FileNotFoundError):
+            return "Not available"
+
     def _check_tailscale_installed():
         """Check if tailscale is installed on the system."""
         try:
@@ -384,6 +401,7 @@ def start_web_settings_server(data_handler, host="0.0.0.0", port=443):
             "index.html",
             device_ip=_get_device_ip(),
             tailscale_address=_get_tailscale_address(),
+            commit_version=_get_commit_version(),
             ssl_enabled=_ssl_enabled,
             display_name=_get_display_name(),
             update_available=_check_for_updates()
