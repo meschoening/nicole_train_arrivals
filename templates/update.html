@@ -70,6 +70,62 @@
       font-weight: bold;
       margin-top: 8px;
     }
+
+    /* Reboot waiting overlay */
+    #rebootOverlay {
+      display: none;
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0, 0, 0, 0.85);
+      z-index: 9999;
+      justify-content: center;
+      align-items: center;
+      flex-direction: column;
+    }
+
+    #rebootOverlay.visible {
+      display: flex;
+    }
+
+    .spinner {
+      width: 60px;
+      height: 60px;
+      border: 5px solid rgba(255, 255, 255, 0.2);
+      border-top-color: #fff;
+      border-radius: 50%;
+      animation: spin 1s linear infinite;
+      margin-bottom: 24px;
+    }
+
+    @keyframes spin {
+      to {
+        transform: rotate(360deg);
+      }
+    }
+
+    #rebootOverlay .message {
+      color: #fff;
+      font-size: 18px;
+      text-align: center;
+      max-width: 300px;
+    }
+
+    #rebootOverlay .submessage {
+      color: #aaa;
+      font-size: 14px;
+      margin-top: 12px;
+      text-align: center;
+    }
+
+    #rebootOverlay .error-message {
+      color: #ff6b6b;
+      font-size: 16px;
+      margin-top: 16px;
+      text-align: center;
+    }
   </style>
 </head>
 
@@ -107,6 +163,14 @@
     <div id="status" class="row"></div>
     <pre id="console" class="row"></pre>
     <div id="successLabel" class="row"></div>
+  </div>
+
+  <!-- Reboot waiting overlay -->
+  <div id="rebootOverlay">
+    <div class="spinner"></div>
+    <div class="message">Waiting for system to come back online...</div>
+    <div class="submessage">This may take up to 2 minutes</div>
+    <div id="rebootError" class="error-message" style="display: none;"></div>
   </div>
 
   <script>
@@ -175,12 +239,53 @@
 
     rebootBtn.addEventListener('click', async () => {
       setStatus('Rebooting system...');
+
       try {
         await fetch('/api/reboot', { method: 'POST' });
-        setStatus('System is rebooting... this page may become unreachable.', '#d49200');
       } catch (e) {
-        setStatus('Failed to trigger reboot.', '#cc3333');
+        // Expected - connection may drop immediately
       }
+
+      // Show the overlay and start polling
+      const overlay = document.getElementById('rebootOverlay');
+      const errorEl = document.getElementById('rebootError');
+      overlay.classList.add('visible');
+
+      const homeUrl = '{{ url_for("index") }}';
+      const pollInterval = 2000; // 2 seconds
+      const maxWaitTime = 120000; // 120 seconds
+      const startTime = Date.now();
+
+      async function checkServerAvailable() {
+        const elapsed = Date.now() - startTime;
+
+        if (elapsed > maxWaitTime) {
+          errorEl.textContent = 'Timeout: Server did not come back online within 2 minutes.';
+          errorEl.style.display = 'block';
+          return;
+        }
+
+        try {
+          const response = await fetch(homeUrl, {
+            method: 'HEAD',
+            cache: 'no-store'
+          });
+
+          if (response.ok) {
+            // Server is back! Redirect to home page
+            window.location.href = homeUrl;
+            return;
+          }
+        } catch (e) {
+          // Server not ready yet, continue polling
+        }
+
+        // Schedule next check
+        setTimeout(checkServerAvailable, pollInterval);
+      }
+
+      // Wait a bit before starting to poll (give server time to shut down)
+      setTimeout(checkServerAvailable, 3000);
     });
 
     // Interval save handler
