@@ -339,8 +339,12 @@ def start_web_settings_server(data_handler, host="0.0.0.0", port=443):
 
     @app.get("/update")
     def get_update():
-        # Simple page render; live behavior wired via JS
-        return render_template("update.html", display_name=_get_display_name())
+        config = config_handler.load_config()
+        return render_template(
+            "update.html",
+            display_name=_get_display_name(),
+            update_check_interval=config.get("update_check_interval_seconds", 60)
+        )
 
     @app.get("/api-key")
     def get_api_key():
@@ -731,6 +735,105 @@ def start_web_settings_server(data_handler, host="0.0.0.0", port=443):
             "X-Accel-Buffering": "no",  # for some proxies
         }
         return Response(generate(), mimetype="text/event-stream", headers=headers)
+
+    @app.post("/api/update-check-interval")
+    def api_update_check_interval():
+        """Save the background update check interval setting."""
+        data = request.get_json() or {}
+        interval = data.get("interval")
+        
+        # Validate interval (min 5 seconds, max 3600 seconds)
+        try:
+            interval = int(interval)
+            if interval < 5:
+                interval = 5
+            elif interval > 3600:
+                interval = 3600
+        except (TypeError, ValueError):
+            return jsonify({"success": False, "error": "Invalid interval value"}), 400
+        
+        config_handler.save_config("update_check_interval_seconds", interval)
+        return jsonify({"success": True, "interval": interval})
+
+    @app.get("/api/check-for-updates")
+    def api_check_for_updates():
+        """
+        Check if updates are available by running git fetch and comparing commits.
+        Non-destructive - only checks, does not apply updates.
+        """
+        cwd = os.path.dirname(os.path.abspath(__file__))
+        
+        try:
+            # Run git fetch to get latest remote state
+            fetch_result = subprocess.run(
+                ["sudo", "-u", "max", "git", "fetch"],
+                cwd=cwd,
+                capture_output=True,
+                text=True,
+                timeout=30
+            )
+            
+            if fetch_result.returncode != 0:
+                return jsonify({
+                    "updates_available": False,
+                    "error": "Failed to fetch from remote"
+                })
+            
+            # Get local HEAD commit
+            local_result = subprocess.run(
+                ["sudo", "-u", "max", "git", "rev-parse", "HEAD"],
+                cwd=cwd,
+                capture_output=True,
+                text=True,
+                timeout=10
+            )
+            
+            if local_result.returncode != 0:
+                return jsonify({
+                    "updates_available": False,
+                    "error": "Failed to get local HEAD"
+                })
+            
+            local_head = local_result.stdout.strip()
+            
+            # Get remote HEAD commit (try origin/main first, then origin/master)
+            remote_head = None
+            for branch in ["origin/main", "origin/master"]:
+                remote_result = subprocess.run(
+                    ["sudo", "-u", "max", "git", "rev-parse", branch],
+                    cwd=cwd,
+                    capture_output=True,
+                    text=True,
+                    timeout=10
+                )
+                if remote_result.returncode == 0:
+                    remote_head = remote_result.stdout.strip()
+                    break
+            
+            if remote_head is None:
+                return jsonify({
+                    "updates_available": False,
+                    "error": "Could not determine remote branch"
+                })
+            
+            updates_available = local_head != remote_head
+            
+            return jsonify({
+                "updates_available": updates_available,
+                "local_commit": local_head[:8],
+                "remote_commit": remote_head[:8]
+            })
+            
+        except subprocess.TimeoutExpired:
+            return jsonify({
+                "updates_available": False,
+                "error": "Git command timed out"
+            })
+        except Exception as e:
+            return jsonify({
+                "updates_available": False,
+                "error": str(e)
+            })
 
     @app.post("/api/restart")
     def api_restart():

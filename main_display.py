@@ -618,6 +618,16 @@ class MainWindow(QMainWindow):
         self.waiting_for_api_key = False
         self.api_key_check_timer = QTimer()
         self.api_key_check_timer.timeout.connect(self.check_for_api_key)
+        
+        # Background update check
+        self.update_available = False
+        self.update_check_timer = QTimer()
+        self.update_check_timer.timeout.connect(self.check_for_git_updates)
+        # Load interval from config and start timer
+        update_interval = config.get('update_check_interval_seconds', 60)
+        self.update_check_timer.start(update_interval * 1000)
+        # QProcess for git fetch (non-blocking)
+        self.git_fetch_process = None
     
     def showEvent(self, event):
         """Called when the window is shown - trigger initial API load"""
@@ -1758,6 +1768,27 @@ class MainWindow(QMainWindow):
                     padding-bottom: 7px;
                 }
             """)
+        elif color == "light_green":
+            # Light green for "update available" state
+            self.update_button.setStyleSheet("""
+                QPushButton {
+                    font-family: Quicksand;
+                    font-size: 20px;
+                    font-weight: bold;
+                    padding: 8px 16px;
+                    background-color: #a5d6a7;
+                    color: #1b5e20;
+                    border: none;
+                    border-radius: 5px;
+                }
+                QPushButton:hover {
+                    background-color: #81c784;
+                }
+                QPushButton:pressed {
+                    background-color: #66bb6a;
+                    padding-bottom: 7px;
+                }
+            """)
     
     def run_git_pull(self):
         """Start the git pull process"""
@@ -1824,9 +1855,15 @@ class MainWindow(QMainWindow):
                 commit_message = self.get_latest_commit_message()
                 if commit_message:
                     self.update_popout.show_success_message(commit_message)
+                # Clear the update available notification since we just applied it
+                self.update_available = False
+                self.hide_update_notification()
             else:
                 self.update_button.setText("Up to date!")
                 self.set_update_button_color("green")
+                # Also clear update notification if we're up to date
+                self.update_available = False
+                self.hide_update_notification()
     
     def has_git_error(self):
         """Check if git output contains error indicators"""
@@ -1893,6 +1930,94 @@ class MainWindow(QMainWindow):
         except Exception:
             pass
         return None
+    
+    def check_for_git_updates(self):
+        """Check for available git updates in the background (non-destructive)"""
+        # Don't start a new check if one is already running
+        if self.git_fetch_process is not None and self.git_fetch_process.state() == QProcess.Running:
+            return
+        
+        # Create and configure QProcess for git fetch
+        self.git_fetch_process = QProcess()
+        self.git_fetch_process.setWorkingDirectory(os.path.dirname(os.path.abspath(__file__)))
+        self.git_fetch_process.finished.connect(self.on_git_fetch_finished)
+        
+        # Start git fetch
+        self.git_fetch_process.start("git", ["fetch"])
+    
+    def on_git_fetch_finished(self, exit_code, exit_status):
+        """Handle git fetch completion and check if updates are available"""
+        if exit_code != 0:
+            # Fetch failed, just skip this check
+            return
+        
+        # Now compare local HEAD with remote
+        cwd = os.path.dirname(os.path.abspath(__file__))
+        
+        try:
+            # Get local HEAD
+            local_result = subprocess.run(
+                ["git", "rev-parse", "HEAD"],
+                cwd=cwd,
+                capture_output=True,
+                text=True,
+                timeout=5
+            )
+            
+            if local_result.returncode != 0:
+                return
+            
+            local_head = local_result.stdout.strip()
+            
+            # Try to get remote HEAD (origin/main first, then origin/master)
+            remote_head = None
+            for branch in ["origin/main", "origin/master"]:
+                remote_result = subprocess.run(
+                    ["git", "rev-parse", branch],
+                    cwd=cwd,
+                    capture_output=True,
+                    text=True,
+                    timeout=5
+                )
+                if remote_result.returncode == 0:
+                    remote_head = remote_result.stdout.strip()
+                    break
+            
+            if remote_head is None:
+                return
+            
+            # Check if updates are available
+            if local_head != remote_head and not self.update_available:
+                self.update_available = True
+                self.show_update_notification()
+            elif local_head == remote_head and self.update_available:
+                # Updates were applied (heads now match), clear notification
+                self.update_available = False
+                self.hide_update_notification()
+                
+        except Exception:
+            # Silently fail - this is a background check
+            pass
+    
+    def show_update_notification(self):
+        """Show the update available notification in the UI"""
+        # Show notification label on home page (if it exists)
+        if hasattr(self, 'update_notification_label'):
+            self.update_notification_label.show()
+        
+        # Change update button color to light green on settings page
+        if hasattr(self, 'update_button'):
+            self.set_update_button_color("light_green")
+    
+    def hide_update_notification(self):
+        """Hide the update available notification"""
+        # Hide notification label on home page
+        if hasattr(self, 'update_notification_label'):
+            self.update_notification_label.hide()
+        
+        # Reset update button color to normal green
+        if hasattr(self, 'update_button'):
+            self.set_update_button_color("green")
     
     def update_checking_animation(self):
         """Update the button text for checking animation"""
@@ -2140,7 +2265,7 @@ class MainWindow(QMainWindow):
             # Disable screen saver
             os.system("xset s off")
     
-    def create_title_bar(self, button_widget, countdown_label=None, center_widget=None):
+    def create_title_bar(self, button_widget, countdown_label=None, center_widget=None, update_notification_label=None):
         """Create a title bar with fixed center widget regardless of left/right widths"""
         title_bar = QWidget()
         title_bar.setStyleSheet("background-color: lightgray;")
@@ -2173,12 +2298,15 @@ class MainWindow(QMainWindow):
             center_layout.addWidget(center_widget, alignment=Qt.AlignCenter)
         center_container.setLayout(center_layout)
 
-        # Right: Countdown (optional) + button
+        # Right: Update notification (optional) + Countdown (optional) + button
         right_container = QWidget()
         right_layout = QHBoxLayout()
         right_layout.setContentsMargins(0, 0, 0, 0)
         right_layout.setSpacing(10)
         right_layout.addStretch()
+        # Add update notification label BEFORE countdown (to the left of it)
+        if update_notification_label:
+            right_layout.addWidget(update_notification_label, alignment=Qt.AlignVCenter | Qt.AlignRight)
         if countdown_label:
             right_layout.addWidget(countdown_label, alignment=Qt.AlignVCenter | Qt.AlignRight)
         right_layout.addWidget(button_widget, alignment=Qt.AlignVCenter | Qt.AlignRight)
@@ -2712,6 +2840,19 @@ class MainWindow(QMainWindow):
         self.clock_timer.timeout.connect(self.update_clock)
         self.clock_timer.start(1000)
         
+        # Create update notification label (initially hidden)
+        self.update_notification_label = QLabel("Update Available ↓")
+        self.update_notification_label.setStyleSheet("""
+            font-family: Quicksand;
+            font-size: 14px;
+            font-weight: bold;
+            color: #155724;
+            background-color: #d4edda;
+            padding: 5px 10px;
+            border-radius: 4px;
+        """)
+        self.update_notification_label.hide()  # Hidden by default
+        
         # Create settings button
         settings_button = QPushButton("⚙")
         settings_button.setStyleSheet("""
@@ -2768,8 +2909,13 @@ class MainWindow(QMainWindow):
         buttons_layout.addWidget(close_button)
         buttons_container.setLayout(buttons_layout)
         
-        # Add title bar with centered clock
-        layout.addWidget(self.create_title_bar(buttons_container, self.refresh_countdown_label, self.clock_label))
+        # Add title bar with centered clock and update notification
+        layout.addWidget(self.create_title_bar(
+            buttons_container, 
+            self.refresh_countdown_label, 
+            self.clock_label,
+            self.update_notification_label
+        ))
         
         # Capture the home page title label and add opacity effect for animations
         self.home_title_label = self._last_title_label
@@ -3331,7 +3477,7 @@ class MainWindow(QMainWindow):
         self.ip_button.installEventFilter(self)
         left_buttons_layout.addWidget(self.ip_button)
         
-        self.wifi_button = QPushButton("WiFi")
+        self.wifi_button = QPushButton("WiFi Setup")
         self.wifi_button.setStyleSheet("""
             QPushButton {
                 font-family: Quicksand;
@@ -3352,29 +3498,6 @@ class MainWindow(QMainWindow):
         """)
         self.wifi_button.clicked.connect(self.launch_wifi_setup)
         left_buttons_layout.addWidget(self.wifi_button)
-        
-        self.update_button = QPushButton("Update")
-        self.update_button.setStyleSheet("""
-            QPushButton {
-                font-family: Quicksand;
-                font-size: 20px;
-                font-weight: bold;
-                padding: 8px 16px;
-                background-color: #4CAF50;
-                color: white;
-                border: none;
-                border-radius: 5px;
-            }
-            QPushButton:hover {
-                background-color: #45a049;
-            }
-            QPushButton:pressed {
-                background-color: #3d8b40;
-                padding-bottom: 7px;
-            }
-        """)
-        self.update_button.clicked.connect(self.on_update_button_clicked)
-        left_buttons_layout.addWidget(self.update_button)
         
         left_buttons_container.setLayout(left_buttons_layout)
         bottom_row_grid.addWidget(left_buttons_container, 0, 0, Qt.AlignLeft | Qt.AlignBottom)
@@ -3428,7 +3551,34 @@ class MainWindow(QMainWindow):
         center_section_container.setLayout(center_section_layout)
         bottom_row_grid.addWidget(center_section_container, 0, 1, Qt.AlignCenter | Qt.AlignBottom)
         
-        # Right section: Shutdown button (column 2, right-aligned)
+        # Right section: Update and Shutdown buttons (column 2, right-aligned)
+        right_buttons_container = QWidget()
+        right_buttons_layout = QHBoxLayout()
+        right_buttons_layout.setContentsMargins(0, 0, 0, 0)
+        right_buttons_layout.setSpacing(10)
+        
+        self.update_button = QPushButton("Update")
+        self.update_button.setStyleSheet("""
+            QPushButton {
+                font-family: Quicksand;
+                font-size: 20px;
+                font-weight: bold;
+                padding: 8px 16px;
+                background-color: #e0e0e0;
+                border: none;
+                border-radius: 5px;
+            }
+            QPushButton:hover {
+                background-color: #d0d0d0;
+            }
+            QPushButton:pressed {
+                background-color: #c0c0c0;
+                padding-bottom: 7px;
+            }
+        """)
+        self.update_button.clicked.connect(self.on_update_button_clicked)
+        right_buttons_layout.addWidget(self.update_button)
+        
         self.shutdown_exit_button = QPushButton("Shutdown")
         self.shutdown_exit_button.setStyleSheet("""
             QPushButton {
@@ -3449,7 +3599,10 @@ class MainWindow(QMainWindow):
             }
         """)
         self.shutdown_exit_button.clicked.connect(self.on_shutdown_exit_button_clicked)
-        bottom_row_grid.addWidget(self.shutdown_exit_button, 0, 2, Qt.AlignRight | Qt.AlignBottom)
+        right_buttons_layout.addWidget(self.shutdown_exit_button)
+        
+        right_buttons_container.setLayout(right_buttons_layout)
+        bottom_row_grid.addWidget(right_buttons_container, 0, 2, Qt.AlignRight | Qt.AlignBottom)
         
         # Set equal column stretches so center column is truly centered on page
         bottom_row_grid.setColumnStretch(0, 1)

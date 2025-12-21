@@ -79,6 +79,24 @@
       <a href="{{ url_for('index') }}" class="btn">← Back</a>
     </div>
     <h2>Software Update</h2>
+
+    <!-- Background Update Check Interval Section -->
+    <div class="interval-section">
+      <h3>Background Update Check Interval</h3>
+      <div class="row" style="display: flex; align-items: center; gap: 12px;">
+        <label for="checkInterval" style="min-width: auto;">Check every</label>
+        <input type="number" id="checkInterval" min="5" max="3600" step="1" value="{{ update_check_interval }}"
+          style="width: 80px; padding: 6px; font-size: 14px;">
+        <span>seconds</span>
+        <button type="button" id="saveIntervalBtn">Save</button>
+      </div>
+      <div id="intervalStatus" class="row" style="color: #666; font-size: 14px;"></div>
+    </div>
+
+    <hr style="margin: 24px 0; border: none; border-top: 1px solid #ddd;">
+
+    <!-- Run Update Section -->
+    <h3>Run Update</h3>
     <div class="row">
       <button id="runUpdate">Run Update</button>
       <button id="rebootBtn">Reboot System</button>
@@ -160,6 +178,51 @@
       } catch (e) {
         setStatus('Failed to trigger reboot.', '#cc3333');
       }
+    });
+
+    // Interval save handler
+    const saveIntervalBtn = document.getElementById('saveIntervalBtn');
+    const checkIntervalInput = document.getElementById('checkInterval');
+    const intervalStatusEl = document.getElementById('intervalStatus');
+
+    saveIntervalBtn.addEventListener('click', async () => {
+      let interval = parseInt(checkIntervalInput.value, 10);
+
+      // Validate bounds
+      if (isNaN(interval) || interval < 5) {
+        interval = 5;
+        checkIntervalInput.value = 5;
+      } else if (interval > 3600) {
+        interval = 3600;
+        checkIntervalInput.value = 3600;
+      }
+
+      saveIntervalBtn.disabled = true;
+      saveIntervalBtn.textContent = 'Saving...';
+
+      try {
+        const response = await fetch('/api/update-check-interval', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ interval: interval })
+        });
+
+        const data = await response.json();
+
+        if (data.success) {
+          intervalStatusEl.textContent = 'Saved! The display will check for updates every ' + data.interval + ' seconds.';
+          intervalStatusEl.style.color = '#2a7a2a';
+        } else {
+          intervalStatusEl.textContent = 'Error: ' + (data.error || 'Unknown error');
+          intervalStatusEl.style.color = '#cc3333';
+        }
+      } catch (e) {
+        intervalStatusEl.textContent = 'Error: ' + e.message;
+        intervalStatusEl.style.color = '#cc3333';
+      }
+
+      saveIntervalBtn.disabled = false;
+      saveIntervalBtn.textContent = 'Save';
     });
   </script>
 </body>
