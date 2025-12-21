@@ -1058,7 +1058,7 @@ class MainWindow(QMainWindow):
     
     def get_config_last_saved(self):
         """Get the last modified timestamp of the config file"""
-        config_path = "config.json"
+        config_path = config_handler.CONFIG_FILE
         if os.path.exists(config_path):
             mtime = os.path.getmtime(config_path)
             dt = datetime.fromtimestamp(mtime)
