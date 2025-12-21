@@ -3298,63 +3298,15 @@ class MainWindow(QMainWindow):
         # Add stretch to push bottom elements down
         content_layout.addStretch()
         
-        # Save Settings button row - centered relative to entire page
-        save_section_layout = QVBoxLayout()
-        save_section_layout.setSpacing(5)
-        save_section_layout.setAlignment(Qt.AlignCenter)
+        # Bottom row using grid layout for true page-centered Save button
+        bottom_row_grid = QGridLayout()
+        bottom_row_grid.setContentsMargins(20, 0, 20, 20)
+        bottom_row_grid.setHorizontalSpacing(10)
         
-        save_button = QPushButton("Save Settings")
-        save_button.setStyleSheet("""
-            QPushButton {
-                font-family: Quicksand;
-                font-size: 20px;
-                font-weight: bold;
-                padding: 12px 36px;
-                background-color: #4CAF50;
-                color: white;
-                border: none;
-                border-radius: 5px;
-            }
-            QPushButton:hover {
-                background-color: #45a049;
-            }
-            QPushButton:pressed {
-                background-color: #3d8b40;
-                padding-bottom: 11px;
-            }
-        """)
-        save_button.clicked.connect(self.save_settings)
-        save_section_layout.addWidget(save_button, alignment=Qt.AlignCenter)
-        
-        # Add timestamp/warning labels container below save button
-        labels_container = QHBoxLayout()
-        labels_container.setSpacing(10)
-        labels_container.setAlignment(Qt.AlignCenter)
-        
-        self.timestamp_label = QLabel()
-        self.timestamp_label.setStyleSheet("font-family: Quicksand; font-size: 14px; color: #666;")
-        self.timestamp_label.setAlignment(Qt.AlignCenter)
-        self.update_timestamp_label()
-        labels_container.addWidget(self.timestamp_label)
-        
-        self.unsaved_warning_label = QLabel("Changes not yet saved!")
-        self.unsaved_warning_label.setStyleSheet("font-family: Quicksand; font-size: 14px; color: #e74c3c;")
-        self.unsaved_warning_label.setAlignment(Qt.AlignCenter)
-        self.unsaved_warning_label.hide()  # Initially hidden
-        labels_container.addWidget(self.unsaved_warning_label)
-        
-        save_section_layout.addLayout(labels_container)
-        content_layout.addLayout(save_section_layout)
-        
-        content_layout.addSpacing(10)
-        
-        # Bottom row with navigation buttons
-        bottom_row_layout = QHBoxLayout()
-        bottom_row_layout.setContentsMargins(20, 0, 20, 20)
-        bottom_row_layout.setSpacing(10)
-        
-        # Left section: IP, WiFi, and Update buttons
+        # Left section: IP, WiFi, and Update buttons (column 0, left-aligned)
+        left_buttons_container = QWidget()
         left_buttons_layout = QHBoxLayout()
+        left_buttons_layout.setContentsMargins(0, 0, 0, 0)
         left_buttons_layout.setSpacing(10)
         
         self.ip_button = QPushButton("IP")
@@ -3377,7 +3329,7 @@ class MainWindow(QMainWindow):
             }
         """)
         self.ip_button.installEventFilter(self)
-        left_buttons_layout.addWidget(self.ip_button, alignment=Qt.AlignBottom)
+        left_buttons_layout.addWidget(self.ip_button)
         
         self.wifi_button = QPushButton("WiFi")
         self.wifi_button.setStyleSheet("""
@@ -3399,7 +3351,7 @@ class MainWindow(QMainWindow):
             }
         """)
         self.wifi_button.clicked.connect(self.launch_wifi_setup)
-        left_buttons_layout.addWidget(self.wifi_button, alignment=Qt.AlignBottom)
+        left_buttons_layout.addWidget(self.wifi_button)
         
         self.update_button = QPushButton("Update")
         self.update_button.setStyleSheet("""
@@ -3422,13 +3374,61 @@ class MainWindow(QMainWindow):
             }
         """)
         self.update_button.clicked.connect(self.on_update_button_clicked)
-        left_buttons_layout.addWidget(self.update_button, alignment=Qt.AlignBottom)
-
+        left_buttons_layout.addWidget(self.update_button)
         
-        bottom_row_layout.addLayout(left_buttons_layout)
-        bottom_row_layout.addStretch()
+        left_buttons_container.setLayout(left_buttons_layout)
+        bottom_row_grid.addWidget(left_buttons_container, 0, 0, Qt.AlignLeft | Qt.AlignBottom)
         
-        # Right section: Shutdown button
+        # Center section: Save Settings button with timestamp/warning labels (column 1, centered)
+        center_section_container = QWidget()
+        center_section_layout = QVBoxLayout()
+        center_section_layout.setContentsMargins(0, 0, 0, 0)
+        center_section_layout.setSpacing(5)
+        
+        save_button = QPushButton("Save Settings")
+        save_button.setStyleSheet("""
+            QPushButton {
+                font-family: Quicksand;
+                font-size: 20px;
+                font-weight: bold;
+                padding: 12px 36px;
+                background-color: #4CAF50;
+                color: white;
+                border: none;
+                border-radius: 5px;
+            }
+            QPushButton:hover {
+                background-color: #45a049;
+            }
+            QPushButton:pressed {
+                background-color: #3d8b40;
+                padding-bottom: 11px;
+            }
+        """)
+        save_button.clicked.connect(self.save_settings)
+        center_section_layout.addWidget(save_button, alignment=Qt.AlignCenter)
+        
+        # Add timestamp/warning labels container below save button
+        labels_container = QHBoxLayout()
+        labels_container.setSpacing(10)
+        
+        self.timestamp_label = QLabel()
+        self.timestamp_label.setStyleSheet("font-family: Quicksand; font-size: 14px; color: #666;")
+        self.timestamp_label.setAlignment(Qt.AlignCenter)
+        self.update_timestamp_label()
+        labels_container.addWidget(self.timestamp_label)
+        
+        self.unsaved_warning_label = QLabel("Changes not yet saved!")
+        self.unsaved_warning_label.setStyleSheet("font-family: Quicksand; font-size: 14px; color: #e74c3c;")
+        self.unsaved_warning_label.setAlignment(Qt.AlignCenter)
+        self.unsaved_warning_label.hide()  # Initially hidden
+        labels_container.addWidget(self.unsaved_warning_label)
+        
+        center_section_layout.addLayout(labels_container)
+        center_section_container.setLayout(center_section_layout)
+        bottom_row_grid.addWidget(center_section_container, 0, 1, Qt.AlignCenter | Qt.AlignBottom)
+        
+        # Right section: Shutdown button (column 2, right-aligned)
         self.shutdown_exit_button = QPushButton("Shutdown")
         self.shutdown_exit_button.setStyleSheet("""
             QPushButton {
@@ -3449,9 +3449,14 @@ class MainWindow(QMainWindow):
             }
         """)
         self.shutdown_exit_button.clicked.connect(self.on_shutdown_exit_button_clicked)
-        bottom_row_layout.addWidget(self.shutdown_exit_button, alignment=Qt.AlignBottom)
+        bottom_row_grid.addWidget(self.shutdown_exit_button, 0, 2, Qt.AlignRight | Qt.AlignBottom)
         
-        content_layout.addLayout(bottom_row_layout)
+        # Set equal column stretches so center column is truly centered on page
+        bottom_row_grid.setColumnStretch(0, 1)
+        bottom_row_grid.setColumnStretch(1, 1)
+        bottom_row_grid.setColumnStretch(2, 1)
+        
+        content_layout.addLayout(bottom_row_grid)
         
         content_widget = QWidget()
         content_widget.setLayout(content_layout)
