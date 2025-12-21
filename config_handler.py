@@ -1,7 +1,8 @@
 import json
 import os
 
-CONFIG_FILE = "config.json"
+# Use absolute path based on this file's location
+CONFIG_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "config.json")
 
 DEFAULT_CONFIG = {
     "api_key": "",
