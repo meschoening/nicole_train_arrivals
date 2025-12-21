@@ -715,7 +715,7 @@ class WiFiSetupWindow(QMainWindow):
             
             self.connection_console.appendPlainText("\n✓ Access Point started successfully!")
             self.connection_console.appendPlainText("SSID: NicoleTrains-Setup")
-            self.connection_console.appendPlainText(f"Password: {hotspot_password}" if hotspot_password else "Password: (none - open network)")
+            self.connection_console.appendPlainText(f"Password: **{hotspot_password}**" if hotspot_password else "Password: (none - open network)")
             self.connection_console.appendPlainText("IP: 192.168.4.1")
             
             self.update_status_labels()
