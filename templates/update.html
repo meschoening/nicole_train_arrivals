@@ -90,6 +90,9 @@
         <span>seconds</span>
         <button type="button" id="saveIntervalBtn">Save</button>
       </div>
+      <div class="row" style="color:#666; margin-top: 8px;">
+        <span id="lastSaved">Last saved: {{ last_saved }}</span>
+      </div>
       <div id="intervalStatus" class="row" style="color: #666; font-size: 14px;"></div>
     </div>
 
@@ -184,6 +187,15 @@
     const saveIntervalBtn = document.getElementById('saveIntervalBtn');
     const checkIntervalInput = document.getElementById('checkInterval');
     const intervalStatusEl = document.getElementById('intervalStatus');
+    const lastSavedEl = document.getElementById('lastSaved');
+
+    // Mark as unsaved when interval changes
+    function markUnsaved() {
+      if (lastSavedEl) lastSavedEl.style.color = '#cc6666';
+    }
+
+    checkIntervalInput.addEventListener('input', markUnsaved);
+    checkIntervalInput.addEventListener('change', markUnsaved);
 
     saveIntervalBtn.addEventListener('click', async () => {
       let interval = parseInt(checkIntervalInput.value, 10);
@@ -212,6 +224,18 @@
         if (data.success) {
           intervalStatusEl.textContent = 'Saved! The display will check for updates every ' + data.interval + ' seconds.';
           intervalStatusEl.style.color = '#2a7a2a';
+          // Update last saved label
+          const now = new Date();
+          const timeStr = now.toLocaleString('en-US', {
+            month: '2-digit',
+            day: '2-digit',
+            year: 'numeric',
+            hour: '2-digit',
+            minute: '2-digit',
+            second: '2-digit'
+          });
+          lastSavedEl.textContent = 'Last saved: ' + timeStr;
+          lastSavedEl.style.color = '#666';
         } else {
           intervalStatusEl.textContent = 'Error: ' + (data.error || 'Unknown error');
           intervalStatusEl.style.color = '#cc3333';

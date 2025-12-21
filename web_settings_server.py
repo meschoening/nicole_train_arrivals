@@ -343,7 +343,8 @@ def start_web_settings_server(data_handler, host="0.0.0.0", port=443):
         return render_template(
             "update.html",
             display_name=_get_display_name(),
-            update_check_interval=config.get("update_check_interval_seconds", 60)
+            update_check_interval=config.get("update_check_interval_seconds", 60),
+            last_saved=_get_config_last_saved()
         )
 
     @app.get("/api-key")
