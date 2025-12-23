@@ -160,15 +160,15 @@ class UpdatePopout(QWidget):
                 background-color: transparent;
                 border: none;
                 color: #666;
-            }
-            QPushButton:hover {
+            }}
+            QPushButton:hover {{
                 color: #000;
                 background-color: #e0e0e0;
                 border-radius: 3px;
-            }
-            QPushButton:pressed {
+            }}
+            QPushButton:pressed {{
                 background-color: #d0d0d0;
-            }
+            }}
         """)
         self.close_button.setFixedSize(20, 20)
         header_layout.addWidget(self.close_button)
@@ -202,7 +202,7 @@ class UpdatePopout(QWidget):
                 background-color: #e8f5e9;
                 border: none;
                 padding: 8px 10px;
-            }
+            }}
         """)
         self.success_label.setWordWrap(True)
         self.success_label.hide()
@@ -317,14 +317,14 @@ class RebootWarningOverlay(QWidget):
                 color: #f44336;
                 border: none;
                 border-radius: 8px;
-            }
-            QPushButton:hover {
+            }}
+            QPushButton:hover {{
                 background-color: #f0f0f0;
-            }
-            QPushButton:pressed {
+            }}
+            QPushButton:pressed {{
                 background-color: #e0e0e0;
                 padding-bottom: 14px;
-            }
+            }}
         """)
         center_layout.addWidget(self.cancel_button, alignment=Qt.AlignCenter)
         
@@ -379,14 +379,14 @@ class ShutdownPopout(QWidget):
                 background-color: #e0e0e0;
                 border: none;
                 border-radius: 5px;
-            }
-            QPushButton:hover {
+            }}
+            QPushButton:hover {{
                 background-color: #d0d0d0;
-            }
-            QPushButton:pressed {
+            }}
+            QPushButton:pressed {{
                 background-color: #c0c0c0;
                 padding-bottom: 9px;
-            }
+            }}
         """)
         layout.addWidget(self.reboot_button)
         
@@ -402,14 +402,14 @@ class ShutdownPopout(QWidget):
                 background-color: #e0e0e0;
                 border: none;
                 border-radius: 5px;
-            }
-            QPushButton:hover {
+            }}
+            QPushButton:hover {{
                 background-color: #d0d0d0;
-            }
-            QPushButton:pressed {
+            }}
+            QPushButton:pressed {{
                 background-color: #c0c0c0;
                 padding-bottom: 9px;
-            }
+            }}
         """)
         layout.addWidget(self.shutdown_button)
         

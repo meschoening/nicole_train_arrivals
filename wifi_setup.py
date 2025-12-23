@@ -98,8 +98,8 @@ class WiFiSetupWindow(QMainWindow):
         
         # Return to Main Display button (right-aligned)
         return_button = QPushButton("Return to Main Display")
-        return_button.setStyleSheet("""
-            QPushButton {
+        return_button.setStyleSheet(f"""
+            QPushButton {{
                 font-family: {self.font_family};
                 font-size: 18px;
                 font-weight: bold;
@@ -107,14 +107,14 @@ class WiFiSetupWindow(QMainWindow):
                 background-color: #e0e0e0;
                 border: none;
                 border-radius: 5px;
-            }
-            QPushButton:hover {
+            }}
+            QPushButton:hover {{
                 background-color: #d0d0d0;
-            }
-            QPushButton:pressed {
+            }}
+            QPushButton:pressed {{
                 background-color: #c0c0c0;
                 padding-bottom: 9px;
-            }
+            }}
         """)
         return_button.setFixedHeight(45)
         return_button.clicked.connect(self.return_to_main_display)
@@ -189,8 +189,8 @@ class WiFiSetupWindow(QMainWindow):
         
         # Broadcast button right under IP Address
         self.broadcast_button = QPushButton("Broadcast Setup Network")
-        self.broadcast_button.setStyleSheet("""
-            QPushButton {
+        self.broadcast_button.setStyleSheet(f"""
+            QPushButton {{
                 font-family: {self.font_family};
                 font-size: 18px;
                 font-weight: bold;
@@ -199,14 +199,14 @@ class WiFiSetupWindow(QMainWindow):
                 color: white;
                 border: none;
                 border-radius: 5px;
-            }
-            QPushButton:hover {
+            }}
+            QPushButton:hover {{
                 background-color: #45a049;
-            }
-            QPushButton:pressed {
+            }}
+            QPushButton:pressed {{
                 background-color: #3d8b40;
                 padding-bottom: 9px;
-            }
+            }}
         """)
         self.broadcast_button.setFixedHeight(45)
         self.broadcast_button.clicked.connect(self.toggle_broadcast)
@@ -239,24 +239,24 @@ class WiFiSetupWindow(QMainWindow):
         
         # Saved networks dropdown
         self.saved_networks_combo = QComboBox()
-        self.saved_networks_combo.setStyleSheet("""
-            QComboBox {
+        self.saved_networks_combo.setStyleSheet(f"""
+            QComboBox {{
                 font-family: {self.font_family};
                 font-size: 18px;
                 padding: 10px;
                 border: 1px solid #ccc;
                 border-radius: 5px;
                 background-color: white;
-            }
-            QComboBox:hover {
+            }}
+            QComboBox:hover {{
                 border: 1px solid #999;
-            }
-            QComboBox QAbstractItemView {
+            }}
+            QComboBox QAbstractItemView {{
                 font-family: {self.font_family};
                 font-size: 18px;
                 background-color: white;
                 selection-background-color: #e0e0e0;
-            }
+            }}
         """)
         manual_layout.addWidget(self.saved_networks_combo)
         
@@ -266,8 +266,8 @@ class WiFiSetupWindow(QMainWindow):
         
         # Refresh List button
         self.refresh_networks_button = QPushButton("Refresh List")
-        self.refresh_networks_button.setStyleSheet("""
-            QPushButton {
+        self.refresh_networks_button.setStyleSheet(f"""
+            QPushButton {{
                 font-family: {self.font_family};
                 font-size: 16px;
                 font-weight: bold;
@@ -275,21 +275,21 @@ class WiFiSetupWindow(QMainWindow):
                 background-color: #e0e0e0;
                 border: none;
                 border-radius: 5px;
-            }
-            QPushButton:hover {
+            }}
+            QPushButton:hover {{
                 background-color: #d0d0d0;
-            }
-            QPushButton:pressed {
+            }}
+            QPushButton:pressed {{
                 background-color: #c0c0c0;
-            }
+            }}
         """)
         self.refresh_networks_button.clicked.connect(self.load_saved_networks)
         buttons_row.addWidget(self.refresh_networks_button)
         
         # Connect/Disconnect button
         self.connect_button = QPushButton("Connect to Network")
-        self.connect_button.setStyleSheet("""
-            QPushButton {
+        self.connect_button.setStyleSheet(f"""
+            QPushButton {{
                 font-family: {self.font_family};
                 font-size: 16px;
                 font-weight: bold;
@@ -298,17 +298,17 @@ class WiFiSetupWindow(QMainWindow):
                 color: white;
                 border: none;
                 border-radius: 5px;
-            }
-            QPushButton:hover {
+            }}
+            QPushButton:hover {{
                 background-color: #45a049;
-            }
-            QPushButton:pressed {
+            }}
+            QPushButton:pressed {{
                 background-color: #3d8b40;
-            }
-            QPushButton:disabled {
+            }}
+            QPushButton:disabled {{
                 background-color: #cccccc;
                 color: #666666;
-            }
+            }}
         """)
         self.connect_button.clicked.connect(self.toggle_manual_connection)
         buttons_row.addWidget(self.connect_button)
@@ -487,8 +487,8 @@ class WiFiSetupWindow(QMainWindow):
         self.is_connecting = True
         self.connect_button.setEnabled(False)
         self.connect_button.setText("Connecting...")
-        self.connect_button.setStyleSheet("""
-            QPushButton {
+        self.connect_button.setStyleSheet(f"""
+            QPushButton {{
                 font-family: {self.font_family};
                 font-size: 16px;
                 font-weight: bold;
@@ -497,7 +497,7 @@ class WiFiSetupWindow(QMainWindow):
                 color: #666666;
                 border: none;
                 border-radius: 5px;
-            }
+            }}
         """)
         
         self.connection_console.clear()
@@ -553,8 +553,8 @@ class WiFiSetupWindow(QMainWindow):
             self.is_manually_connected = True
             self.connection_console.appendPlainText("\n✓ Connection successful!")
             self.connect_button.setText("Disconnect")
-            self.connect_button.setStyleSheet("""
-                QPushButton {
+            self.connect_button.setStyleSheet(f"""
+                QPushButton {{
                     font-family: {self.font_family};
                     font-size: 16px;
                     font-weight: bold;
@@ -563,20 +563,20 @@ class WiFiSetupWindow(QMainWindow):
                     color: white;
                     border: none;
                     border-radius: 5px;
-                }
-                QPushButton:hover {
+                }}
+                QPushButton:hover {{
                     background-color: #da190b;
-                }
-                QPushButton:pressed {
+                }}
+                QPushButton:pressed {{
                     background-color: #c41409;
-                }
+                }}
             """)
         else:
             self.is_manually_connected = False
             self.connection_console.appendPlainText(f"\n✗ Connection failed (exit code: {exit_code})")
             self.connect_button.setText("Connect to Network")
-            self.connect_button.setStyleSheet("""
-                QPushButton {
+            self.connect_button.setStyleSheet(f"""
+                QPushButton {{
                     font-family: {self.font_family};
                     font-size: 16px;
                     font-weight: bold;
@@ -585,13 +585,13 @@ class WiFiSetupWindow(QMainWindow):
                     color: white;
                     border: none;
                     border-radius: 5px;
-                }
-                QPushButton:hover {
+                }}
+                QPushButton:hover {{
                     background-color: #45a049;
-                }
-                QPushButton:pressed {
+                }}
+                QPushButton:pressed {{
                     background-color: #3d8b40;
-                }
+                }}
             """)
         
         # Update status labels
@@ -609,8 +609,8 @@ class WiFiSetupWindow(QMainWindow):
             self.connection_console.appendPlainText(f"\n✗ Disconnect failed (exit code: {exit_code})")
         
         self.connect_button.setText("Connect to Network")
-        self.connect_button.setStyleSheet("""
-            QPushButton {
+        self.connect_button.setStyleSheet(f"""
+            QPushButton {{
                 font-family: {self.font_family};
                 font-size: 16px;
                 font-weight: bold;
@@ -619,13 +619,13 @@ class WiFiSetupWindow(QMainWindow):
                 color: white;
                 border: none;
                 border-radius: 5px;
-            }
-            QPushButton:hover {
+            }}
+            QPushButton:hover {{
                 background-color: #45a049;
-            }
-            QPushButton:pressed {
+            }}
+            QPushButton:pressed {{
                 background-color: #3d8b40;
-            }
+            }}
         """)
         
         # Update status labels
