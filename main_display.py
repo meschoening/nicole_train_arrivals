@@ -1289,6 +1289,13 @@ class MainWindow(QMainWindow):
         """Handle mouse release on arrival row - toggle time display and restore color"""
         row = self.arrival_rows[index]
         
+        # Don't toggle if the row is empty (showing "—")
+        if row.time_label.text() == "—":
+            # Restore base color but don't toggle anything
+            base_color = "#ffffff" if index % 2 == 0 else "#f5f5f5"
+            row.setStyleSheet(f"background-color: {base_color};")
+            return
+        
         # Toggle the time display state
         if index in self.rows_showing_actual_time:
             # Row is currently showing actual time, toggle it off
@@ -1338,6 +1345,7 @@ class MainWindow(QMainWindow):
                 row.circle_label.setStyleSheet("background-color: #cccccc; border-radius: 10px;")
                 row.destination_label.setText("—")
                 row.time_label.setText("—")
+            self.rows_showing_actual_time.clear()
             return
         
         # Get predictions for the selected station
@@ -1351,6 +1359,7 @@ class MainWindow(QMainWindow):
                 row.circle_label.setStyleSheet("background-color: #cccccc; border-radius: 10px;")
                 row.destination_label.setText("—")
                 row.time_label.setText("—")
+            self.rows_showing_actual_time.clear()
             return
         
         if predictions_data is None or predictions_data.empty:
@@ -1359,6 +1368,7 @@ class MainWindow(QMainWindow):
                 row.circle_label.setStyleSheet("background-color: #cccccc; border-radius: 10px;")
                 row.destination_label.setText("No arrivals")
                 row.time_label.setText("—")
+            self.rows_showing_actual_time.clear()
             return
         
         # Apply filtering if enabled (use config flag to reflect remote changes)
@@ -1375,6 +1385,7 @@ class MainWindow(QMainWindow):
                         row.circle_label.setStyleSheet("background-color: #cccccc; border-radius: 10px;")
                         row.destination_label.setText("No arrivals")
                         row.time_label.setText("—")
+                    self.rows_showing_actual_time.clear()
                     return
         
         # Apply direction-based filtering if enabled
@@ -1419,6 +1430,7 @@ class MainWindow(QMainWindow):
                         row.circle_label.setStyleSheet("background-color: #cccccc; border-radius: 10px;")
                         row.destination_label.setText("No arrivals")
                         row.time_label.setText("—")
+                    self.rows_showing_actual_time.clear()
                     return
         
         # Sort predictions by arrival time (Min field)
@@ -1479,6 +1491,8 @@ class MainWindow(QMainWindow):
                 row.circle_label.setStyleSheet("background-color: #cccccc; border-radius: 10px;")
                 row.destination_label.setText("—")
                 row.time_label.setText("—")
+                # Clear arrival time toggle for empty rows
+                self.rows_showing_actual_time.discard(i)
     
     def refresh_arrivals(self):
         """Refresh arrivals data from API and update display"""
