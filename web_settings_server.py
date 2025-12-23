@@ -1071,6 +1071,99 @@ def start_web_settings_server(data_handler, host="0.0.0.0", port=443):
         directions = _get_directions_for_station(data_handler, station_code)
         return jsonify(directions)
 
+    def _get_installed_fonts():
+        """Get list of installed font family names using fc-list."""
+        try:
+            result = subprocess.run(
+                ["fc-list", "--format=%{family}\n"],
+                capture_output=True,
+                text=True,
+                timeout=10
+            )
+            if result.returncode == 0:
+                # Parse font names, deduplicate, and sort
+                fonts = set()
+                for line in result.stdout.strip().splitlines():
+                    # fc-list can return comma-separated family names
+                    for font in line.split(","):
+                        font = font.strip()
+                        if font:
+                            fonts.add(font)
+                return sorted(fonts, key=str.lower)
+        except Exception:
+            pass
+        # Fallback fonts if fc-list fails (e.g., on Windows)
+        return ["Quicksand", "Arial", "Helvetica", "Sans-Serif", "Serif", "Monospace"]
+
+    @app.get("/change-font")
+    def get_change_font():
+        config = config_handler.load_config()
+        current_font = config.get("font_family", "Quicksand")
+        default_font = config_handler.DEFAULT_CONFIG.get("font_family", "Quicksand")
+        installed_fonts = _get_installed_fonts()
+        return render_template(
+            "change_font.html",
+            fonts=installed_fonts,
+            current_font=current_font,
+            default_font=default_font,
+            display_name=_get_display_name()
+        )
+
+    @app.post("/api/font")
+    def api_set_font():
+        """Set the application font."""
+        data = request.get_json() or {}
+        font_family = data.get("font_family", "").strip()
+        
+        if not font_family:
+            return jsonify({"success": False, "error": "Font family is required"}), 400
+        
+        config_handler.save_config("font_family", font_family)
+        
+        # Trigger settings changed flag for main display
+        with _settings_changed_lock:
+            _settings_changed_trigger["pending"] = True
+        
+        return jsonify({"success": True, "font_family": font_family})
+
+    @app.post("/api/font/revert")
+    def api_revert_font():
+        """Revert font to default."""
+        default_font = config_handler.DEFAULT_CONFIG.get("font_family", "Quicksand")
+        config_handler.save_config("font_family", default_font)
+        
+        # Trigger settings changed flag for main display
+        with _settings_changed_lock:
+            _settings_changed_trigger["pending"] = True
+        
+        return jsonify({"success": True, "font_family": default_font})
+
+    @app.post("/api/restart-app")
+    def api_restart_app():
+        """Restart the main display application."""
+        try:
+            script_dir = os.path.dirname(os.path.abspath(__file__))
+            main_display_script = os.path.join(script_dir, "main_display.py")
+            
+            # Launch new instance of main_display.py
+            subprocess.Popen(
+                ["python3", main_display_script, "--fullscreen"],
+                cwd=script_dir,
+                start_new_session=True
+            )
+            
+            # Schedule the current process to exit after response is sent
+            def exit_app():
+                time.sleep(0.5)
+                os._exit(0)
+            
+            exit_thread = threading.Thread(target=exit_app, daemon=True)
+            exit_thread.start()
+            
+            return jsonify({"success": True, "message": "Restarting application..."})
+        except Exception as e:
+            return jsonify({"success": False, "error": str(e)}), 500
+
     def _run():
         app.run(host=host, port=port, threaded=True, use_reloader=False, debug=False, ssl_context=ssl_context)
 
