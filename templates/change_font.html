@@ -244,17 +244,18 @@
                     const res = await fetch('/api/restart-app', { method: 'POST' });
                     const data = await res.json();
                     if (data.success) {
-                        showStatus('Restarting application... Please wait.');
-                        // The page will become unresponsive as the server restarts
+                        showStatus('Restarting application... Page will reload when ready.');
+                        // Start polling for server to come back online
+                        waitForServerAndReload();
                     } else {
                         showStatus(data.error || 'Failed to restart', true);
                         applyBtn.disabled = false;
                         updateApplyButton();
                     }
                 } catch (err) {
-                    showStatus('Error: ' + err.message, true);
-                    applyBtn.disabled = false;
-                    updateApplyButton();
+                    // Connection error likely means server is restarting - start polling
+                    showStatus('Restarting application... Page will reload when ready.');
+                    waitForServerAndReload();
                 }
                 return;
             }
@@ -287,6 +288,41 @@
                 applyBtn.disabled = false;
             }
         });
+
+        function waitForServerAndReload() {
+            const checkInterval = 500; // ms
+            const maxWait = 30000; // 30 seconds max
+            let elapsed = 0;
+
+            const pollServer = () => {
+                fetch('/change-font', { method: 'HEAD' })
+                    .then(response => {
+                        if (response.ok) {
+                            // Server is back, reload the page
+                            window.location.reload();
+                        } else {
+                            scheduleNextPoll();
+                        }
+                    })
+                    .catch(() => {
+                        scheduleNextPoll();
+                    });
+            };
+
+            const scheduleNextPoll = () => {
+                elapsed += checkInterval;
+                if (elapsed < maxWait) {
+                    setTimeout(pollServer, checkInterval);
+                } else {
+                    showStatus('Server did not respond. Please reload the page manually.', true);
+                    applyBtn.disabled = false;
+                    updateApplyButton();
+                }
+            };
+
+            // Start polling after a short delay to allow server to shut down
+            setTimeout(pollServer, 1000);
+        }
 
         revertBtn.addEventListener('click', async () => {
             revertBtn.disabled = true;
