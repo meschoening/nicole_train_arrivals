@@ -3003,8 +3003,8 @@ class MainWindow(QMainWindow):
         
         # Create back button
         back_button = QPushButton("←")
-        back_button.setStyleSheet("""
-            QPushButton {
+        back_button.setStyleSheet(f"""
+            QPushButton {{
                 font-family: {self.font_family};
                 font-size: 22px;
                 font-weight: bold;
@@ -3012,14 +3012,14 @@ class MainWindow(QMainWindow):
                 background-color: lightgray;
                 border: none;
                 border-radius: 5px;
-            }
-            QPushButton:hover {
+            }}
+            QPushButton:hover {{
                 background-color: #b0b0b0;
-            }
-            QPushButton:pressed {
+            }}
+            QPushButton:pressed {{
                 background-color: #909090;
                 padding-bottom: 4px;
-            }
+            }}
         """)
         back_button.setFixedHeight(45)
         back_button.clicked.connect(self.close_settings_page)
@@ -3502,8 +3502,8 @@ class MainWindow(QMainWindow):
         left_buttons_layout.setSpacing(10)
         
         self.ip_button = QPushButton("IP")
-        self.ip_button.setStyleSheet("""
-            QPushButton {
+        self.ip_button.setStyleSheet(f"""
+            QPushButton {{
                 font-family: {self.font_family};
                 font-size: 20px;
                 font-weight: bold;
@@ -3511,21 +3511,21 @@ class MainWindow(QMainWindow):
                 background-color: #e0e0e0;
                 border: none;
                 border-radius: 5px;
-            }
-            QPushButton:hover {
+            }}
+            QPushButton:hover {{
                 background-color: #d0d0d0;
-            }
-            QPushButton:pressed {
+            }}
+            QPushButton:pressed {{
                 background-color: #c0c0c0;
                 padding-bottom: 7px;
-            }
+            }}
         """)
         self.ip_button.installEventFilter(self)
         left_buttons_layout.addWidget(self.ip_button)
         
         self.wifi_button = QPushButton("WiFi Setup")
-        self.wifi_button.setStyleSheet("""
-            QPushButton {
+        self.wifi_button.setStyleSheet(f"""
+            QPushButton {{
                 font-family: {self.font_family};
                 font-size: 20px;
                 font-weight: bold;
@@ -3533,14 +3533,14 @@ class MainWindow(QMainWindow):
                 background-color: #e0e0e0;
                 border: none;
                 border-radius: 5px;
-            }
-            QPushButton:hover {
+            }}
+            QPushButton:hover {{
                 background-color: #d0d0d0;
-            }
-            QPushButton:pressed {
+            }}
+            QPushButton:pressed {{
                 background-color: #c0c0c0;
                 padding-bottom: 7px;
-            }
+            }}
         """)
         self.wifi_button.clicked.connect(self.launch_wifi_setup)
         left_buttons_layout.addWidget(self.wifi_button)
@@ -3555,8 +3555,8 @@ class MainWindow(QMainWindow):
         center_section_layout.setSpacing(5)
         
         save_button = QPushButton("Save Settings")
-        save_button.setStyleSheet("""
-            QPushButton {
+        save_button.setStyleSheet(f"""
+            QPushButton {{
                 font-family: {self.font_family};
                 font-size: 20px;
                 font-weight: bold;
@@ -3565,14 +3565,14 @@ class MainWindow(QMainWindow):
                 color: white;
                 border: none;
                 border-radius: 5px;
-            }
-            QPushButton:hover {
+            }}
+            QPushButton:hover {{
                 background-color: #45a049;
-            }
-            QPushButton:pressed {
+            }}
+            QPushButton:pressed {{
                 background-color: #3d8b40;
                 padding-bottom: 11px;
-            }
+            }}
         """)
         save_button.clicked.connect(self.save_settings)
         center_section_layout.addWidget(save_button, alignment=Qt.AlignCenter)
@@ -3604,8 +3604,8 @@ class MainWindow(QMainWindow):
         right_buttons_layout.setSpacing(10)
         
         self.update_button = QPushButton("Update")
-        self.update_button.setStyleSheet("""
-            QPushButton {
+        self.update_button.setStyleSheet(f"""
+            QPushButton {{
                 font-family: {self.font_family};
                 font-size: 20px;
                 font-weight: bold;
@@ -3613,21 +3613,21 @@ class MainWindow(QMainWindow):
                 background-color: #e0e0e0;
                 border: none;
                 border-radius: 5px;
-            }
-            QPushButton:hover {
+            }}
+            QPushButton:hover {{
                 background-color: #d0d0d0;
-            }
-            QPushButton:pressed {
+            }}
+            QPushButton:pressed {{
                 background-color: #c0c0c0;
                 padding-bottom: 7px;
-            }
+            }}
         """)
         self.update_button.clicked.connect(self.on_update_button_clicked)
         right_buttons_layout.addWidget(self.update_button)
         
         self.shutdown_exit_button = QPushButton("Shutdown")
-        self.shutdown_exit_button.setStyleSheet("""
-            QPushButton {
+        self.shutdown_exit_button.setStyleSheet(f"""
+            QPushButton {{
                 font-family: {self.font_family};
                 font-size: 20px;
                 font-weight: bold;
@@ -3635,14 +3635,14 @@ class MainWindow(QMainWindow):
                 background-color: #e0e0e0;
                 border: none;
                 border-radius: 5px;
-            }
-            QPushButton:hover {
+            }}
+            QPushButton:hover {{
                 background-color: #d0d0d0;
-            }
-            QPushButton:pressed {
+            }}
+            QPushButton:pressed {{
                 background-color: #c0c0c0;
                 padding-bottom: 7px;
-            }
+            }}
         """)
         self.shutdown_exit_button.clicked.connect(self.on_shutdown_exit_button_clicked)
         right_buttons_layout.addWidget(self.shutdown_exit_button)
