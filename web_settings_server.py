@@ -1072,28 +1072,85 @@ def start_web_settings_server(data_handler, host="0.0.0.0", port=443):
         return jsonify(directions)
 
     def _get_installed_fonts():
-        """Get list of installed font family names using fc-list."""
+        """Get list of installed fonts with their file paths using fc-list.
+        
+        Returns:
+            list of dict: Each dict has 'name' (font family) and 'file' (path to font file)
+        """
         try:
+            # Get font family names and their file paths
             result = subprocess.run(
-                ["fc-list", "--format=%{family}\n"],
+                ["fc-list", "--format=%{family}|%{file}\n"],
                 capture_output=True,
                 text=True,
                 timeout=10
             )
             if result.returncode == 0:
-                # Parse font names, deduplicate, and sort
-                fonts = set()
+                # Parse font names and paths, deduplicate by family name
+                fonts = {}
                 for line in result.stdout.strip().splitlines():
-                    # fc-list can return comma-separated family names
-                    for font in line.split(","):
-                        font = font.strip()
-                        if font:
-                            fonts.add(font)
-                return sorted(fonts, key=str.lower)
+                    if "|" not in line:
+                        continue
+                    family_part, file_path = line.split("|", 1)
+                    file_path = file_path.strip()
+                    
+                    # fc-list can return comma-separated family names, use first one
+                    for font_name in family_part.split(","):
+                        font_name = font_name.strip()
+                        if font_name and font_name not in fonts:
+                            # Only include common font formats
+                            if file_path.lower().endswith(('.ttf', '.otf', '.woff', '.woff2')):
+                                fonts[font_name] = file_path
+                                break
+                
+                # Sort by font name and return as list of dicts
+                return [{"name": name, "file": path} for name, path in sorted(fonts.items(), key=lambda x: x[0].lower())]
         except Exception:
             pass
         # Fallback fonts if fc-list fails (e.g., on Windows)
-        return ["Quicksand", "Arial", "Helvetica", "Sans-Serif", "Serif", "Monospace"]
+        return [{"name": f, "file": ""} for f in ["Quicksand", "Arial", "Helvetica", "Sans-Serif", "Serif", "Monospace"]]
+
+    def _get_font_path(font_name):
+        """Get the file path for a specific font by name."""
+        try:
+            result = subprocess.run(
+                ["fc-list", f":family={font_name}", "--format=%{file}\n"],
+                capture_output=True,
+                text=True,
+                timeout=5
+            )
+            if result.returncode == 0:
+                for line in result.stdout.strip().splitlines():
+                    path = line.strip()
+                    if path and os.path.exists(path):
+                        return path
+        except Exception:
+            pass
+        return None
+
+    @app.get("/api/font-file/<path:font_name>")
+    def api_font_file(font_name):
+        """Serve a font file by font family name."""
+        from flask import send_file
+        import urllib.parse
+        
+        # URL decode the font name
+        font_name = urllib.parse.unquote(font_name)
+        
+        font_path = _get_font_path(font_name)
+        if font_path and os.path.exists(font_path):
+            # Determine mime type based on extension
+            ext = os.path.splitext(font_path)[1].lower()
+            mime_types = {
+                '.ttf': 'font/ttf',
+                '.otf': 'font/otf',
+                '.woff': 'font/woff',
+                '.woff2': 'font/woff2',
+            }
+            mime_type = mime_types.get(ext, 'application/octet-stream')
+            return send_file(font_path, mimetype=mime_type)
+        
+        return jsonify({"error": "Font not found"}), 404
 
     @app.get("/change-font")
     def get_change_font():

@@ -6,6 +6,21 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Change Font - {{ display_name }}</title>
     <style>
+        /* Dynamic @font-face rules for each installed font */
+            {
+            % for font in fonts %
+        }
+
+        @font-face {
+            font-family: '{{ font.name }}';
+            src: url('/api/font-file/{{ font.name | urlencode }}') format('truetype');
+            font-display: swap;
+        }
+
+            {
+            % endfor %
+        }
+
         body {
             font-family: sans-serif;
             margin: 0;
@@ -171,9 +186,10 @@
 
         <div class="font-list" id="fontList">
             {% for font in fonts %}
-            <div class="font-item {% if font == current_font %}selected{% endif %}" data-font="{{ font }}">
-                <input type="radio" name="font" value="{{ font }}" {% if font==current_font %}checked{% endif %}>
-                <span class="font-name" style="font-family: '{{ font }}';">{{ font }}</span>
+            <div class="font-item {% if font.name == current_font %}selected{% endif %}" data-font="{{ font.name }}">
+                <input type="radio" name="font" value="{{ font.name }}" {% if font.name==current_font %}checked{% endif
+                    %}>
+                <span class="font-name" style="font-family: '{{ font.name }}';">{{ font.name }}</span>
             </div>
             {% endfor %}
         </div>
