@@ -65,6 +65,11 @@ class IPPopout(QWidget):
     """A popout widget that displays the device IP address and Tailscale address"""
     def __init__(self, ip_address, tailscale_address, parent=None):
         super().__init__(parent)
+        
+        # Load font config
+        config = config_handler.load_config()
+        font_family = config.get('font_family', 'Quicksand')
+        
         self.setWindowFlags(Qt.ToolTip | Qt.FramelessWindowHint)
         self.setAttribute(Qt.WA_TranslucentBackground, True)
         
@@ -77,11 +82,11 @@ class IPPopout(QWidget):
         ip_line = QHBoxLayout()
         ip_line.setSpacing(10)
         ip_label = QLabel("Device IP:")
-        ip_label.setStyleSheet("font-family: Quicksand; font-size: 16px; font-weight: bold; color: #333; border: none;")
+        ip_label.setStyleSheet(f"font-family: {font_family}; font-size: 16px; font-weight: bold; color: #333; border: none;")
         ip_line.addWidget(ip_label)
         
         ip_value = QLabel(ip_address)
-        ip_value.setStyleSheet("font-family: Quicksand; font-size: 16px; color: #666; border: none;")
+        ip_value.setStyleSheet(f"font-family: {font_family}; font-size: 16px; color: #666; border: none;")
         ip_line.addWidget(ip_value)
         content_layout.addLayout(ip_line)
         
@@ -89,11 +94,11 @@ class IPPopout(QWidget):
         tailscale_line = QHBoxLayout()
         tailscale_line.setSpacing(10)
         tailscale_label = QLabel("Tailscale Address:")
-        tailscale_label.setStyleSheet("font-family: Quicksand; font-size: 16px; font-weight: bold; color: #333; border: none;")
+        tailscale_label.setStyleSheet(f"font-family: {font_family}; font-size: 16px; font-weight: bold; color: #333; border: none;")
         tailscale_line.addWidget(tailscale_label)
         
         tailscale_value = QLabel(tailscale_address)
-        tailscale_value.setStyleSheet("font-family: Quicksand; font-size: 16px; color: #666; border: none;")
+        tailscale_value.setStyleSheet(f"font-family: {font_family}; font-size: 16px; color: #666; border: none;")
         tailscale_line.addWidget(tailscale_value)
         content_layout.addLayout(tailscale_line)
         
@@ -120,6 +125,11 @@ class UpdatePopout(QWidget):
     """A popout widget that displays git pull terminal output"""
     def __init__(self, parent=None):
         super().__init__(parent)
+        
+        # Load font config
+        config = config_handler.load_config()
+        font_family = config.get('font_family', 'Quicksand')
+        
         self.setWindowFlags(Qt.ToolTip | Qt.FramelessWindowHint)
         self.setAttribute(Qt.WA_TranslucentBackground, False)
         
@@ -136,14 +146,14 @@ class UpdatePopout(QWidget):
         header_layout.setContentsMargins(10, 5, 5, 5)
         
         header_label = QLabel("Update Status")
-        header_label.setStyleSheet("font-family: Quicksand; font-size: 14px; font-weight: bold; color: #333; border: none;")
+        header_label.setStyleSheet(f"font-family: {font_family}; font-size: 14px; font-weight: bold; color: #333; border: none;")
         header_layout.addWidget(header_label)
         header_layout.addStretch()
         
         self.close_button = QPushButton("✕")
-        self.close_button.setStyleSheet("""
-            QPushButton {
-                font-family: Quicksand;
+        self.close_button.setStyleSheet(f"""
+            QPushButton {{
+                font-family: {font_family};
                 font-size: 16px;
                 font-weight: bold;
                 padding: 0px;
@@ -183,9 +193,9 @@ class UpdatePopout(QWidget):
         
         # Create success label for displaying installed update info (hidden by default)
         self.success_label = QLabel()
-        self.success_label.setStyleSheet("""
-            QLabel {
-                font-family: Quicksand;
+        self.success_label.setStyleSheet(f"""
+            QLabel {{
+                font-family: {font_family};
                 font-size: 13px;
                 font-weight: bold;
                 color: #2a7a2a;
@@ -240,6 +250,11 @@ class RebootWarningOverlay(QWidget):
     """A fullscreen modal overlay that displays reboot countdown warning"""
     def __init__(self, parent=None):
         super().__init__(parent)
+        
+        # Load font config
+        config = config_handler.load_config()
+        font_family = config.get('font_family', 'Quicksand')
+        
         self.setWindowFlags(Qt.Window | Qt.FramelessWindowHint | Qt.WindowStaysOnTopHint)
         self.setAttribute(Qt.WA_TranslucentBackground, True)
         
@@ -267,8 +282,8 @@ class RebootWarningOverlay(QWidget):
         
         # Warning icon/text
         warning_label = QLabel("⚠ REBOOT WARNING ⚠")
-        warning_label.setStyleSheet("""
-            font-family: Quicksand;
+        warning_label.setStyleSheet(f"""
+            font-family: {font_family};
             font-size: 32px;
             font-weight: bold;
             color: white;
@@ -278,8 +293,8 @@ class RebootWarningOverlay(QWidget):
         
         # Countdown message
         self.countdown_label = QLabel("System will reboot in 60 seconds")
-        self.countdown_label.setStyleSheet("""
-            font-family: Quicksand;
+        self.countdown_label.setStyleSheet(f"""
+            font-family: {font_family};
             font-size: 24px;
             font-weight: bold;
             color: white;
@@ -292,9 +307,9 @@ class RebootWarningOverlay(QWidget):
         
         # Cancel button
         self.cancel_button = QPushButton("Cancel Reboot")
-        self.cancel_button.setStyleSheet("""
-            QPushButton {
-                font-family: Quicksand;
+        self.cancel_button.setStyleSheet(f"""
+            QPushButton {{
+                font-family: {font_family};
                 font-size: 22px;
                 font-weight: bold;
                 padding: 15px 40px;
@@ -334,6 +349,11 @@ class ShutdownPopout(QWidget):
     """A popout widget that displays shutdown and exit options"""
     def __init__(self, parent=None):
         super().__init__(parent)
+        
+        # Load font config
+        config = config_handler.load_config()
+        self.font_family = config.get('font_family', 'Quicksand')
+        
         self.setWindowFlags(Qt.ToolTip | Qt.FramelessWindowHint)
         self.setAttribute(Qt.WA_TranslucentBackground, False)
         
@@ -350,9 +370,9 @@ class ShutdownPopout(QWidget):
         # Create Reboot button
         self.reboot_button = QPushButton("Reboot")
         self.reboot_button.setMinimumWidth(200)
-        self.reboot_button.setStyleSheet("""
-            QPushButton {
-                font-family: Quicksand;
+        self.reboot_button.setStyleSheet(f"""
+            QPushButton {{
+                font-family: {self.font_family};
                 font-size: 18px;
                 font-weight: bold;
                 padding: 10px 20px;
@@ -373,9 +393,9 @@ class ShutdownPopout(QWidget):
         # Create Shutdown button
         self.shutdown_button = QPushButton("Shutdown")
         self.shutdown_button.setMinimumWidth(200)
-        self.shutdown_button.setStyleSheet("""
-            QPushButton {
-                font-family: Quicksand;
+        self.shutdown_button.setStyleSheet(f"""
+            QPushButton {{
+                font-family: {self.font_family};
                 font-size: 18px;
                 font-weight: bold;
                 padding: 10px 20px;
@@ -411,23 +431,23 @@ class ShutdownPopout(QWidget):
         self.shutdown_confirmed = False
         self.shutdown_button.setText("Shutdown")
         self.shutdown_button.setMinimumWidth(200)
-        self.shutdown_button.setStyleSheet("""
-            QPushButton {
-                font-family: Quicksand;
+        self.shutdown_button.setStyleSheet(f"""
+            QPushButton {{
+                font-family: {self.font_family};
                 font-size: 18px;
                 font-weight: bold;
                 padding: 10px 20px;
                 background-color: #e0e0e0;
                 border: none;
                 border-radius: 5px;
-            }
-            QPushButton:hover {
+            }}
+            QPushButton:hover {{
                 background-color: #d0d0d0;
-            }
-            QPushButton:pressed {
+            }}
+            QPushButton:pressed {{
                 background-color: #c0c0c0;
                 padding-bottom: 9px;
-            }
+            }}
         """)
     
     def reset_reboot_state(self):
@@ -435,23 +455,23 @@ class ShutdownPopout(QWidget):
         self.reboot_confirmed = False
         self.reboot_button.setText("Reboot")
         self.reboot_button.setMinimumWidth(200)
-        self.reboot_button.setStyleSheet("""
-            QPushButton {
-                font-family: Quicksand;
+        self.reboot_button.setStyleSheet(f"""
+            QPushButton {{
+                font-family: {self.font_family};
                 font-size: 18px;
                 font-weight: bold;
                 padding: 10px 20px;
                 background-color: #e0e0e0;
                 border: none;
                 border-radius: 5px;
-            }
-            QPushButton:hover {
+            }}
+            QPushButton:hover {{
                 background-color: #d0d0d0;
-            }
-            QPushButton:pressed {
+            }}
+            QPushButton:pressed {{
                 background-color: #c0c0c0;
                 padding-bottom: 9px;
-            }
+            }}
         """)
     
     def set_reboot_confirm_state(self):
@@ -459,9 +479,9 @@ class ShutdownPopout(QWidget):
         self.reboot_confirmed = True
         self.reboot_button.setText("Confirm Reboot")
         self.reboot_button.setMinimumWidth(200)
-        self.reboot_button.setStyleSheet("""
-            QPushButton {
-                font-family: Quicksand;
+        self.reboot_button.setStyleSheet(f"""
+            QPushButton {{
+                font-family: {self.font_family};
                 font-size: 18px;
                 font-weight: bold;
                 padding: 10px 20px;
@@ -469,14 +489,14 @@ class ShutdownPopout(QWidget):
                 color: white;
                 border: none;
                 border-radius: 5px;
-            }
-            QPushButton:hover {
+            }}
+            QPushButton:hover {{
                 background-color: #da190b;
-            }
-            QPushButton:pressed {
+            }}
+            QPushButton:pressed {{
                 background-color: #c1170a;
                 padding-bottom: 9px;
-            }
+            }}
         """)
     
     def set_shutdown_confirm_state(self):
@@ -484,9 +504,9 @@ class ShutdownPopout(QWidget):
         self.shutdown_confirmed = True
         self.shutdown_button.setText("Confirm Shutdown")
         self.shutdown_button.setMinimumWidth(200)
-        self.shutdown_button.setStyleSheet("""
-            QPushButton {
-                font-family: Quicksand;
+        self.shutdown_button.setStyleSheet(f"""
+            QPushButton {{
+                font-family: {self.font_family};
                 font-size: 18px;
                 font-weight: bold;
                 padding: 10px 20px;
@@ -494,14 +514,14 @@ class ShutdownPopout(QWidget):
                 color: white;
                 border: none;
                 border-radius: 5px;
-            }
-            QPushButton:hover {
+            }}
+            QPushButton:hover {{
                 background-color: #da190b;
-            }
-            QPushButton:pressed {
+            }}
+            QPushButton:pressed {{
                 background-color: #c1170a;
                 padding-bottom: 9px;
-            }
+            }}
         """)
 
 class MainWindow(QMainWindow):
@@ -518,12 +538,12 @@ class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
 
-        # Load custom font
-        QFontDatabase.addApplicationFont("assets/Quicksand-Bold.ttf")
-
-        # Load config to get title text
+        # Load config to get properties
         config = config_handler.load_config()
         self.default_title_text = config.get('title_text', "Nicole's Train Tracker!")
+        self.font_family = config.get('font_family', 'Quicksand')
+
+
 
         # self.setFixedSize(QSize(1024,600))  # Commented out for fullscreen mode
         self.setWindowTitle(self.default_title_text)
@@ -638,19 +658,19 @@ class MainWindow(QMainWindow):
             print("Window shown at time:", datetime.now().strftime("%H:%M:%S"))
             # Show a brief loading state while UI finishes drawing
             self.startup_status_label.setText("Loading Visuals...")
-            self.startup_status_label.setStyleSheet("font-family: Quicksand; font-size: 24px; color: #666;")
+            self.startup_status_label.setStyleSheet(f"font-family: {self.font_family}; font-size: 24px; color: #666;")
             # Now start the delay, then check WiFi first
             QTimer.singleShot(1000, self.check_wifi_and_load)
     
     def check_wifi_and_load(self):
         """Check WiFi connection before attempting API load."""
         self.startup_status_label.setText("Checking WiFi connection...")
-        self.startup_status_label.setStyleSheet("font-family: Quicksand; font-size: 24px; color: #666;")
+        self.startup_status_label.setStyleSheet(f"font-family: {self.font_family}; font-size: 24px; color: #666;")
         
         if not self.check_wifi_connection():
             # No WiFi connection - show error and WiFi setup buttons
             self.startup_status_label.setText("WiFi connection not configured. Launch network setup?")
-            self.startup_status_label.setStyleSheet("font-family: Quicksand; font-size: 24px; color: #cc0000;")
+            self.startup_status_label.setStyleSheet(f"font-family: {self.font_family}; font-size: 24px; color: #cc0000;")
             # Show WiFi-specific buttons
             self.startup_wifi_buttons_container.show()
             return
@@ -689,7 +709,7 @@ class MainWindow(QMainWindow):
         try:
             # Switch subtitle when we actually begin the API call
             self.startup_status_label.setText("Connecting to Metro API...")
-            self.startup_status_label.setStyleSheet("font-family: Quicksand; font-size: 24px; color: #666;")
+            self.startup_status_label.setStyleSheet(f"font-family: {self.font_family}; font-size: 24px; color: #666;")
 
             config = config_handler.load_config()
             api_key = config.get('api_key')
@@ -697,7 +717,7 @@ class MainWindow(QMainWindow):
                 # Stay on startup page and prompt user to add API key
                 message = "API Key Missing. Add it by visiting nicoletrains.local"
                 self.startup_status_label.setText(message)
-                self.startup_status_label.setStyleSheet("font-family: Quicksand; font-size: 24px; color: #cc0000;")
+                self.startup_status_label.setStyleSheet(f"font-family: {self.font_family}; font-size: 24px; color: #cc0000;")
                 # Start checking for API key to be added
                 self.waiting_for_api_key = True
                 self.api_key_check_timer.start(2000)  # Check every 2 seconds
@@ -718,7 +738,7 @@ class MainWindow(QMainWindow):
             self.refresh_error_message = str(e)
             # Update startup screen to show error
             self.startup_status_label.setText(str(e))
-            self.startup_status_label.setStyleSheet("font-family: Quicksand; font-size: 24px; color: #cc0000;")
+            self.startup_status_label.setStyleSheet(f"font-family: {self.font_family}; font-size: 24px; color: #cc0000;")
             # Show the action buttons
             self.startup_buttons_container.show()
     
@@ -744,7 +764,7 @@ class MainWindow(QMainWindow):
             
             # Reset status label to original state
             self.startup_status_label.setText("Connecting to Metro API...")
-            self.startup_status_label.setStyleSheet("font-family: Quicksand; font-size: 24px; color: #666;")
+            self.startup_status_label.setStyleSheet(f"font-family: {self.font_family}; font-size: 24px; color: #666;")
             
             # Retry the initial load
             self.perform_initial_load()
@@ -820,7 +840,7 @@ class MainWindow(QMainWindow):
         except Exception as e:
             print(f"Error launching WiFi setup: {e}")
             self.startup_status_label.setText(f"Failed to launch WiFi setup: {e}")
-            self.startup_status_label.setStyleSheet("font-family: Quicksand; font-size: 24px; color: #cc0000;")
+            self.startup_status_label.setStyleSheet(f"font-family: {self.font_family}; font-size: 24px; color: #cc0000;")
     
     def get_device_ip(self):
         """Get the local IP address of the device"""
@@ -1254,13 +1274,13 @@ class MainWindow(QMainWindow):
         
         # Destination label in the center
         destination_label = QLabel("—")
-        destination_label.setStyleSheet("font-family: Quicksand; font-size: 28px; font-weight: bold;")
+        destination_label.setStyleSheet(f"font-family: {self.font_family}; font-size: 28px; font-weight: bold;")
         row_layout.addWidget(destination_label, alignment=Qt.AlignVCenter)
         row_layout.addStretch()
         
         # Arrival time on the right
         time_label = QLabel("—")
-        time_label.setStyleSheet("font-family: Quicksand; font-size: 28px; font-weight: bold;")
+        time_label.setStyleSheet(f"font-family: {self.font_family}; font-size: 28px; font-weight: bold;")
         row_layout.addWidget(time_label, alignment=Qt.AlignVCenter)
         
         row.setLayout(row_layout)
@@ -1549,12 +1569,12 @@ class MainWindow(QMainWindow):
                 f"Error Refreshing: {self.refresh_error_message} Trying again in {time_display}"
             )
             self.refresh_countdown_label.setStyleSheet(
-                "font-family: Quicksand; font-size: 14px; color: white; background-color: #e74c3c; padding: 5px; border-radius: 3px;"
+                f"font-family: {self.font_family}; font-size: 14px; color: white; background-color: #e74c3c; padding: 5px; border-radius: 3px;"
             )
         else:
             # Normal countdown display
             self.refresh_countdown_label.setText(f"Refresh in {time_display}")
-            self.refresh_countdown_label.setStyleSheet("font-family: Quicksand; font-size: 14px; color: #666;")
+            self.refresh_countdown_label.setStyleSheet(f"font-family: {self.font_family}; font-size: 14px; color: #666;")
     
     def toggle_countdown_visibility(self):
         """Toggle the visibility of the countdown label"""
@@ -1737,7 +1757,7 @@ class MainWindow(QMainWindow):
         if color == "green":
             self.update_button.setStyleSheet("""
                 QPushButton {
-                    font-family: Quicksand;
+                    font-family: {self.font_family};
                     font-size: 20px;
                     font-weight: bold;
                     padding: 8px 16px;
@@ -1757,7 +1777,7 @@ class MainWindow(QMainWindow):
         elif color == "orange":
             self.update_button.setStyleSheet("""
                 QPushButton {
-                    font-family: Quicksand;
+                    font-family: {self.font_family};
                     font-size: 20px;
                     font-weight: bold;
                     padding: 8px 16px;
@@ -1777,7 +1797,7 @@ class MainWindow(QMainWindow):
         elif color == "red":
             self.update_button.setStyleSheet("""
                 QPushButton {
-                    font-family: Quicksand;
+                    font-family: {self.font_family};
                     font-size: 20px;
                     font-weight: bold;
                     padding: 8px 16px;
@@ -1798,7 +1818,7 @@ class MainWindow(QMainWindow):
             # Light green for "update available" state
             self.update_button.setStyleSheet("""
                 QPushButton {
-                    font-family: Quicksand;
+                    font-family: {self.font_family};
                     font-size: 20px;
                     font-weight: bold;
                     padding: 8px 16px;
@@ -2108,7 +2128,7 @@ class MainWindow(QMainWindow):
         if color == "neutral":
             self.shutdown_exit_button.setStyleSheet("""
                 QPushButton {
-                    font-family: Quicksand;
+                    font-family: {self.font_family};
                     font-size: 20px;
                     font-weight: bold;
                     padding: 8px 16px;
@@ -2127,7 +2147,7 @@ class MainWindow(QMainWindow):
         elif color == "active":
             self.shutdown_exit_button.setStyleSheet("""
                 QPushButton {
-                    font-family: Quicksand;
+                    font-family: {self.font_family};
                     font-size: 20px;
                     font-weight: bold;
                     padding: 8px 16px;
@@ -2307,7 +2327,7 @@ class MainWindow(QMainWindow):
         left_layout.setContentsMargins(0, 0, 0, 0)
         left_layout.setSpacing(0)
         title_label = QLabel(self.default_title_text)
-        title_label.setStyleSheet("font-family: Quicksand; font-size: 30px; font-weight: bold;")
+        title_label.setStyleSheet(f"font-family: {self.font_family}; font-size: 30px; font-weight: bold;")
         
         left_layout.addWidget(title_label, alignment=Qt.AlignVCenter | Qt.AlignLeft)
         left_container.setLayout(left_layout)
@@ -2556,12 +2576,12 @@ class MainWindow(QMainWindow):
         # Apply color if specified
         if message_color:
             self.home_title_label.setStyleSheet(
-                f"font-family: Quicksand; font-size: 30px; font-weight: bold; color: {message_color};"
+                f"font-family: {self.font_family}; font-size: 30px; font-weight: bold; color: {message_color};"
             )
         else:
             # Use default (no color specified - current behavior)
             self.home_title_label.setStyleSheet(
-                "font-family: Quicksand; font-size: 30px; font-weight: bold;"
+                f"font-family: {self.font_family}; font-size: 30px; font-weight: bold;"
             )
         
         fade_duration = self.message_config.get("fade_duration_ms", 800)
@@ -2594,7 +2614,7 @@ class MainWindow(QMainWindow):
         
         # Restore default styling (no color specified)
         self.home_title_label.setStyleSheet(
-            "font-family: Quicksand; font-size: 30px; font-weight: bold;"
+            f"font-family: {self.font_family}; font-size: 30px; font-weight: bold;"
         )
         
         fade_duration = self.message_config.get("fade_duration_ms", 800)
@@ -2655,13 +2675,13 @@ class MainWindow(QMainWindow):
         
         # Title label - large and centered
         self.startup_title_label = QLabel(self.default_title_text)
-        self.startup_title_label.setStyleSheet("font-family: Quicksand; font-size: 48px; font-weight: bold; color: #333;")
+        self.startup_title_label.setStyleSheet(f"font-family: {self.font_family}; font-size: 48px; font-weight: bold; color: #333;")
         self.startup_title_label.setAlignment(Qt.AlignCenter)
         center_layout.addWidget(self.startup_title_label)
         
         # Status label - smaller, below title
         self.startup_status_label = QLabel("Connecting to Metro API...")
-        self.startup_status_label.setStyleSheet("font-family: Quicksand; font-size: 24px; color: #666;")
+        self.startup_status_label.setStyleSheet(f"font-family: {self.font_family}; font-size: 24px; color: #666;")
         self.startup_status_label.setAlignment(Qt.AlignCenter)
         center_layout.addWidget(self.startup_status_label)
         
@@ -2677,7 +2697,7 @@ class MainWindow(QMainWindow):
         self.startup_exit_button.setMinimumWidth(180)
         self.startup_exit_button.setStyleSheet("""
             QPushButton {
-                font-family: Quicksand;
+                font-family: {self.font_family};
                 font-size: 18px;
                 font-weight: bold;
                 padding: 10px 20px;
@@ -2701,7 +2721,7 @@ class MainWindow(QMainWindow):
         self.startup_reboot_button.setMinimumWidth(180)
         self.startup_reboot_button.setStyleSheet("""
             QPushButton {
-                font-family: Quicksand;
+                font-family: {self.font_family};
                 font-size: 18px;
                 font-weight: bold;
                 padding: 10px 20px;
@@ -2725,7 +2745,7 @@ class MainWindow(QMainWindow):
         self.startup_shutdown_button.setMinimumWidth(180)
         self.startup_shutdown_button.setStyleSheet("""
             QPushButton {
-                font-family: Quicksand;
+                font-family: {self.font_family};
                 font-size: 18px;
                 font-weight: bold;
                 padding: 10px 20px;
@@ -2760,7 +2780,7 @@ class MainWindow(QMainWindow):
         self.startup_launch_setup_button.setMinimumWidth(180)
         self.startup_launch_setup_button.setStyleSheet("""
             QPushButton {
-                font-family: Quicksand;
+                font-family: {self.font_family};
                 font-size: 18px;
                 font-weight: bold;
                 padding: 10px 20px;
@@ -2784,7 +2804,7 @@ class MainWindow(QMainWindow):
         self.startup_wifi_reboot_button.setMinimumWidth(180)
         self.startup_wifi_reboot_button.setStyleSheet("""
             QPushButton {
-                font-family: Quicksand;
+                font-family: {self.font_family};
                 font-size: 18px;
                 font-weight: bold;
                 padding: 10px 20px;
@@ -2808,7 +2828,7 @@ class MainWindow(QMainWindow):
         self.startup_wifi_shutdown_button.setMinimumWidth(180)
         self.startup_wifi_shutdown_button.setStyleSheet("""
             QPushButton {
-                font-family: Quicksand;
+                font-family: {self.font_family};
                 font-size: 18px;
                 font-weight: bold;
                 padding: 10px 20px;
@@ -2850,7 +2870,7 @@ class MainWindow(QMainWindow):
         
         # Create countdown label
         self.refresh_countdown_label = QLabel("Refresh in 30s")
-        self.refresh_countdown_label.setStyleSheet("font-family: Quicksand; font-size: 14px; color: #666; padding: 0px;")
+        self.refresh_countdown_label.setStyleSheet(f"font-family: {self.font_family}; font-size: 14px; color: #666; padding: 0px;")
         self.refresh_countdown_label.setMaximumWidth(500)  # Prevent overlap with title and buttons
         self.refresh_countdown_label.setWordWrap(False)
         self.refresh_countdown_label.setSizePolicy(QSizePolicy.Maximum, QSizePolicy.Preferred)
@@ -2860,7 +2880,7 @@ class MainWindow(QMainWindow):
         
         # Create clock label and timer
         self.clock_label = QLabel()
-        self.clock_label.setStyleSheet("font-family: Quicksand; font-size: 30px; font-weight: bold;")
+        self.clock_label.setStyleSheet(f"font-family: {self.font_family}; font-size: 30px; font-weight: bold;")
         self.update_clock()
         self.clock_timer = QTimer()
         self.clock_timer.timeout.connect(self.update_clock)
@@ -2869,7 +2889,7 @@ class MainWindow(QMainWindow):
         # Create update notification label (initially hidden)
         self.update_notification_label = QLabel("Update Available")
         self.update_notification_label.setStyleSheet("""
-            font-family: Quicksand;
+            font-family: {self.font_family};
             font-size: 14px;
             font-weight: bold;
             color: #155724;
@@ -2883,7 +2903,7 @@ class MainWindow(QMainWindow):
         settings_button = QPushButton("⚙")
         settings_button.setStyleSheet("""
             QPushButton {
-                font-family: Quicksand;
+                font-family: {self.font_family};
                 font-size: 22px;
                 font-weight: bold;
                 padding: 5px 20px;
@@ -2906,7 +2926,7 @@ class MainWindow(QMainWindow):
         close_button = QPushButton("✕")
         close_button.setStyleSheet("""
             QPushButton {
-                font-family: Quicksand;
+                font-family: {self.font_family};
                 font-size: 22px;
                 font-weight: bold;
                 padding: 5px 20px;
@@ -2985,7 +3005,7 @@ class MainWindow(QMainWindow):
         back_button = QPushButton("←")
         back_button.setStyleSheet("""
             QPushButton {
-                font-family: Quicksand;
+                font-family: {self.font_family};
                 font-size: 22px;
                 font-weight: bold;
                 padding: 5px 20px;
@@ -3013,7 +3033,7 @@ class MainWindow(QMainWindow):
         # Add settings subtitle
         content_layout = QVBoxLayout()
         settings_label = QLabel("Settings")
-        settings_label.setStyleSheet("font-family: Quicksand; font-size: 28px; font-weight: bold;")
+        settings_label.setStyleSheet(f"font-family: {self.font_family}; font-size: 28px; font-weight: bold;")
         settings_label.setAlignment(Qt.AlignCenter)
         content_layout.addWidget(settings_label)
         content_layout.addSpacing(10)
@@ -3038,14 +3058,14 @@ class MainWindow(QMainWindow):
         line_selector_layout.setContentsMargins(0, 0, 0, 0)
         
         line_label = QLabel("Select Line:")
-        line_label.setStyleSheet("font-family: Quicksand; font-size: 21px; font-weight: bold;")
+        line_label.setStyleSheet(f"font-family: {self.font_family}; font-size: 21px; font-weight: bold;")
         line_label.setFixedWidth(selectors_label_width)
         line_selector_layout.addWidget(line_label)
         
         self.line_combo = QComboBox()
         self.line_combo.setStyleSheet("""
             QComboBox {
-                font-family: Quicksand;
+                font-family: {self.font_family};
                 font-size: 18px;
                 padding: 7px;
                 border: 1px solid #ccc;
@@ -3056,7 +3076,7 @@ class MainWindow(QMainWindow):
                 border: 1px solid #999;
             }
             QComboBox QAbstractItemView {
-                font-family: Quicksand;
+                font-family: {self.font_family};
                 font-size: 18px;
                 background-color: white;
                 selection-background-color: #e0e0e0;
@@ -3094,14 +3114,14 @@ class MainWindow(QMainWindow):
         station_selector_layout.setContentsMargins(0, 0, 0, 0)
         
         station_label = QLabel("Select Station:")
-        station_label.setStyleSheet("font-family: Quicksand; font-size: 21px; font-weight: bold;")
+        station_label.setStyleSheet(f"font-family: {self.font_family}; font-size: 21px; font-weight: bold;")
         station_label.setFixedWidth(selectors_label_width)
         station_selector_layout.addWidget(station_label)
         
         self.station_combo = QComboBox()
         self.station_combo.setStyleSheet("""
             QComboBox {
-                font-family: Quicksand;
+                font-family: {self.font_family};
                 font-size: 18px;
                 padding: 7px;
                 border: 1px solid #ccc;
@@ -3112,7 +3132,7 @@ class MainWindow(QMainWindow):
                 border: 1px solid #999;
             }
             QComboBox QAbstractItemView {
-                font-family: Quicksand;
+                font-family: {self.font_family};
                 font-size: 18px;
                 background-color: white;
                 selection-background-color: #e0e0e0;
@@ -3150,14 +3170,14 @@ class MainWindow(QMainWindow):
         destination_selector_layout.setContentsMargins(0, 0, 0, 0)
         
         destination_label = QLabel("Select Destination:")
-        destination_label.setStyleSheet("font-family: Quicksand; font-size: 21px; font-weight: bold;")
+        destination_label.setStyleSheet(f"font-family: {self.font_family}; font-size: 21px; font-weight: bold;")
         destination_label.setFixedWidth(selectors_label_width)
         destination_selector_layout.addWidget(destination_label)
         
         self.destination_combo = QComboBox()
         self.destination_combo.setStyleSheet("""
             QComboBox {
-                font-family: Quicksand;
+                font-family: {self.font_family};
                 font-size: 18px;
                 padding: 7px;
                 border: 1px solid #ccc;
@@ -3168,7 +3188,7 @@ class MainWindow(QMainWindow):
                 border: 1px solid #999;
             }
             QComboBox QAbstractItemView {
-                font-family: Quicksand;
+                font-family: {self.font_family};
                 font-size: 18px;
                 background-color: white;
                 selection-background-color: #e0e0e0;
@@ -3206,7 +3226,7 @@ class MainWindow(QMainWindow):
         countdown_checkbox_layout.setContentsMargins(0, 0, 0, 0)
         
         countdown_label = QLabel("Show Time to Refresh:")
-        countdown_label.setStyleSheet("font-family: Quicksand; font-size: 21px; font-weight: bold;")
+        countdown_label.setStyleSheet(f"font-family: {self.font_family}; font-size: 21px; font-weight: bold;")
         countdown_label.setFixedWidth(checkboxes_label_width)
         countdown_checkbox_layout.addWidget(countdown_label)
         
@@ -3245,7 +3265,7 @@ class MainWindow(QMainWindow):
         clock_checkbox_layout.setContentsMargins(0, 0, 0, 0)
         
         clock_label = QLabel("Show Clock in Top Bar:")
-        clock_label.setStyleSheet("font-family: Quicksand; font-size: 21px; font-weight: bold;")
+        clock_label.setStyleSheet(f"font-family: {self.font_family}; font-size: 21px; font-weight: bold;")
         clock_label.setFixedWidth(checkboxes_label_width)
         clock_checkbox_layout.addWidget(clock_label)
         
@@ -3264,7 +3284,7 @@ class MainWindow(QMainWindow):
         filter_checkbox_layout.setContentsMargins(0, 0, 0, 0)
         
         filter_label = QLabel("Filter by Selected Destination:")
-        filter_label.setStyleSheet("font-family: Quicksand; font-size: 21px; font-weight: bold;")
+        filter_label.setStyleSheet(f"font-family: {self.font_family}; font-size: 21px; font-weight: bold;")
         filter_label.setFixedWidth(checkboxes_label_width)
         filter_checkbox_layout.addWidget(filter_label)
         
@@ -3304,7 +3324,7 @@ class MainWindow(QMainWindow):
         filter_direction_checkbox_layout.setContentsMargins(0, 0, 0, 0)
         
         filter_direction_label = QLabel("Filter by Destination Direction:")
-        filter_direction_label.setStyleSheet("font-family: Quicksand; font-size: 21px; font-weight: bold;")
+        filter_direction_label.setStyleSheet(f"font-family: {self.font_family}; font-size: 21px; font-weight: bold;")
         filter_direction_label.setFixedWidth(checkboxes_label_width)
         filter_direction_checkbox_layout.addWidget(filter_direction_label)
         
@@ -3384,7 +3404,7 @@ class MainWindow(QMainWindow):
         screen_sleep_enable_layout.setContentsMargins(0, 0, 0, 0)
         
         screen_sleep_enable_label = QLabel("Enable Screen Sleep:")
-        screen_sleep_enable_label.setStyleSheet("font-family: Quicksand; font-size: 21px; font-weight: bold;")
+        screen_sleep_enable_label.setStyleSheet(f"font-family: {self.font_family}; font-size: 21px; font-weight: bold;")
         screen_sleep_enable_layout.addWidget(screen_sleep_enable_label)
         
         self.screen_sleep_enabled_checkbox = QCheckBox()
@@ -3421,7 +3441,7 @@ class MainWindow(QMainWindow):
         
         # Label showing current value
         self.screen_sleep_value_label = QLabel("Screen Sleep Timeout: 5 min")
-        self.screen_sleep_value_label.setStyleSheet("font-family: Quicksand; font-size: 21px; font-weight: bold;")
+        self.screen_sleep_value_label.setStyleSheet(f"font-family: {self.font_family}; font-size: 21px; font-weight: bold;")
         screen_sleep_slider_layout.addWidget(self.screen_sleep_value_label)
         
         # Slider
@@ -3484,7 +3504,7 @@ class MainWindow(QMainWindow):
         self.ip_button = QPushButton("IP")
         self.ip_button.setStyleSheet("""
             QPushButton {
-                font-family: Quicksand;
+                font-family: {self.font_family};
                 font-size: 20px;
                 font-weight: bold;
                 padding: 8px 12px;
@@ -3506,7 +3526,7 @@ class MainWindow(QMainWindow):
         self.wifi_button = QPushButton("WiFi Setup")
         self.wifi_button.setStyleSheet("""
             QPushButton {
-                font-family: Quicksand;
+                font-family: {self.font_family};
                 font-size: 20px;
                 font-weight: bold;
                 padding: 8px 12px;
@@ -3537,7 +3557,7 @@ class MainWindow(QMainWindow):
         save_button = QPushButton("Save Settings")
         save_button.setStyleSheet("""
             QPushButton {
-                font-family: Quicksand;
+                font-family: {self.font_family};
                 font-size: 20px;
                 font-weight: bold;
                 padding: 12px 36px;
@@ -3562,13 +3582,13 @@ class MainWindow(QMainWindow):
         labels_container.setSpacing(10)
         
         self.timestamp_label = QLabel()
-        self.timestamp_label.setStyleSheet("font-family: Quicksand; font-size: 14px; color: #666;")
+        self.timestamp_label.setStyleSheet(f"font-family: {self.font_family}; font-size: 14px; color: #666;")
         self.timestamp_label.setAlignment(Qt.AlignCenter)
         self.update_timestamp_label()
         labels_container.addWidget(self.timestamp_label)
         
         self.unsaved_warning_label = QLabel("Changes not yet saved!")
-        self.unsaved_warning_label.setStyleSheet("font-family: Quicksand; font-size: 14px; color: #e74c3c;")
+        self.unsaved_warning_label.setStyleSheet(f"font-family: {self.font_family}; font-size: 14px; color: #e74c3c;")
         self.unsaved_warning_label.setAlignment(Qt.AlignCenter)
         self.unsaved_warning_label.hide()  # Initially hidden
         labels_container.addWidget(self.unsaved_warning_label)
@@ -3586,7 +3606,7 @@ class MainWindow(QMainWindow):
         self.update_button = QPushButton("Update")
         self.update_button.setStyleSheet("""
             QPushButton {
-                font-family: Quicksand;
+                font-family: {self.font_family};
                 font-size: 20px;
                 font-weight: bold;
                 padding: 8px 16px;
@@ -3608,7 +3628,7 @@ class MainWindow(QMainWindow):
         self.shutdown_exit_button = QPushButton("Shutdown")
         self.shutdown_exit_button.setStyleSheet("""
             QPushButton {
-                font-family: Quicksand;
+                font-family: {self.font_family};
                 font-size: 20px;
                 font-weight: bold;
                 padding: 8px 16px;

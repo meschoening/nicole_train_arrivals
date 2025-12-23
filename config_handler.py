@@ -13,7 +13,8 @@ DEFAULT_CONFIG = {
     "screen_sleep_minutes": 5,
     "refresh_rate_seconds": 30,
     "title_text": "Nicole's Train Tracker!",
-    "update_check_interval_seconds": 60
+    "update_check_interval_seconds": 60,
+    "font_family": "Quicksand"
 }
 
 

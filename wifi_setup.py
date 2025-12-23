@@ -12,12 +12,13 @@ from PyQt5.QtWidgets import (
     QScrollArea
 )
 from PyQt5.QtCore import Qt, QTimer, QProcess
-from PyQt5.QtGui import QFontDatabase
+
 import os
 import sys
 import subprocess
 import argparse
 import threading
+import config_handler
 
 
 class WiFiSetupWindow(QMainWindow):
@@ -26,8 +27,9 @@ class WiFiSetupWindow(QMainWindow):
     def __init__(self):
         super().__init__()
         
-        # Load custom font
-        QFontDatabase.addApplicationFont("assets/Quicksand-Bold.ttf")
+        # Load config to get font family
+        config = config_handler.load_config()
+        self.font_family = config.get('font_family', 'Quicksand')
         
         self.title_text = "WiFi Configuration"
         self.setWindowTitle(self.title_text)
@@ -89,7 +91,7 @@ class WiFiSetupWindow(QMainWindow):
         
         # Title label
         title_label = QLabel(self.title_text)
-        title_label.setStyleSheet("font-family: Quicksand; font-size: 30px; font-weight: bold;")
+        title_label.setStyleSheet(f"font-family: {self.font_family}; font-size: 30px; font-weight: bold;")
         layout.addWidget(title_label, alignment=Qt.AlignVCenter | Qt.AlignLeft)
         
         layout.addStretch()
@@ -98,7 +100,7 @@ class WiFiSetupWindow(QMainWindow):
         return_button = QPushButton("Return to Main Display")
         return_button.setStyleSheet("""
             QPushButton {
-                font-family: Quicksand;
+                font-family: {self.font_family};
                 font-size: 18px;
                 font-weight: bold;
                 padding: 10px 25px;
@@ -152,10 +154,10 @@ class WiFiSetupWindow(QMainWindow):
         # Status label
         status_row = QHBoxLayout()
         status_title = QLabel("Status:")
-        status_title.setStyleSheet("font-family: Quicksand; font-size: 24px; font-weight: bold;")
+        status_title.setStyleSheet(f"font-family: {self.font_family}; font-size: 24px; font-weight: bold;")
         status_title.setFixedWidth(150)
         self.status_value = QLabel("Checking...")
-        self.status_value.setStyleSheet("font-family: Quicksand; font-size: 24px;")
+        self.status_value.setStyleSheet(f"font-family: {self.font_family}; font-size: 24px;")
         status_row.addWidget(status_title)
         status_row.addWidget(self.status_value)
         status_row.addStretch()
@@ -164,10 +166,10 @@ class WiFiSetupWindow(QMainWindow):
         # AP Name label
         ap_row = QHBoxLayout()
         ap_title = QLabel("AP Name:")
-        ap_title.setStyleSheet("font-family: Quicksand; font-size: 24px; font-weight: bold;")
+        ap_title.setStyleSheet(f"font-family: {self.font_family}; font-size: 24px; font-weight: bold;")
         ap_title.setFixedWidth(150)
         self.ap_name_value = QLabel("—")
-        self.ap_name_value.setStyleSheet("font-family: Quicksand; font-size: 24px;")
+        self.ap_name_value.setStyleSheet(f"font-family: {self.font_family}; font-size: 24px;")
         ap_row.addWidget(ap_title)
         ap_row.addWidget(self.ap_name_value)
         ap_row.addStretch()
@@ -176,10 +178,10 @@ class WiFiSetupWindow(QMainWindow):
         # IP Address label
         ip_row = QHBoxLayout()
         ip_title = QLabel("IP Address:")
-        ip_title.setStyleSheet("font-family: Quicksand; font-size: 24px; font-weight: bold;")
+        ip_title.setStyleSheet(f"font-family: {self.font_family}; font-size: 24px; font-weight: bold;")
         ip_title.setFixedWidth(150)
         self.ip_value = QLabel("—")
-        self.ip_value.setStyleSheet("font-family: Quicksand; font-size: 24px;")
+        self.ip_value.setStyleSheet(f"font-family: {self.font_family}; font-size: 24px;")
         ip_row.addWidget(ip_title)
         ip_row.addWidget(self.ip_value)
         ip_row.addStretch()
@@ -189,7 +191,7 @@ class WiFiSetupWindow(QMainWindow):
         self.broadcast_button = QPushButton("Broadcast Setup Network")
         self.broadcast_button.setStyleSheet("""
             QPushButton {
-                font-family: Quicksand;
+                font-family: {self.font_family};
                 font-size: 18px;
                 font-weight: bold;
                 padding: 10px 25px;
@@ -212,7 +214,7 @@ class WiFiSetupWindow(QMainWindow):
         
         # Connection result (shown after stopping broadcast)
         self.connection_result_label = QLabel("")
-        self.connection_result_label.setStyleSheet("font-family: Quicksand; font-size: 20px; color: #666;")
+        self.connection_result_label.setStyleSheet(f"font-family: {self.font_family}; font-size: 20px; color: #666;")
         self.connection_result_label.setWordWrap(True)
         self.connection_result_label.hide()
         status_layout.addWidget(self.connection_result_label)
@@ -232,14 +234,14 @@ class WiFiSetupWindow(QMainWindow):
         
         # Section title
         manual_title = QLabel("Manual Connection")
-        manual_title.setStyleSheet("font-family: Quicksand; font-size: 22px; font-weight: bold;")
+        manual_title.setStyleSheet(f"font-family: {self.font_family}; font-size: 22px; font-weight: bold;")
         manual_layout.addWidget(manual_title)
         
         # Saved networks dropdown
         self.saved_networks_combo = QComboBox()
         self.saved_networks_combo.setStyleSheet("""
             QComboBox {
-                font-family: Quicksand;
+                font-family: {self.font_family};
                 font-size: 18px;
                 padding: 10px;
                 border: 1px solid #ccc;
@@ -250,7 +252,7 @@ class WiFiSetupWindow(QMainWindow):
                 border: 1px solid #999;
             }
             QComboBox QAbstractItemView {
-                font-family: Quicksand;
+                font-family: {self.font_family};
                 font-size: 18px;
                 background-color: white;
                 selection-background-color: #e0e0e0;
@@ -266,7 +268,7 @@ class WiFiSetupWindow(QMainWindow):
         self.refresh_networks_button = QPushButton("Refresh List")
         self.refresh_networks_button.setStyleSheet("""
             QPushButton {
-                font-family: Quicksand;
+                font-family: {self.font_family};
                 font-size: 16px;
                 font-weight: bold;
                 padding: 10px 20px;
@@ -288,7 +290,7 @@ class WiFiSetupWindow(QMainWindow):
         self.connect_button = QPushButton("Connect to Network")
         self.connect_button.setStyleSheet("""
             QPushButton {
-                font-family: Quicksand;
+                font-family: {self.font_family};
                 font-size: 16px;
                 font-weight: bold;
                 padding: 10px 20px;
@@ -333,7 +335,7 @@ class WiFiSetupWindow(QMainWindow):
         
         # Console Output label
         console_title = QLabel("Console Output:")
-        console_title.setStyleSheet("font-family: Quicksand; font-size: 22px; font-weight: bold;")
+        console_title.setStyleSheet(f"font-family: {self.font_family}; font-size: 22px; font-weight: bold;")
         console_layout.addWidget(console_title)
         
         # Console output (fills remaining space)
@@ -369,7 +371,7 @@ class WiFiSetupWindow(QMainWindow):
         try:
             if self.is_broadcasting:
                 self.status_value.setText("AP Mode (Broadcasting)")
-                self.status_value.setStyleSheet("font-family: Quicksand; font-size: 24px; color: #2196F3;")
+                self.status_value.setStyleSheet(f"font-family: {self.font_family}; font-size: 24px; color: #2196F3;")
                 self.ap_name_value.setText("NicoleTrains-Setup")
                 self.ip_value.setText("192.168.4.1")
             else:
@@ -395,21 +397,21 @@ class WiFiSetupWindow(QMainWindow):
                 
                 if connected:
                     self.status_value.setText("Connected")
-                    self.status_value.setStyleSheet("font-family: Quicksand; font-size: 24px; color: #4CAF50;")
+                    self.status_value.setStyleSheet(f"font-family: {self.font_family}; font-size: 24px; color: #4CAF50;")
                     self.ap_name_value.setText(connection_name if connection_name else "—")
                     # Get current IP
                     ip = self.get_current_ip()
                     self.ip_value.setText(ip if ip else "—")
                 else:
                     self.status_value.setText("Not Connected")
-                    self.status_value.setStyleSheet("font-family: Quicksand; font-size: 24px; color: #cc0000;")
+                    self.status_value.setStyleSheet(f"font-family: {self.font_family}; font-size: 24px; color: #cc0000;")
                     self.ap_name_value.setText("—")
                     self.ip_value.setText("—")
                     
         except Exception as e:
             print(f"Error updating status: {e}")
             self.status_value.setText("Error checking status")
-            self.status_value.setStyleSheet("font-family: Quicksand; font-size: 24px; color: #cc0000;")
+            self.status_value.setStyleSheet(f"font-family: {self.font_family}; font-size: 24px; color: #cc0000;")
     
     def get_current_ip(self):
         """Get the current IP address of wlan0."""
@@ -487,7 +489,7 @@ class WiFiSetupWindow(QMainWindow):
         self.connect_button.setText("Connecting...")
         self.connect_button.setStyleSheet("""
             QPushButton {
-                font-family: Quicksand;
+                font-family: {self.font_family};
                 font-size: 16px;
                 font-weight: bold;
                 padding: 10px 20px;
@@ -553,7 +555,7 @@ class WiFiSetupWindow(QMainWindow):
             self.connect_button.setText("Disconnect")
             self.connect_button.setStyleSheet("""
                 QPushButton {
-                    font-family: Quicksand;
+                    font-family: {self.font_family};
                     font-size: 16px;
                     font-weight: bold;
                     padding: 10px 20px;
@@ -575,7 +577,7 @@ class WiFiSetupWindow(QMainWindow):
             self.connect_button.setText("Connect to Network")
             self.connect_button.setStyleSheet("""
                 QPushButton {
-                    font-family: Quicksand;
+                    font-family: {self.font_family};
                     font-size: 16px;
                     font-weight: bold;
                     padding: 10px 20px;
@@ -609,7 +611,7 @@ class WiFiSetupWindow(QMainWindow):
         self.connect_button.setText("Connect to Network")
         self.connect_button.setStyleSheet("""
             QPushButton {
-                font-family: Quicksand;
+                font-family: {self.font_family};
                 font-size: 16px;
                 font-weight: bold;
                 padding: 10px 20px;
@@ -726,7 +728,7 @@ class WiFiSetupWindow(QMainWindow):
             self.broadcast_button.setText("Broadcast Setup Network")
             self.broadcast_button.setEnabled(True)
             self.connection_result_label.setText(f"Error starting broadcast: {e}")
-            self.connection_result_label.setStyleSheet("font-family: Quicksand; font-size: 20px; color: #cc0000;")
+            self.connection_result_label.setStyleSheet(f"font-family: {self.font_family}; font-size: 20px; color: #cc0000;")
             self.connection_result_label.show()
     
     def stop_broadcasting(self):
