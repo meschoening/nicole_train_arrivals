@@ -145,9 +145,9 @@ class UpdatePopout(QWidget):
         header_layout = QHBoxLayout()
         header_layout.setContentsMargins(10, 5, 5, 5)
         
-        header_label = QLabel("Update Status")
-        header_label.setStyleSheet(f"font-family: {font_family}; font-size: 14px; font-weight: bold; color: #333; border: none;")
-        header_layout.addWidget(header_label)
+        self.header_label = QLabel("Update Status")
+        self.header_label.setStyleSheet(f"font-family: {font_family}; font-size: 14px; font-weight: bold; color: #333; border: none;")
+        header_layout.addWidget(self.header_label)
         header_layout.addStretch()
         
         self.close_button = QPushButton("✕")
@@ -238,6 +238,43 @@ class UpdatePopout(QWidget):
     
     def clear_output(self):
         """Clear the output area and hide success label"""
+        # Reload font from config in case it changed
+        config = config_handler.load_config()
+        font_family = config.get('font_family', 'Quicksand')
+        
+        # Update font styling for labels and buttons
+        self.header_label.setStyleSheet(f"font-family: {font_family}; font-size: 14px; font-weight: bold; color: #333; border: none;")
+        self.close_button.setStyleSheet(f"""
+            QPushButton {{
+                font-family: {font_family};
+                font-size: 16px;
+                font-weight: bold;
+                padding: 0px;
+                background-color: transparent;
+                border: none;
+                color: #666;
+            }}
+            QPushButton:hover {{
+                color: #000;
+                background-color: #e0e0e0;
+                border-radius: 3px;
+            }}
+            QPushButton:pressed {{
+                background-color: #d0d0d0;
+            }}
+        """)
+        self.success_label.setStyleSheet(f"""
+            QLabel {{
+                font-family: {font_family};
+                font-size: 13px;
+                font-weight: bold;
+                color: #2a7a2a;
+                background-color: #e8f5e9;
+                border: none;
+                padding: 8px 10px;
+            }}
+        """)
+        
         self.output_text.clear()
         self.success_label.hide()
     
