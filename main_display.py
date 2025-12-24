@@ -428,6 +428,10 @@ class ShutdownPopout(QWidget):
     
     def reset_shutdown_state(self):
         """Reset the shutdown button to its initial state"""
+        # Reload font from config in case it changed
+        config = config_handler.load_config()
+        self.font_family = config.get('font_family', 'Quicksand')
+        
         self.shutdown_confirmed = False
         self.shutdown_button.setText("Shutdown")
         self.shutdown_button.setMinimumWidth(200)
@@ -452,6 +456,10 @@ class ShutdownPopout(QWidget):
     
     def reset_reboot_state(self):
         """Reset the reboot button to its initial state"""
+        # Reload font from config in case it changed
+        config = config_handler.load_config()
+        self.font_family = config.get('font_family', 'Quicksand')
+        
         self.reboot_confirmed = False
         self.reboot_button.setText("Reboot")
         self.reboot_button.setMinimumWidth(200)
@@ -2778,8 +2786,8 @@ class MainWindow(QMainWindow):
         # Launch Setup button (left)
         self.startup_launch_setup_button = QPushButton("Launch Setup")
         self.startup_launch_setup_button.setMinimumWidth(180)
-        self.startup_launch_setup_button.setStyleSheet("""
-            QPushButton {
+        self.startup_launch_setup_button.setStyleSheet(f"""
+            QPushButton {{
                 font-family: {self.font_family};
                 font-size: 18px;
                 font-weight: bold;
@@ -2787,14 +2795,14 @@ class MainWindow(QMainWindow):
                 background-color: #e0e0e0;
                 border: none;
                 border-radius: 5px;
-            }
-            QPushButton:hover {
+            }}
+            QPushButton:hover {{
                 background-color: #d0d0d0;
-            }
-            QPushButton:pressed {
+            }}
+            QPushButton:pressed {{
                 background-color: #c0c0c0;
                 padding-bottom: 9px;
-            }
+            }}
         """)
         self.startup_launch_setup_button.clicked.connect(self.launch_wifi_setup)
         wifi_buttons_layout.addWidget(self.startup_launch_setup_button)
@@ -2802,8 +2810,8 @@ class MainWindow(QMainWindow):
         # Reboot button (middle)
         self.startup_wifi_reboot_button = QPushButton("Reboot")
         self.startup_wifi_reboot_button.setMinimumWidth(180)
-        self.startup_wifi_reboot_button.setStyleSheet("""
-            QPushButton {
+        self.startup_wifi_reboot_button.setStyleSheet(f"""
+            QPushButton {{
                 font-family: {self.font_family};
                 font-size: 18px;
                 font-weight: bold;
@@ -2811,14 +2819,14 @@ class MainWindow(QMainWindow):
                 background-color: #e0e0e0;
                 border: none;
                 border-radius: 5px;
-            }
-            QPushButton:hover {
+            }}
+            QPushButton:hover {{
                 background-color: #d0d0d0;
-            }
-            QPushButton:pressed {
+            }}
+            QPushButton:pressed {{
                 background-color: #c0c0c0;
                 padding-bottom: 9px;
-            }
+            }}
         """)
         self.startup_wifi_reboot_button.clicked.connect(self.perform_system_reboot)
         wifi_buttons_layout.addWidget(self.startup_wifi_reboot_button)
@@ -2826,8 +2834,8 @@ class MainWindow(QMainWindow):
         # Shutdown button (right)
         self.startup_wifi_shutdown_button = QPushButton("Shutdown")
         self.startup_wifi_shutdown_button.setMinimumWidth(180)
-        self.startup_wifi_shutdown_button.setStyleSheet("""
-            QPushButton {
+        self.startup_wifi_shutdown_button.setStyleSheet(f"""
+            QPushButton {{
                 font-family: {self.font_family};
                 font-size: 18px;
                 font-weight: bold;
@@ -2835,14 +2843,14 @@ class MainWindow(QMainWindow):
                 background-color: #e0e0e0;
                 border: none;
                 border-radius: 5px;
-            }
-            QPushButton:hover {
+            }}
+            QPushButton:hover {{
                 background-color: #d0d0d0;
-            }
-            QPushButton:pressed {
+            }}
+            QPushButton:pressed {{
                 background-color: #c0c0c0;
                 padding-bottom: 9px;
-            }
+            }}
         """)
         self.startup_wifi_shutdown_button.clicked.connect(self.perform_system_shutdown)
         wifi_buttons_layout.addWidget(self.startup_wifi_shutdown_button)
