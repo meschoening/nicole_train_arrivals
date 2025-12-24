@@ -63,6 +63,7 @@ Add the following to "visudo" to enable reboot/shutdown buttons:
     max ALL=(ALL) NOPASSWD: /usr/sbin/ip
     max ALL=(ALL) NOPASSWD: /usr/bin/systemctl start dnsmasq
     max ALL=(ALL) NOPASSWD: /usr/bin/systemctl stop dnsmasq
+    max ALL=(ALL) NOPASSWD: /usr/bin/systemctl restart systemd-resolved
     max ALL=(ALL) NOPASSWD: /usr/bin/systemctl restart NetworkManager
     max ALL=(ALL) NOPASSWD: /usr/sbin/hostapd
     max ALL=(ALL) NOPASSWD: /usr/bin/killall hostapd

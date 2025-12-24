@@ -761,14 +761,22 @@ class WiFiSetupWindow(QMainWindow):
                 "sudo", "systemctl", "stop", "dnsmasq"
             ], capture_output=True, timeout=10)
             
-            # Step 4: Flush IP and return interface to managed mode
+            # Step 4: Restart systemd-resolved to refresh DNS resolution
+            # This is critical - without it, DNS queries fail after stopping dnsmasq
+            self.connection_console.appendPlainText("$ sudo systemctl restart systemd-resolved")
+            QApplication.processEvents()
+            subprocess.run([
+                "sudo", "systemctl", "restart", "systemd-resolved"
+            ], capture_output=True, timeout=10)
+            
+            # Step 5: Flush IP and return interface to managed mode
             self.connection_console.appendPlainText("$ sudo ip addr flush dev wlan0")
             QApplication.processEvents()
             subprocess.run([
                 "sudo", "ip", "addr", "flush", "dev", "wlan0"
             ], capture_output=True, timeout=5)
             
-            # Step 5: Restart NetworkManager to take control
+            # Step 6: Restart NetworkManager to take control
             self.connection_console.appendPlainText("$ sudo systemctl restart NetworkManager")
             QApplication.processEvents()
             subprocess.run([

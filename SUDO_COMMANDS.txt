@@ -16,6 +16,7 @@ sudo hostapd -B /path/to/hostapd_provisioning.conf
 ### Stopping AP Mode:
 sudo killall hostapd
 sudo systemctl stop dnsmasq
+sudo systemctl restart systemd-resolved
 sudo ip addr flush dev wlan0
 sudo systemctl restart NetworkManager
 
@@ -49,6 +50,7 @@ max ALL=(ALL) NOPASSWD: /usr/bin/nmcli
 max ALL=(ALL) NOPASSWD: /usr/sbin/ip
 max ALL=(ALL) NOPASSWD: /usr/bin/systemctl start dnsmasq
 max ALL=(ALL) NOPASSWD: /usr/bin/systemctl stop dnsmasq
+max ALL=(ALL) NOPASSWD: /usr/bin/systemctl restart systemd-resolved
 max ALL=(ALL) NOPASSWD: /usr/bin/systemctl restart NetworkManager
 max ALL=(ALL) NOPASSWD: /usr/sbin/hostapd
 max ALL=(ALL) NOPASSWD: /usr/bin/killall hostapd
