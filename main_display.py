@@ -1800,8 +1800,8 @@ class MainWindow(QMainWindow):
     def set_update_button_color(self, color):
         """Set the update button color"""
         if color == "green":
-            self.update_button.setStyleSheet("""
-                QPushButton {
+            self.update_button.setStyleSheet(f"""
+                QPushButton {{
                     font-family: {self.font_family};
                     font-size: 20px;
                     font-weight: bold;
@@ -1810,18 +1810,18 @@ class MainWindow(QMainWindow):
                     color: white;
                     border: none;
                     border-radius: 5px;
-                }
-                QPushButton:hover {
+                }}
+                QPushButton:hover {{
                     background-color: #45a049;
-                }
-                QPushButton:pressed {
+                }}
+                QPushButton:pressed {{
                     background-color: #3d8b40;
                     padding-bottom: 7px;
-                }
+                }}
             """)
         elif color == "orange":
-            self.update_button.setStyleSheet("""
-                QPushButton {
+            self.update_button.setStyleSheet(f"""
+                QPushButton {{
                     font-family: {self.font_family};
                     font-size: 20px;
                     font-weight: bold;
@@ -1830,18 +1830,18 @@ class MainWindow(QMainWindow):
                     color: white;
                     border: none;
                     border-radius: 5px;
-                }
-                QPushButton:hover {
+                }}
+                QPushButton:hover {{
                     background-color: #FFB300;
-                }
-                QPushButton:pressed {
+                }}
+                QPushButton:pressed {{
                     background-color: #FFA000;
                     padding-bottom: 7px;
-                }
+                }}
             """)
         elif color == "red":
-            self.update_button.setStyleSheet("""
-                QPushButton {
+            self.update_button.setStyleSheet(f"""
+                QPushButton {{
                     font-family: {self.font_family};
                     font-size: 20px;
                     font-weight: bold;
@@ -1850,19 +1850,19 @@ class MainWindow(QMainWindow):
                     color: white;
                     border: none;
                     border-radius: 5px;
-                }
-                QPushButton:hover {
+                }}
+                QPushButton:hover {{
                     background-color: #da190b;
-                }
-                QPushButton:pressed {
+                }}
+                QPushButton:pressed {{
                     background-color: #c1170a;
                     padding-bottom: 7px;
-                }
+                }}
             """)
         elif color == "light_green":
             # Light green for "update available" state
-            self.update_button.setStyleSheet("""
-                QPushButton {
+            self.update_button.setStyleSheet(f"""
+                QPushButton {{
                     font-family: {self.font_family};
                     font-size: 20px;
                     font-weight: bold;
@@ -1871,14 +1871,14 @@ class MainWindow(QMainWindow):
                     color: #1b5e20;
                     border: none;
                     border-radius: 5px;
-                }
-                QPushButton:hover {
+                }}
+                QPushButton:hover {{
                     background-color: #81c784;
-                }
-                QPushButton:pressed {
+                }}
+                QPushButton:pressed {{
                     background-color: #66bb6a;
                     padding-bottom: 7px;
-                }
+                }}
             """)
     
     def run_git_pull(self):
@@ -2171,8 +2171,8 @@ class MainWindow(QMainWindow):
     def set_shutdown_exit_button_color(self, color):
         """Set the shutdown/exit button color"""
         if color == "neutral":
-            self.shutdown_exit_button.setStyleSheet("""
-                QPushButton {
+            self.shutdown_exit_button.setStyleSheet(f"""
+                QPushButton {{
                     font-family: {self.font_family};
                     font-size: 20px;
                     font-weight: bold;
@@ -2180,18 +2180,18 @@ class MainWindow(QMainWindow):
                     background-color: #e0e0e0;
                     border: none;
                     border-radius: 5px;
-                }
-                QPushButton:hover {
+                }}
+                QPushButton:hover {{
                     background-color: #d0d0d0;
-                }
-                QPushButton:pressed {
+                }}
+                QPushButton:pressed {{
                     background-color: #c0c0c0;
                     padding-bottom: 7px;
-                }
+                }}
             """)
         elif color == "active":
-            self.shutdown_exit_button.setStyleSheet("""
-                QPushButton {
+            self.shutdown_exit_button.setStyleSheet(f"""
+                QPushButton {{
                     font-family: {self.font_family};
                     font-size: 20px;
                     font-weight: bold;
@@ -2199,14 +2199,14 @@ class MainWindow(QMainWindow):
                     background-color: #c8c8c8;
                     border: none;
                     border-radius: 5px;
-                }
-                QPushButton:hover {
+                }}
+                QPushButton:hover {{
                     background-color: #b8b8b8;
-                }
-                QPushButton:pressed {
+                }}
+                QPushButton:pressed {{
                     background-color: #a8a8a8;
                     padding-bottom: 7px;
-                }
+                }}
             """)
     
     def exit_to_desktop(self):
