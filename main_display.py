@@ -1791,7 +1791,7 @@ class MainWindow(QMainWindow):
         
         # Reset button text and color
         self.update_button.setText("Update")
-        self.set_update_button_color("green")
+        self.set_update_button_color("neutral")
         
         # Hide popout
         if hasattr(self, 'update_popout'):
@@ -1877,6 +1877,26 @@ class MainWindow(QMainWindow):
                 }}
                 QPushButton:pressed {{
                     background-color: #66bb6a;
+                    padding-bottom: 7px;
+                }}
+            """)
+        elif color == "neutral":
+            # Neutral grey for default state
+            self.update_button.setStyleSheet(f"""
+                QPushButton {{
+                    font-family: {self.font_family};
+                    font-size: 20px;
+                    font-weight: bold;
+                    padding: 8px 16px;
+                    background-color: #e0e0e0;
+                    border: none;
+                    border-radius: 5px;
+                }}
+                QPushButton:hover {{
+                    background-color: #d0d0d0;
+                }}
+                QPushButton:pressed {{
+                    background-color: #c0c0c0;
                     padding-bottom: 7px;
                 }}
             """)
