@@ -1901,8 +1901,22 @@ class MainWindow(QMainWindow):
                 }}
             """)
     
+    def wait_for_git_fetch_if_running(self):
+        """Wait for any running background git fetch to complete before proceeding.
+        
+        This prevents race conditions when the user clicks Update while a 
+        background git fetch is in progress.
+        """
+        if self.git_fetch_process is not None and self.git_fetch_process.state() == QProcess.Running:
+            self.update_popout.append_output("Waiting for background update check to finish...\n")
+            # Wait up to 10 seconds for the fetch to complete
+            self.git_fetch_process.waitForFinished(10000)
+    
     def run_git_pull(self):
         """Start the git pull process"""
+        # Wait for any background git fetch to complete first
+        self.wait_for_git_fetch_if_running()
+        
         # Change button text, color, and start animation
         self.update_button.setText("Checking")
         self.set_update_button_color("orange")
