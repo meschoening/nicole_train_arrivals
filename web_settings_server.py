@@ -19,6 +19,22 @@ _settings_changed_lock = threading.Lock()
 # Lock to serialize git operations (fetch, pull) to prevent race conditions
 _git_operation_lock = threading.Lock()
 
+# Shared flag to track if a git operation is in progress (for cross-component coordination)
+_git_operation_in_progress = {"active": False}
+_git_operation_flag_lock = threading.Lock()
+
+
+def is_git_operation_in_progress():
+    """Check if a git operation is currently in progress."""
+    with _git_operation_flag_lock:
+        return _git_operation_in_progress["active"]
+
+
+def set_git_operation_in_progress(active):
+    """Set the git operation in progress flag."""
+    with _git_operation_flag_lock:
+        _git_operation_in_progress["active"] = active
+
 # SSL certificate directory (expanded from ~)
 _SSL_CERT_DIR = os.path.expanduser("~/https")
 
@@ -760,51 +776,57 @@ def start_web_settings_server(data_handler, host="0.0.0.0", port=443):
         def generate():
             # Acquire lock to prevent concurrent git operations
             with _git_operation_lock:
-                cwd = os.path.dirname(os.path.abspath(__file__))
-                # Run `git pull` as user 'max' to avoid ownership issues
-                # Use sudo -u max to run git commands under the max user
-                process = subprocess.Popen(
-                    ["sudo", "-u", "max", "git", "pull"],
-                    cwd=cwd,
-                    stdout=subprocess.PIPE,
-                    stderr=subprocess.STDOUT,
-                    text=True,
-                    bufsize=1,
-                )
-
-                all_output_lines = []
+                # Set flag so main display knows git operation is in progress
+                set_git_operation_in_progress(True)
                 try:
-                    if process.stdout is not None:
-                        for line in process.stdout:
-                            # Stream each line to the client
-                            safe = line.rstrip('\n')
-                            all_output_lines.append(safe)
-                            yield f"data: {safe}\n\n"
+                    cwd = os.path.dirname(os.path.abspath(__file__))
+                    # Run `git pull` as user 'max' to avoid ownership issues
+                    # Use sudo -u max to run git commands under the max user
+                    process = subprocess.Popen(
+                        ["sudo", "-u", "max", "git", "pull"],
+                        cwd=cwd,
+                        stdout=subprocess.PIPE,
+                        stderr=subprocess.STDOUT,
+                        text=True,
+                        bufsize=1,
+                    )
+
+                    all_output_lines = []
+                    try:
+                        if process.stdout is not None:
+                            for line in process.stdout:
+                                # Stream each line to the client
+                                safe = line.rstrip('\n')
+                                all_output_lines.append(safe)
+                                yield f"data: {safe}\n\n"
+                    finally:
+                        exit_code = process.wait()
+                        combined_output = "\n".join(all_output_lines)
+                        has_updates = _has_updates(combined_output)
+                        done_payload = {
+                            "exit_code": exit_code,
+                            "has_error": _has_git_error(combined_output) or (exit_code != 0),
+                            "has_updates": has_updates,
+                        }
+                        # If update succeeded with changes, get the latest commit message
+                        if has_updates and not done_payload["has_error"]:
+                            try:
+                                commit_result = subprocess.run(
+                                    ["sudo", "-u", "max", "git", "log", "-1", "--format=%s"],
+                                    cwd=cwd,
+                                    capture_output=True,
+                                    text=True,
+                                    timeout=5
+                                )
+                                if commit_result.returncode == 0 and commit_result.stdout.strip():
+                                    done_payload["commit_message"] = commit_result.stdout.strip()
+                            except Exception:
+                                pass
+                        yield "event: done\n"
+                        yield f"data: {json.dumps(done_payload)}\n\n"
                 finally:
-                    exit_code = process.wait()
-                    combined_output = "\n".join(all_output_lines)
-                    has_updates = _has_updates(combined_output)
-                    done_payload = {
-                        "exit_code": exit_code,
-                        "has_error": _has_git_error(combined_output) or (exit_code != 0),
-                        "has_updates": has_updates,
-                    }
-                    # If update succeeded with changes, get the latest commit message
-                    if has_updates and not done_payload["has_error"]:
-                        try:
-                            commit_result = subprocess.run(
-                                ["sudo", "-u", "max", "git", "log", "-1", "--format=%s"],
-                                cwd=cwd,
-                                capture_output=True,
-                                text=True,
-                                timeout=5
-                            )
-                            if commit_result.returncode == 0 and commit_result.stdout.strip():
-                                done_payload["commit_message"] = commit_result.stdout.strip()
-                        except Exception:
-                            pass
-                    yield "event: done\n"
-                    yield f"data: {json.dumps(done_payload)}\n\n"
+                    # Clear the flag when operation completes
+                    set_git_operation_in_progress(False)
 
         headers = {
             "Cache-Control": "no-cache",
@@ -839,79 +861,85 @@ def start_web_settings_server(data_handler, host="0.0.0.0", port=443):
         """
         # Acquire lock to prevent concurrent git operations
         with _git_operation_lock:
-            cwd = os.path.dirname(os.path.abspath(__file__))
-            
+            # Set flag so main display knows git operation is in progress
+            set_git_operation_in_progress(True)
             try:
-                # Run git fetch to get latest remote state
-                fetch_result = subprocess.run(
-                    ["sudo", "-u", "max", "git", "fetch"],
-                    cwd=cwd,
-                    capture_output=True,
-                    text=True,
-                    timeout=30
-                )
+                cwd = os.path.dirname(os.path.abspath(__file__))
                 
-                if fetch_result.returncode != 0:
-                    return jsonify({
-                        "updates_available": False,
-                        "error": "Failed to fetch from remote"
-                    })
-                
-                # Get local HEAD commit
-                local_result = subprocess.run(
-                    ["sudo", "-u", "max", "git", "rev-parse", "HEAD"],
-                    cwd=cwd,
-                    capture_output=True,
-                    text=True,
-                    timeout=10
-                )
-                
-                if local_result.returncode != 0:
-                    return jsonify({
-                        "updates_available": False,
-                        "error": "Failed to get local HEAD"
-                    })
-                
-                local_head = local_result.stdout.strip()
-                
-                # Get remote HEAD commit (try origin/main first, then origin/master)
-                remote_head = None
-                for branch in ["origin/main", "origin/master"]:
-                    remote_result = subprocess.run(
-                        ["sudo", "-u", "max", "git", "rev-parse", branch],
+                try:
+                    # Run git fetch to get latest remote state
+                    fetch_result = subprocess.run(
+                        ["sudo", "-u", "max", "git", "fetch"],
+                        cwd=cwd,
+                        capture_output=True,
+                        text=True,
+                        timeout=30
+                    )
+                    
+                    if fetch_result.returncode != 0:
+                        return jsonify({
+                            "updates_available": False,
+                            "error": "Failed to fetch from remote"
+                        })
+                    
+                    # Get local HEAD commit
+                    local_result = subprocess.run(
+                        ["sudo", "-u", "max", "git", "rev-parse", "HEAD"],
                         cwd=cwd,
                         capture_output=True,
                         text=True,
                         timeout=10
                     )
-                    if remote_result.returncode == 0:
-                        remote_head = remote_result.stdout.strip()
-                        break
-                
-                if remote_head is None:
+                    
+                    if local_result.returncode != 0:
+                        return jsonify({
+                            "updates_available": False,
+                            "error": "Failed to get local HEAD"
+                        })
+                    
+                    local_head = local_result.stdout.strip()
+                    
+                    # Get remote HEAD commit (try origin/main first, then origin/master)
+                    remote_head = None
+                    for branch in ["origin/main", "origin/master"]:
+                        remote_result = subprocess.run(
+                            ["sudo", "-u", "max", "git", "rev-parse", branch],
+                            cwd=cwd,
+                            capture_output=True,
+                            text=True,
+                            timeout=10
+                        )
+                        if remote_result.returncode == 0:
+                            remote_head = remote_result.stdout.strip()
+                            break
+                    
+                    if remote_head is None:
+                        return jsonify({
+                            "updates_available": False,
+                            "error": "Could not determine remote branch"
+                        })
+                    
+                    updates_available = local_head != remote_head
+                    
+                    return jsonify({
+                        "updates_available": updates_available,
+                        "local_commit": local_head[:8],
+                        "remote_commit": remote_head[:8]
+                    })
+                    
+                except subprocess.TimeoutExpired:
                     return jsonify({
                         "updates_available": False,
-                        "error": "Could not determine remote branch"
+                        "error": "Git command timed out"
                     })
-                
-                updates_available = local_head != remote_head
-                
-                return jsonify({
-                    "updates_available": updates_available,
-                    "local_commit": local_head[:8],
-                    "remote_commit": remote_head[:8]
-                })
-                
-            except subprocess.TimeoutExpired:
-                return jsonify({
-                    "updates_available": False,
-                    "error": "Git command timed out"
-                })
-            except Exception as e:
-                return jsonify({
-                    "updates_available": False,
-                    "error": str(e)
-                })
+                except Exception as e:
+                    return jsonify({
+                        "updates_available": False,
+                        "error": str(e)
+                    })
+            finally:
+                # Clear the flag when operation completes
+                set_git_operation_in_progress(False)
 
     @app.post("/api/restart")
     def api_restart():

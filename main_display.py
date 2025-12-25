@@ -13,7 +13,7 @@ import random
 import time
 import argparse
 from datetime import datetime, timedelta
-from web_settings_server import start_web_settings_server, get_pending_message_trigger, get_pending_settings_change
+from web_settings_server import start_web_settings_server, get_pending_message_trigger, get_pending_settings_change, is_git_operation_in_progress, set_git_operation_in_progress
 
 class TouchscreenComboViewFilter(QObject):
     """Event filter for QComboBox views to handle touchscreen taps correctly"""
@@ -1907,15 +1907,29 @@ class MainWindow(QMainWindow):
         This prevents race conditions when the user clicks Update while a 
         background git fetch is in progress.
         """
+        # Check local QProcess first
         if self.git_fetch_process is not None and self.git_fetch_process.state() == QProcess.Running:
             self.update_popout.append_output("Waiting for background update check to finish...\n")
             # Wait up to 10 seconds for the fetch to complete
             self.git_fetch_process.waitForFinished(10000)
+        
+        # Also check if web server has a git operation in progress
+        if is_git_operation_in_progress():
+            self.update_popout.append_output("Waiting for web server git operation to finish...\n")
+            # Poll for up to 10 seconds
+            for _ in range(100):
+                if not is_git_operation_in_progress():
+                    break
+                QApplication.processEvents()  # Keep UI responsive
+                time.sleep(0.1)
     
     def run_git_pull(self):
         """Start the git pull process"""
-        # Wait for any background git fetch to complete first
+        # Wait for any background git operations to complete first
         self.wait_for_git_fetch_if_running()
+        
+        # Set the shared flag so web server knows we're doing git operations
+        set_git_operation_in_progress(True)
         
         # Change button text, color, and start animation
         self.update_button.setText("Checking")
@@ -1959,6 +1973,9 @@ class MainWindow(QMainWindow):
     
     def on_git_finished(self, exit_code, exit_status):
         """Handle git process completion"""
+        # Clear the shared flag since git operation is complete
+        set_git_operation_in_progress(False)
+        
         # Stop animation timer
         self.checking_animation_timer.stop()
         
@@ -2062,6 +2079,13 @@ class MainWindow(QMainWindow):
         if self.git_fetch_process is not None and self.git_fetch_process.state() == QProcess.Running:
             return
         
+        # Don't start if web server has a git operation in progress
+        if is_git_operation_in_progress():
+            return
+        
+        # Set the shared flag so web server knows we're doing git operations
+        set_git_operation_in_progress(True)
+        
         # Create and configure QProcess for git fetch
         self.git_fetch_process = QProcess()
         self.git_fetch_process.setWorkingDirectory(os.path.dirname(os.path.abspath(__file__)))
@@ -2072,6 +2096,9 @@ class MainWindow(QMainWindow):
     
     def on_git_fetch_finished(self, exit_code, exit_status):
         """Handle git fetch completion and check if updates are available"""
+        # Clear the shared flag since git operation is complete
+        set_git_operation_in_progress(False)
+        
         if exit_code != 0:
             # Fetch failed, just skip this check
             return
