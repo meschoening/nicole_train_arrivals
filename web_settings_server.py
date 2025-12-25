@@ -8,6 +8,21 @@ import subprocess
 import sys
 import time
 import json
+import traceback
+
+# Debug logging for git operations
+_GIT_DEBUG = True
+
+def _git_debug_log(message, include_stack=False):
+    """Log git operation debug info with timestamp."""
+    if _GIT_DEBUG:
+        timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S.%f')[:-3]
+        with _git_operation_flag_lock:
+            flag_state = _git_operation_in_progress.get("active", False)
+        print(f"[GIT-DEBUG {timestamp}] [web_server] [flag={flag_state}] {message}", flush=True)
+        if include_stack:
+            print(f"[GIT-DEBUG {timestamp}] Stack trace:", flush=True)
+            traceback.print_stack()
 
 
 _data_lock = threading.Lock()
@@ -27,11 +42,18 @@ _git_operation_flag_lock = threading.Lock()
 def is_git_operation_in_progress():
     """Check if a git operation is currently in progress."""
     with _git_operation_flag_lock:
-        return _git_operation_in_progress["active"]
+        result = _git_operation_in_progress["active"]
+    if _GIT_DEBUG:
+        timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S.%f')[:-3]
+        print(f"[GIT-DEBUG {timestamp}] [web_server] is_git_operation_in_progress() -> {result}", flush=True)
+    return result
 
 
-def set_git_operation_in_progress(active):
+def set_git_operation_in_progress(active, caller="unknown"):
     """Set the git operation in progress flag."""
+    if _GIT_DEBUG:
+        timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S.%f')[:-3]
+        print(f"[GIT-DEBUG {timestamp}] [web_server] set_git_operation_in_progress({active}) called by {caller}", flush=True)
     with _git_operation_flag_lock:
         _git_operation_in_progress["active"] = active
 
@@ -774,12 +796,15 @@ def start_web_settings_server(data_handler, host="0.0.0.0", port=443):
     @app.get("/api/update/run")
     def api_update_run():
         def generate():
+            _git_debug_log("api_update_run: Attempting to acquire _git_operation_lock...")
             # Acquire lock to prevent concurrent git operations
             with _git_operation_lock:
+                _git_debug_log("api_update_run: Lock acquired, setting flag to True")
                 # Set flag so main display knows git operation is in progress
-                set_git_operation_in_progress(True)
+                set_git_operation_in_progress(True, caller="api_update_run")
                 try:
                     cwd = os.path.dirname(os.path.abspath(__file__))
+                    _git_debug_log(f"api_update_run: Starting 'git pull' in {cwd}")
                     # Run `git pull` as user 'max' to avoid ownership issues
                     # Use sudo -u max to run git commands under the max user
                     process = subprocess.Popen(
@@ -802,6 +827,8 @@ def start_web_settings_server(data_handler, host="0.0.0.0", port=443):
                     finally:
                         exit_code = process.wait()
                         combined_output = "\n".join(all_output_lines)
+                        _git_debug_log(f"api_update_run: git pull finished with exit_code={exit_code}")
+                        _git_debug_log(f"api_update_run: git output: {combined_output[:500]}")
                         has_updates = _has_updates(combined_output)
                         done_payload = {
                             "exit_code": exit_code,
@@ -822,11 +849,13 @@ def start_web_settings_server(data_handler, host="0.0.0.0", port=443):
                                     done_payload["commit_message"] = commit_result.stdout.strip()
                             except Exception:
                                 pass
+                        _git_debug_log(f"api_update_run: done_payload={done_payload}")
                         yield "event: done\n"
                         yield f"data: {json.dumps(done_payload)}\n\n"
                 finally:
+                    _git_debug_log("api_update_run: Clearing flag and releasing lock")
                     # Clear the flag when operation completes
-                    set_git_operation_in_progress(False)
+                    set_git_operation_in_progress(False, caller="api_update_run")
 
         headers = {
             "Cache-Control": "no-cache",
@@ -859,14 +888,17 @@ def start_web_settings_server(data_handler, host="0.0.0.0", port=443):
         Check if updates are available by running git fetch and comparing commits.
         Non-destructive - only checks, does not apply updates.
         """
+        _git_debug_log("api_check_for_updates: Attempting to acquire _git_operation_lock...")
         # Acquire lock to prevent concurrent git operations
         with _git_operation_lock:
+            _git_debug_log("api_check_for_updates: Lock acquired, setting flag to True")
             # Set flag so main display knows git operation is in progress
-            set_git_operation_in_progress(True)
+            set_git_operation_in_progress(True, caller="api_check_for_updates")
             try:
                 cwd = os.path.dirname(os.path.abspath(__file__))
                 
                 try:
+                    _git_debug_log("api_check_for_updates: Starting 'git fetch'")
                     # Run git fetch to get latest remote state
                     fetch_result = subprocess.run(
                         ["sudo", "-u", "max", "git", "fetch"],
@@ -875,8 +907,10 @@ def start_web_settings_server(data_handler, host="0.0.0.0", port=443):
                         text=True,
                         timeout=30
                     )
+                    _git_debug_log(f"api_check_for_updates: git fetch completed with returncode={fetch_result.returncode}")
                     
                     if fetch_result.returncode != 0:
+                        _git_debug_log(f"api_check_for_updates: git fetch failed: {fetch_result.stderr}")
                         return jsonify({
                             "updates_available": False,
                             "error": "Failed to fetch from remote"
@@ -920,6 +954,7 @@ def start_web_settings_server(data_handler, host="0.0.0.0", port=443):
                         })
                     
                     updates_available = local_head != remote_head
+                    _git_debug_log(f"api_check_for_updates: local={local_head[:8]}, remote={remote_head[:8]}, updates_available={updates_available}")
                     
                     return jsonify({
                         "updates_available": updates_available,
@@ -928,18 +963,21 @@ def start_web_settings_server(data_handler, host="0.0.0.0", port=443):
                     })
                     
                 except subprocess.TimeoutExpired:
+                    _git_debug_log("api_check_for_updates: Git command timed out")
                     return jsonify({
                         "updates_available": False,
                         "error": "Git command timed out"
                     })
                 except Exception as e:
+                    _git_debug_log(f"api_check_for_updates: Exception: {e}")
                     return jsonify({
                         "updates_available": False,
                         "error": str(e)
                     })
             finally:
+                _git_debug_log("api_check_for_updates: Clearing flag and releasing lock")
                 # Clear the flag when operation completes
-                set_git_operation_in_progress(False)
+                set_git_operation_in_progress(False, caller="api_check_for_updates")
 
     @app.post("/api/restart")
     def api_restart():

@@ -15,6 +15,17 @@ import argparse
 from datetime import datetime, timedelta
 from web_settings_server import start_web_settings_server, get_pending_message_trigger, get_pending_settings_change, is_git_operation_in_progress, set_git_operation_in_progress
 
+# Debug logging for git operations
+_GIT_DEBUG = True
+
+def _git_debug_log(message):
+    """Log git operation debug info with timestamp."""
+    if _GIT_DEBUG:
+        timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S.%f')[:-3]
+        flag_state = is_git_operation_in_progress()
+        print(f"[GIT-DEBUG {timestamp}] [main_display] [flag={flag_state}] {message}", flush=True)
+
+
 class TouchscreenComboViewFilter(QObject):
     """Event filter for QComboBox views to handle touchscreen taps correctly"""
     def __init__(self, combo_box):
@@ -1907,27 +1918,37 @@ class MainWindow(QMainWindow):
         This prevents race conditions when the user clicks Update while a 
         background git fetch is in progress.
         """
+        _git_debug_log("wait_for_git_fetch_if_running: Checking for running git operations...")
         # Check local QProcess first
         if self.git_fetch_process is not None and self.git_fetch_process.state() == QProcess.Running:
+            _git_debug_log("wait_for_git_fetch_if_running: Local git_fetch_process is running, waiting...")
             self.update_popout.append_output("Waiting for background update check to finish...\n")
             # Wait up to 10 seconds for the fetch to complete
             self.git_fetch_process.waitForFinished(10000)
+            _git_debug_log("wait_for_git_fetch_if_running: Local git_fetch_process finished")
         
         # Also check if web server has a git operation in progress
         if is_git_operation_in_progress():
+            _git_debug_log("wait_for_git_fetch_if_running: Web server git operation in progress, polling...")
             self.update_popout.append_output("Waiting for web server git operation to finish...\n")
             # Poll for up to 10 seconds
-            for _ in range(100):
+            for i in range(100):
                 if not is_git_operation_in_progress():
+                    _git_debug_log(f"wait_for_git_fetch_if_running: Web server git operation finished after {i} polls")
                     break
                 QApplication.processEvents()  # Keep UI responsive
                 time.sleep(0.1)
+            else:
+                _git_debug_log("wait_for_git_fetch_if_running: Timeout waiting for web server git operation!")
+        _git_debug_log("wait_for_git_fetch_if_running: Done checking, proceeding...")
     
     def run_git_pull(self):
         """Start the git pull process"""
+        _git_debug_log("run_git_pull: Starting...")
         # Wait for any background git operations to complete first
         self.wait_for_git_fetch_if_running()
         
+        _git_debug_log("run_git_pull: Setting flag to True")
         # Set the shared flag so web server knows we're doing git operations
         set_git_operation_in_progress(True)
         
@@ -1950,6 +1971,7 @@ class MainWindow(QMainWindow):
         self.git_process.finished.connect(self.on_git_finished)
         
         # Start git pull
+        _git_debug_log("run_git_pull: Starting 'git pull' via QProcess")
         self.update_popout.append_output("Running git pull...\n")
         self.git_process.start("git", ["pull"])
     
@@ -1973,7 +1995,10 @@ class MainWindow(QMainWindow):
     
     def on_git_finished(self, exit_code, exit_status):
         """Handle git process completion"""
+        _git_debug_log(f"on_git_finished: exit_code={exit_code}, exit_status={exit_status}")
+        _git_debug_log(f"on_git_finished: git_output={self.git_output[:500] if self.git_output else '(empty)'}")
         # Clear the shared flag since git operation is complete
+        _git_debug_log("on_git_finished: Clearing flag to False")
         set_git_operation_in_progress(False)
         
         # Stop animation timer
@@ -1984,6 +2009,7 @@ class MainWindow(QMainWindow):
         
         # Check for errors
         if exit_code != 0 or self.has_git_error():
+            _git_debug_log(f"on_git_finished: Error detected - exit_code={exit_code}, has_git_error={self.has_git_error()}")
             self.update_button.setText("Error Updating")
             self.set_update_button_color("red")
         else:
@@ -2077,12 +2103,15 @@ class MainWindow(QMainWindow):
         """Check for available git updates in the background (non-destructive)"""
         # Don't start a new check if one is already running
         if self.git_fetch_process is not None and self.git_fetch_process.state() == QProcess.Running:
+            _git_debug_log("check_for_git_updates: Skipping - local git_fetch_process still running")
             return
         
         # Don't start if web server has a git operation in progress
         if is_git_operation_in_progress():
+            _git_debug_log("check_for_git_updates: Skipping - web server git operation in progress")
             return
         
+        _git_debug_log("check_for_git_updates: Starting background git fetch")
         # Set the shared flag so web server knows we're doing git operations
         set_git_operation_in_progress(True)
         
@@ -2092,14 +2121,18 @@ class MainWindow(QMainWindow):
         self.git_fetch_process.finished.connect(self.on_git_fetch_finished)
         
         # Start git fetch
+        _git_debug_log("check_for_git_updates: Starting 'git fetch' via QProcess")
         self.git_fetch_process.start("git", ["fetch"])
     
     def on_git_fetch_finished(self, exit_code, exit_status):
         """Handle git fetch completion and check if updates are available"""
+        _git_debug_log(f"on_git_fetch_finished: exit_code={exit_code}, exit_status={exit_status}")
         # Clear the shared flag since git operation is complete
+        _git_debug_log("on_git_fetch_finished: Clearing flag to False")
         set_git_operation_in_progress(False)
         
         if exit_code != 0:
+            _git_debug_log(f"on_git_fetch_finished: Fetch failed with exit_code={exit_code}")
             # Fetch failed, just skip this check
             return
         
