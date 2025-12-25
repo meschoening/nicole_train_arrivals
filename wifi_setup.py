@@ -256,6 +256,20 @@ class WiFiSetupWindow(QMainWindow):
                 font-size: 18px;
                 background-color: white;
                 selection-background-color: #e0e0e0;
+                selection-color: #000;
+                color: #000;
+            }}
+            QComboBox QAbstractItemView::item {{
+                color: #000;
+                padding: 5px;
+            }}
+            QComboBox QAbstractItemView::item:selected {{
+                background-color: #e0e0e0;
+                color: #000;
+            }}
+            QComboBox QAbstractItemView::item:hover {{
+                background-color: #e0e0e0;
+                color: #000;
             }}
         """)
         manual_layout.addWidget(self.saved_networks_combo)
