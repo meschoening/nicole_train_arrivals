@@ -1,0 +1,108 @@
+RUN ALL AS ROOT
+
+In dietpi-config:
+    Install X11, Python3, Avahi-Daemon
+
+Add the following to the very bottom/as new lines to "/boot/config.txt":
+    framebuffer_width=1024
+    framebuffer_height=600
+    hdmi_force_hotplug=1
+    hdmi_cvt=1024 600 60 3 0 0 0
+    hdmi_group=2
+    hdmi_mode=87
+
+Install NetworkManager for cli network management:
+    apt install network-manager
+    nano /etc/NetworkManager/conf.d/10-managed.conf
+        [keyfile]
+        unmanaged-devices=
+    systemctl restart NetworkManager
+
+    nmcli connection add type wifi con-name "WillowWiFi" ssid "Willow" wifi-sec.key-mgmt wpa-psk wifi-sec.psk "password" connection.autoconnect yes
+    nmcli connection show
+
+    mv /etc/network/interfaces /etc/network/interfaces.ifupdown.bak && reboot now
+
+Verify NetworkManager is working:
+    nmcli connection show
+
+Install tailscale for remote access:
+    curl -fsSL https://tailscale.com/install.sh | sh
+
+Run following commands to install Python addon packages:
+    apt install python3-pyqt5 python3-requests python3-pandas python3-flask git openssh-client openbox xserver-xorg-legacy dnsmasq hostapd
+    setcap 'cap_net_bind_service=+ep' $(readlink -f $(which python3))
+
+Setup provisioning mode config:
+    nano /etc/dnmasq.d/provisioning.conf
+        interface=wlan0
+        dhcp-range=192.168.4.10,192.168.4.50,255.255.255.0,12h
+
+
+Make new sudo user:
+    useradd -m max
+    chsh -s /usr/bin/bash max
+    usermod -aG sudo max
+    passwd max
+
+Enable autologin for new user:
+    dietpi-config
+
+NO LONGER ROOT BY DEFAULT AFTER THIS LINE
+
+Download app zipfile and extract to /home/max/nicole_train_arrivals:
+    su max
+    git clone
+
+Run the following commands to install the app font:
+    mkdir -p /usr/share/fonts/truetype/custom
+    cp nicole_train_arrivals/assets/Quicksand-Bold.ttf /usr/share/fonts/truetype/custom/
+
+Add the following to "visudo" to enable reboot/shutdown buttons:
+    max ALL=(ALL) NOPASSWD: /usr/bin/nmcli
+    max ALL=(ALL) NOPASSWD: /usr/sbin/ip
+    max ALL=(ALL) NOPASSWD: /usr/bin/systemctl start dnsmasq
+    max ALL=(ALL) NOPASSWD: /usr/bin/systemctl stop dnsmasq
+    max ALL=(ALL) NOPASSWD: /usr/bin/systemctl restart systemd-resolved
+    max ALL=(ALL) NOPASSWD: /usr/bin/systemctl restart NetworkManager
+    max ALL=(ALL) NOPASSWD: /usr/sbin/hostapd
+    max ALL=(ALL) NOPASSWD: /usr/bin/killall hostapd
+    max ALL=(ALL) NOPASSWD: /sbin/shutdown
+    max ALL=(ALL) NOPASSWD: /usr/bin/timedatectl
+
+Start configure startx to start the window server:
+    nano ~/.xinitrc
+        exec openbox-session
+    nano /etc/X11/Xwrapper.config
+        allowed_users=anybody
+        needs_root_rights=yes
+
+Add openbox autostart command:
+    mkdir -p ~/.config/openbox
+    nano ~/.config/openbox/autostart
+        xset s off
+        xset s noblank
+        xset -dpms
+        python3 /home/max/nicole_train_arrivals/main_display.py >> /home/max/display.log 2>&1
+
+Remove window bars and borders:
+    nano ~/.config/openbox/rc.xml
+        <openbox_config xmlns="http://openbox.org/3.4/rc" xmlns:xi="http://www.w3.org/2001/XInclude">
+        <applications>
+            <application class="*">
+                <decor>no</decor>
+                <maximized>yes</maximized>
+            </application>
+        </applications>
+
+        </openbox_config>
+
+Add autostart script to ~/.bash_profile:
+    # Auto-start X11 ONLY if:
+    # 1. We are on the physical screen (tty1)
+    # 2. X isn't already running
+    if [[ -z $DISPLAY ]] && [[ $(tty) = /dev/tty1 ]]; then
+        exec startx
+    fi
+
+Reboot after complete.
