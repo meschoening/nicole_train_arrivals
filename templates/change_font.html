@@ -7,13 +7,19 @@
     <title>Change Font - {{ display_name }}</title>
     <style>
         /* Dynamic @font-face rules for each installed font */
-        {% for font in fonts %}
+            {
+            % for font in fonts %
+        }
+
         @font-face {
             font-family: '{{ font.name }}';
             src: url('/api/font-file/{{ font.name | urlencode }}') format('truetype');
             font-display: swap;
         }
-        {% endfor %}
+
+            {
+            % endfor %
+        }
 
         body {
             font-family: sans-serif;
@@ -163,6 +169,55 @@
             color: #721c24;
             border: 1px solid #dc3545;
         }
+
+        .upload-section {
+            margin-top: 32px;
+            padding-top: 24px;
+            border-top: 1px solid #ddd;
+        }
+
+        .upload-section h3 {
+            margin-bottom: 16px;
+        }
+
+        .file-input-wrapper {
+            margin-bottom: 16px;
+        }
+
+        .file-input-wrapper input[type="file"] {
+            display: block;
+            width: 100%;
+            padding: 12px;
+            border: 2px dashed #ddd;
+            border-radius: 6px;
+            background: #fafafa;
+            cursor: pointer;
+            font-size: 14px;
+        }
+
+        .file-input-wrapper input[type="file"]:hover {
+            border-color: #2196F3;
+            background: #f5f9ff;
+        }
+
+        .file-input-wrapper input[type="file"]:focus {
+            outline: none;
+            border-color: #2196F3;
+        }
+
+        .upload-progress {
+            margin-top: 12px;
+            font-size: 14px;
+            color: #666;
+        }
+
+        .upload-progress.error {
+            color: #dc3545;
+        }
+
+        .upload-progress.success {
+            color: #28a745;
+        }
     </style>
 </head>
 
@@ -194,6 +249,15 @@
         </div>
 
         <div id="statusMessage" class="status-message"></div>
+
+        <div class="upload-section">
+            <h3>Install New Font</h3>
+            <div class="file-input-wrapper">
+                <input type="file" id="fontFileInput" accept=".ttf,.otf">
+            </div>
+            <button type="button" id="uploadBtn" class="primary" disabled>Upload and Install Font</button>
+            <div id="uploadProgress" class="upload-progress"></div>
+        </div>
     </div>
 
     <script>
@@ -374,6 +438,107 @@
 
         // Initial state
         updateApplyButton();
+
+        // Font upload functionality
+        const fontFileInput = document.getElementById('fontFileInput');
+        const uploadBtn = document.getElementById('uploadBtn');
+        const uploadProgress = document.getElementById('uploadProgress');
+
+        fontFileInput.addEventListener('change', () => {
+            const hasFile = fontFileInput.files && fontFileInput.files.length > 0;
+            uploadBtn.disabled = !hasFile;
+            uploadProgress.textContent = '';
+            uploadProgress.className = 'upload-progress';
+        });
+
+        function showUploadProgress(message, isError = false, isSuccess = false) {
+            uploadProgress.textContent = message;
+            uploadProgress.className = 'upload-progress';
+            if (isError) {
+                uploadProgress.classList.add('error');
+            } else if (isSuccess) {
+                uploadProgress.classList.add('success');
+            }
+        }
+
+        uploadBtn.addEventListener('click', () => {
+            const file = fontFileInput.files && fontFileInput.files[0];
+            if (!file) {
+                showUploadProgress('Please select a font file first.', true);
+                return;
+            }
+
+            // Validate file extension client-side
+            const ext = file.name.toLowerCase().split('.').pop();
+            if (ext !== 'ttf' && ext !== 'otf') {
+                showUploadProgress('Error: Only .ttf and .otf files are supported.', true);
+                return;
+            }
+
+            // Validate file size client-side (10MB max)
+            if (file.size > 10 * 1024 * 1024) {
+                showUploadProgress('Error: File too large (max 10MB).', true);
+                return;
+            }
+
+            // Disable button and show installing state
+            uploadBtn.disabled = true;
+            uploadBtn.textContent = 'Installing...';
+            showUploadProgress('Uploading... 0%');
+
+            const formData = new FormData();
+            formData.append('font_file', file);
+
+            const xhr = new XMLHttpRequest();
+
+            xhr.upload.addEventListener('progress', (e) => {
+                if (e.lengthComputable) {
+                    const percentComplete = Math.round((e.loaded / e.total) * 100);
+                    if (percentComplete < 100) {
+                        showUploadProgress(`Uploading... ${percentComplete}%`);
+                    } else {
+                        showUploadProgress('Installing font...');
+                    }
+                }
+            });
+
+            xhr.addEventListener('load', () => {
+                try {
+                    const response = JSON.parse(xhr.responseText);
+                    if (xhr.status === 200 && response.success) {
+                        showUploadProgress(`Success! Font "${response.font_name}" installed. Refreshing page...`, false, true);
+                        // Reload the page to show the new font in the list
+                        setTimeout(() => {
+                            window.location.reload();
+                        }, 1500);
+                    } else {
+                        showUploadProgress(`Error: ${response.error || 'Upload failed'}`, true);
+                        resetUploadButton();
+                    }
+                } catch (e) {
+                    showUploadProgress('Error: Invalid server response', true);
+                    resetUploadButton();
+                }
+            });
+
+            xhr.addEventListener('error', () => {
+                showUploadProgress('Error: Network error occurred', true);
+                resetUploadButton();
+            });
+
+            xhr.addEventListener('abort', () => {
+                showUploadProgress('Upload cancelled', true);
+                resetUploadButton();
+            });
+
+            xhr.open('POST', '/api/font/upload');
+            xhr.send(formData);
+        });
+
+        function resetUploadButton() {
+            uploadBtn.disabled = !(fontFileInput.files && fontFileInput.files.length > 0);
+            uploadBtn.textContent = 'Upload and Install Font';
+        }
     </script>
 </body>
 

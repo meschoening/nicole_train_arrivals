@@ -1230,6 +1230,130 @@ def start_web_settings_server(data_handler, host="0.0.0.0", port=443):
         
         return jsonify({"success": True, "font_family": default_font})
 
+    def _get_user_fonts_dir():
+        """Get the user-local fonts directory path."""
+        return os.path.expanduser("~/.local/share/fonts")
+
+    def _install_font(file_storage):
+        """
+        Install an uploaded font file to the user-local fonts directory.
+        
+        Args:
+            file_storage: werkzeug FileStorage object from file upload
+            
+        Returns:
+            dict: {"success": True, "font_name": "...", "message": "..."} or 
+                  {"success": False, "error": "..."}
+        """
+        from werkzeug.utils import secure_filename
+        
+        # Validate file exists
+        if not file_storage or not file_storage.filename:
+            return {"success": False, "error": "No file provided"}
+        
+        # Get and validate filename
+        original_filename = file_storage.filename
+        ext = os.path.splitext(original_filename)[1].lower()
+        
+        if ext not in ('.ttf', '.otf'):
+            return {"success": False, "error": "Only .ttf and .otf files are supported"}
+        
+        # Read file content for validation
+        file_content = file_storage.read()
+        file_storage.seek(0)  # Reset for later saving
+        
+        # Check file size (max 10MB)
+        if len(file_content) > 10 * 1024 * 1024:
+            return {"success": False, "error": "File too large (max 10MB)"}
+        
+        # Validate file magic bytes
+        # TTF: starts with \x00\x01\x00\x00 or 'true' or 'typ1'
+        # OTF: starts with 'OTTO'
+        valid_magic = False
+        if len(file_content) >= 4:
+            magic = file_content[:4]
+            if magic == b'\x00\x01\x00\x00':  # TTF
+                valid_magic = True
+            elif magic == b'OTTO':  # OTF
+                valid_magic = True
+            elif magic == b'true':  # TTF variant
+                valid_magic = True
+            elif magic == b'typ1':  # TTF variant
+                valid_magic = True
+        
+        if not valid_magic:
+            return {"success": False, "error": "Invalid font file format"}
+        
+        # Secure the filename
+        safe_filename = secure_filename(original_filename)
+        if not safe_filename:
+            safe_filename = f"uploaded_font{ext}"
+        
+        # Ensure fonts directory exists
+        fonts_dir = _get_user_fonts_dir()
+        try:
+            os.makedirs(fonts_dir, exist_ok=True)
+        except Exception as e:
+            return {"success": False, "error": f"Failed to create fonts directory: {str(e)}"}
+        
+        # Save the file
+        font_path = os.path.join(fonts_dir, safe_filename)
+        try:
+            file_storage.save(font_path)
+        except Exception as e:
+            return {"success": False, "error": f"Failed to save font file: {str(e)}"}
+        
+        # Refresh font cache
+        try:
+            subprocess.run(
+                ["fc-cache", "-f"],
+                capture_output=True,
+                timeout=30
+            )
+        except Exception:
+            # Font is installed but cache refresh failed - not critical
+            pass
+        
+        # Get font family name using fc-query
+        font_name = None
+        try:
+            result = subprocess.run(
+                ["fc-query", "--format=%{family}", font_path],
+                capture_output=True,
+                text=True,
+                timeout=10
+            )
+            if result.returncode == 0 and result.stdout.strip():
+                # fc-query may return comma-separated names, take first
+                font_name = result.stdout.strip().split(",")[0].strip()
+        except Exception:
+            pass
+        
+        if not font_name:
+            # Fallback: use filename without extension
+            font_name = os.path.splitext(safe_filename)[0]
+        
+        return {
+            "success": True,
+            "font_name": font_name,
+            "filename": safe_filename,
+            "message": f"Font '{font_name}' installed successfully"
+        }
+
+    @app.post("/api/font/upload")
+    def api_upload_font():
+        """Upload and install a new font file."""
+        if 'font_file' not in request.files:
+            return jsonify({"success": False, "error": "No font file provided"}), 400
+        
+        font_file = request.files['font_file']
+        result = _install_font(font_file)
+        
+        if result["success"]:
+            return jsonify(result)
+        else:
+            return jsonify(result), 400
+
     @app.post("/api/restart-app")
     def api_restart_app():
         """Restart the main display application."""
