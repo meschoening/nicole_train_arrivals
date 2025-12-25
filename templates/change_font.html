@@ -7,13 +7,19 @@
     <title>Change Font - {{ display_name }}</title>
     <style>
         /* Dynamic @font-face rules for each installed font */
-        {% for font in fonts %}
+            {
+            % for font in fonts %
+        }
+
         @font-face {
             font-family: '{{ font.name }}';
             src: url('/api/font-file/{{ font.name | urlencode }}') format('truetype');
             font-display: swap;
         }
-        {% endfor %}
+
+            {
+            % endfor %
+        }
 
         body {
             font-family: sans-serif;
@@ -245,7 +251,7 @@
         <div id="statusMessage" class="status-message"></div>
 
         <div class="upload-section">
-            <h3>Install New Font</h3>
+            <h2>Install New Font</h2>
             <div class="file-input-wrapper">
                 <input type="file" id="fontFileInput" accept=".ttf,.otf">
             </div>
