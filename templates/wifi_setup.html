@@ -340,7 +340,9 @@
             }
 
             const form = document.getElementById('connectForm');
+            const submitBtn = form.querySelector('button[type="submit"]');
             form.classList.add('loading');
+            submitBtn.textContent = 'Saving...';
 
             // Clear fields immediately
             document.getElementById('ssid').value = '';
@@ -356,7 +358,7 @@
 
                 if (data.success) {
                     showStatus(data.message, 'success');
-                    loadSavedNetworks();
+                    await loadSavedNetworks();
                 } else {
                     showStatus('Error: ' + data.error, 'error');
                 }
@@ -365,6 +367,7 @@
             }
 
             form.classList.remove('loading');
+            submitBtn.textContent = 'Save Network';
             return false;
         }
 
