@@ -18,3 +18,7 @@ class ConfigStore:
     @property
     def path(self):
         return self._handler.CONFIG_FILE
+
+    @property
+    def default_config(self):
+        return getattr(self._handler, "DEFAULT_CONFIG", {})

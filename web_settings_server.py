@@ -1,7 +1,8 @@
 import threading
 from flask import Flask, request, jsonify, render_template, redirect, url_for, Response
-import config_handler
-import message_handler
+from services.config_store import ConfigStore
+from services.message_store import MessageStore
+from services.system_service import SystemService
 import os
 from datetime import datetime
 import subprocess
@@ -213,6 +214,10 @@ def _get_current_system_timezone():
 
 def start_web_settings_server(data_handler, host="0.0.0.0", port=443):
     global _ssl_enabled
+
+    config_store = ConfigStore()
+    message_store = MessageStore()
+    system_service = SystemService()
     
     # Check for SSL certificates
     ssl_context = None
@@ -227,7 +232,7 @@ def start_web_settings_server(data_handler, host="0.0.0.0", port=443):
     app = Flask(__name__, template_folder="templates")
 
     def _get_config_last_saved():
-        config_path = getattr(config_handler, 'CONFIG_FILE', 'config.json')
+        config_path = config_store.path
         if os.path.exists(config_path):
             mtime = os.path.getmtime(config_path)
             dt = datetime.fromtimestamp(mtime)
@@ -235,32 +240,10 @@ def start_web_settings_server(data_handler, host="0.0.0.0", port=443):
         return "Never"
 
     def _get_device_ip():
-        import socket as _socket
-        try:
-            s = _socket.socket(_socket.AF_INET, _socket.SOCK_DGRAM)
-            s.connect(("8.8.8.8", 80))
-            ip = s.getsockname()[0]
-            s.close()
-            return ip
-        except Exception:
-            return "Unable to detect"
+        return system_service.get_device_ip()
 
     def _get_tailscale_address():
-        try:
-            result = subprocess.run(
-                ["tailscale", "status", "--json"],
-                capture_output=True,
-                text=True,
-                timeout=5
-            )
-            if result.returncode == 0 and result.stdout:
-                status_data = json.loads(result.stdout)
-                dns_name = status_data.get("Self", {}).get("DNSName", "")
-                if dns_name:
-                    return dns_name.rstrip('.')
-            return "Not available"
-        except (subprocess.TimeoutExpired, subprocess.SubprocessError, json.JSONDecodeError, KeyError, FileNotFoundError):
-            return "Not available"
+        return system_service.get_tailscale_address()
 
     def _get_commit_version():
         """Get the latest git commit version info (short hash, message, author date)."""
@@ -313,7 +296,7 @@ def start_web_settings_server(data_handler, host="0.0.0.0", port=443):
         }
 
     def _get_messages_last_saved():
-        messages_path = getattr(message_handler, 'MESSAGES_FILE', 'messages.json')
+        messages_path = message_store.path
         if os.path.exists(messages_path):
             mtime = os.path.getmtime(messages_path)
             dt = datetime.fromtimestamp(mtime)
@@ -322,7 +305,7 @@ def start_web_settings_server(data_handler, host="0.0.0.0", port=443):
 
     def _get_display_name():
         """Get the display name (title_text) from config for page titles."""
-        config = config_handler.load_config()
+        config = config_store.load()
         return config.get("title_text", "Nicole's Train Tracker!")
 
     def _check_for_updates():
@@ -372,7 +355,7 @@ def start_web_settings_server(data_handler, host="0.0.0.0", port=443):
 
     @app.get("/messages")
     def get_messages():
-        config = message_handler.load_messages()
+        config = message_store.load()
         messages_list = config.get("messages", [])
         return render_template(
             "messages.html",
@@ -385,7 +368,7 @@ def start_web_settings_server(data_handler, host="0.0.0.0", port=443):
     @app.post("/messages")
     def post_messages():
         data = request.get_json()
-        message_handler.save_messages(data)
+        message_store.save(data)
         return jsonify({
             "status": "saved",
             "timestamp": _get_messages_last_saved()
@@ -404,7 +387,7 @@ def start_web_settings_server(data_handler, host="0.0.0.0", port=443):
 
     @app.get("/settings")
     def get_settings():
-        config = config_handler.load_config()
+        config = config_store.load()
         
         # Always get timezone from system, not config
         current_timezone = _get_current_system_timezone()
@@ -450,7 +433,7 @@ def start_web_settings_server(data_handler, host="0.0.0.0", port=443):
 
     @app.get("/update")
     def get_update():
-        config = config_handler.load_config()
+        config = config_store.load()
         return render_template(
             "update.html",
             display_name=_get_display_name(),
@@ -460,7 +443,7 @@ def start_web_settings_server(data_handler, host="0.0.0.0", port=443):
 
     @app.get("/api-key")
     def get_api_key():
-        config = config_handler.load_config()
+        config = config_store.load()
         # Check SSH key status for initial page render
         home = os.path.expanduser("~")
         ssh_private = os.path.join(home, ".ssh", "id_ed25519")
@@ -492,7 +475,7 @@ def start_web_settings_server(data_handler, host="0.0.0.0", port=443):
     @app.post("/api-key")
     def post_api_key():
         api_key = request.form.get("api_key", "")
-        config_handler.save_config("api_key", api_key)
+        config_store.save("api_key", api_key)
         return redirect(url_for("index"))
 
     def _get_ssh_key_paths():
@@ -879,7 +862,7 @@ def start_web_settings_server(data_handler, host="0.0.0.0", port=443):
         except (TypeError, ValueError):
             return jsonify({"success": False, "error": "Invalid interval value"}), 400
         
-        config_handler.save_config("update_check_interval_seconds", interval)
+        config_store.save("update_check_interval_seconds", interval)
         return jsonify({"success": True, "interval": interval})
 
     @app.get("/api/check-for-updates")
@@ -985,7 +968,7 @@ def start_web_settings_server(data_handler, host="0.0.0.0", port=443):
         def _do_reboot():
             try:
                 time.sleep(0.25)
-                os.system("sudo shutdown -r now")
+                system_service.reboot()
             except Exception:
                 raise
 
@@ -994,7 +977,7 @@ def start_web_settings_server(data_handler, host="0.0.0.0", port=443):
 
     @app.get("/system-management")
     def get_system_management():
-        config = config_handler.load_config()
+        config = config_store.load()
         return render_template("system_management.html", config=config, display_name=_get_display_name())
 
     @app.post("/api/reboot")
@@ -1003,7 +986,7 @@ def start_web_settings_server(data_handler, host="0.0.0.0", port=443):
         def _do_reboot():
             try:
                 time.sleep(0.25)
-                os.system("sudo shutdown -r now")
+                system_service.reboot()
             except Exception:
                 raise
 
@@ -1016,7 +999,7 @@ def start_web_settings_server(data_handler, host="0.0.0.0", port=443):
         def _do_shutdown():
             try:
                 time.sleep(0.25)
-                os.system("sudo shutdown now")
+                system_service.shutdown()
             except Exception:
                 raise
 
@@ -1025,7 +1008,7 @@ def start_web_settings_server(data_handler, host="0.0.0.0", port=443):
 
     @app.get("/api/reboot-config")
     def api_get_reboot_config():
-        config = config_handler.load_config()
+        config = config_store.load()
         return jsonify({
             "reboot_enabled": config.get("reboot_enabled", False),
             "reboot_time": config.get("reboot_time", "12:00 AM")
@@ -1037,7 +1020,7 @@ def start_web_settings_server(data_handler, host="0.0.0.0", port=443):
         
         # Update reboot_enabled
         if "reboot_enabled" in data:
-            config_handler.save_config("reboot_enabled", bool(data["reboot_enabled"]))
+            config_store.save("reboot_enabled", bool(data["reboot_enabled"]))
         
         # Update reboot_time from three components
         if "reboot_hour" in data and "reboot_minute" in data and "reboot_ampm" in data:
@@ -1045,7 +1028,7 @@ def start_web_settings_server(data_handler, host="0.0.0.0", port=443):
             minute = data["reboot_minute"]
             ampm = data["reboot_ampm"]
             time_str = f"{hour}:{minute} {ampm}"
-            config_handler.save_config("reboot_time", time_str)
+            config_store.save("reboot_time", time_str)
         
         return jsonify({"status": "saved"})
 
@@ -1057,12 +1040,12 @@ def start_web_settings_server(data_handler, host="0.0.0.0", port=443):
             return form.get(name) in ("true", "True", "1", "on", "yes")
 
         # Update simple flags
-        config_handler.save_config("show_countdown", as_bool("show_countdown"))
-        config_handler.save_config("show_clock", as_bool("show_clock"))
-        config_handler.save_config("filter_by_direction", as_bool("filter_by_direction"))
-        config_handler.save_config("filter_by_destination_direction", as_bool("filter_by_destination_direction"))
-        config_handler.save_config("reboot_enabled", as_bool("reboot_enabled"))
-        config_handler.save_config("screen_sleep_enabled", as_bool("screen_sleep_enabled"))
+        config_store.save("show_countdown", as_bool("show_countdown"))
+        config_store.save("show_clock", as_bool("show_clock"))
+        config_store.save("filter_by_direction", as_bool("filter_by_direction"))
+        config_store.save("filter_by_destination_direction", as_bool("filter_by_destination_direction"))
+        config_store.save("reboot_enabled", as_bool("reboot_enabled"))
+        config_store.save("screen_sleep_enabled", as_bool("screen_sleep_enabled"))
 
         # Update numeric values
         minutes = form.get("screen_sleep_minutes")
@@ -1071,7 +1054,7 @@ def start_web_settings_server(data_handler, host="0.0.0.0", port=443):
         except ValueError:
             minutes_val = None
         if minutes_val is not None:
-            config_handler.save_config("screen_sleep_minutes", minutes_val)
+            config_store.save("screen_sleep_minutes", minutes_val)
 
         # Update refresh rate
         refresh_rate = form.get("refresh_rate_seconds")
@@ -1082,25 +1065,25 @@ def start_web_settings_server(data_handler, host="0.0.0.0", port=443):
         if refresh_rate_val is not None:
             # Validate range (5-120 seconds)
             if 5 <= refresh_rate_val <= 120:
-                config_handler.save_config("refresh_rate_seconds", refresh_rate_val)
+                config_store.save("refresh_rate_seconds", refresh_rate_val)
 
         # Update selections
         selected_line = form.get("selected_line")
         if selected_line is not None:
-            config_handler.save_config("selected_line", selected_line)
+            config_store.save("selected_line", selected_line)
 
         selected_station = form.get("selected_station")
         if selected_station is not None:
-            config_handler.save_config("selected_station", selected_station)
+            config_store.save("selected_station", selected_station)
 
         selected_destination = form.get("selected_destination")
         if selected_destination is not None:
-            config_handler.save_config("selected_destination", selected_destination)
+            config_store.save("selected_destination", selected_destination)
 
         # Update title text
         title_text = form.get("title_text")
         if title_text is not None:
-            config_handler.save_config("title_text", title_text)
+            config_store.save("title_text", title_text)
 
         # Handle timezone setting (system-only, not saved to config)
         timezone = form.get("timezone")
@@ -1124,7 +1107,7 @@ def start_web_settings_server(data_handler, host="0.0.0.0", port=443):
         reboot_ampm = form.get("reboot_ampm")
         if reboot_hour and reboot_minute and reboot_ampm:
             time_str = f"{reboot_hour}:{reboot_minute} {reboot_ampm}"
-            config_handler.save_config("reboot_time", time_str)
+            config_store.save("reboot_time", time_str)
 
         # Trigger settings changed flag for main display to refresh
         with _settings_changed_lock:
@@ -1227,9 +1210,9 @@ def start_web_settings_server(data_handler, host="0.0.0.0", port=443):
 
     @app.get("/change-font")
     def get_change_font():
-        config = config_handler.load_config()
+        config = config_store.load()
         current_font = config.get("font_family", "Quicksand")
-        default_font = config_handler.DEFAULT_CONFIG.get("font_family", "Quicksand")
+        default_font = config_store.default_config.get("font_family", "Quicksand")
         installed_fonts = _get_installed_fonts()
         return render_template(
             "change_font.html",
@@ -1248,7 +1231,7 @@ def start_web_settings_server(data_handler, host="0.0.0.0", port=443):
         if not font_family:
             return jsonify({"success": False, "error": "Font family is required"}), 400
         
-        config_handler.save_config("font_family", font_family)
+        config_store.save("font_family", font_family)
         
         # Trigger settings changed flag for main display
         with _settings_changed_lock:
@@ -1259,8 +1242,8 @@ def start_web_settings_server(data_handler, host="0.0.0.0", port=443):
     @app.post("/api/font/revert")
     def api_revert_font():
         """Revert font to default."""
-        default_font = config_handler.DEFAULT_CONFIG.get("font_family", "Quicksand")
-        config_handler.save_config("font_family", default_font)
+        default_font = config_store.default_config.get("font_family", "Quicksand")
+        config_store.save("font_family", default_font)
         
         # Trigger settings changed flag for main display
         with _settings_changed_lock:
@@ -1440,5 +1423,3 @@ def start_web_settings_server(data_handler, host="0.0.0.0", port=443):
         redirect_thread.start()
     
     return thread
-
-

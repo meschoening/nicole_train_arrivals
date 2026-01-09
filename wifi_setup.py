@@ -18,7 +18,7 @@ import sys
 import subprocess
 import argparse
 import threading
-import config_handler
+from services.config_store import ConfigStore
 
 
 class WiFiSetupWindow(QMainWindow):
@@ -26,9 +26,10 @@ class WiFiSetupWindow(QMainWindow):
     
     def __init__(self):
         super().__init__()
-        
+
         # Load config to get font family
-        config = config_handler.load_config()
+        config_store = ConfigStore()
+        config = config_store.load()
         self.font_family = config.get('font_family', 'Quicksand')
         
         self.title_text = "WiFi Configuration"
