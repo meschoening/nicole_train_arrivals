@@ -91,24 +91,24 @@ class WiFiSetupWindow(QMainWindow):
         layout.setContentsMargins(20, 0, 20, 0)
         
         # Title label
-        layout.addWidget(self._build_header_title_label(), alignment=Qt.AlignVCenter | Qt.AlignLeft)
+        layout.addWidget(self.build_header_title_label(), alignment=Qt.AlignVCenter | Qt.AlignLeft)
         
         layout.addStretch()
         
         # Return to Main Display button (right-aligned)
-        layout.addWidget(self._build_return_button(), alignment=Qt.AlignVCenter | Qt.AlignRight)
+        layout.addWidget(self.build_return_button(), alignment=Qt.AlignVCenter | Qt.AlignRight)
         
         header.setLayout(layout)
         return header
 
-    def _build_header_title_label(self):
+    def build_header_title_label(self):
         title_label = QLabel(self.title_text)
         title_label.setStyleSheet(
             f"font-family: {self.font_family}; font-size: 30px; font-weight: bold;"
         )
         return title_label
 
-    def _build_return_button(self):
+    def build_return_button(self):
         return_button = QPushButton("Return to Main Display")
         return_button.setStyleSheet(
             f"""
@@ -134,7 +134,7 @@ class WiFiSetupWindow(QMainWindow):
         return_button.clicked.connect(self.return_to_main_display)
         return return_button
 
-    def _build_status_row(self, title, value_attr, initial_value):
+    def build_status_row(self, title, value_attr, initial_value):
         row = QHBoxLayout()
         title_label = QLabel(title)
         title_label.setStyleSheet(
@@ -149,7 +149,7 @@ class WiFiSetupWindow(QMainWindow):
         row.addStretch()
         return row
 
-    def _build_status_box(self):
+    def build_status_box(self):
         status_container = QWidget()
         status_container.setStyleSheet(
             """
@@ -161,9 +161,9 @@ class WiFiSetupWindow(QMainWindow):
         status_layout.setContentsMargins(30, 30, 30, 30)
         status_layout.setSpacing(15)
 
-        status_layout.addLayout(self._build_status_row("Status:", "status_value", "Checking..."))
-        status_layout.addLayout(self._build_status_row("AP Name:", "ap_name_value", "—"))
-        status_layout.addLayout(self._build_status_row("IP Address:", "ip_value", "—"))
+        status_layout.addLayout(self.build_status_row("Status:", "status_value", "Checking..."))
+        status_layout.addLayout(self.build_status_row("AP Name:", "ap_name_value", "—"))
+        status_layout.addLayout(self.build_status_row("IP Address:", "ip_value", "—"))
 
         self.broadcast_button = QPushButton("Broadcast Setup Network")
         self.broadcast_button.setStyleSheet(
@@ -202,7 +202,7 @@ class WiFiSetupWindow(QMainWindow):
         status_container.setLayout(status_layout)
         return status_container
 
-    def _build_manual_connection_box(self):
+    def build_manual_connection_box(self):
         manual_container = QWidget()
         manual_container.setStyleSheet(
             """
@@ -316,7 +316,7 @@ class WiFiSetupWindow(QMainWindow):
         manual_container.setLayout(manual_layout)
         return manual_container
 
-    def _build_console_section(self):
+    def build_console_section(self):
         console_container = QWidget()
         console_container.setStyleSheet(
             """
@@ -370,12 +370,12 @@ class WiFiSetupWindow(QMainWindow):
         
         left_column_layout = QVBoxLayout()
         left_column_layout.setSpacing(20)
-        left_column_layout.addWidget(self._build_status_box())
-        left_column_layout.addWidget(self._build_manual_connection_box())
+        left_column_layout.addWidget(self.build_status_box())
+        left_column_layout.addWidget(self.build_manual_connection_box())
         left_column_layout.addStretch()
         columns_layout.addLayout(left_column_layout, 1)
 
-        columns_layout.addWidget(self._build_console_section(), 1)
+        columns_layout.addWidget(self.build_console_section(), 1)
         
         # Add the columns to the outer layout
         outer_layout.addLayout(columns_layout, 1)  # stretch factor 1 to fill height

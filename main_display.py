@@ -1918,7 +1918,7 @@ class MainWindow(QMainWindow):
         self.current_fade_animation.finished.connect(on_finished)
         self.current_fade_animation.start()
     
-    def _build_startup_center_container(self):
+    def build_startup_center_container(self):
         center_container = QWidget()
         center_layout = QVBoxLayout()
         center_layout.setAlignment(Qt.AlignCenter)
@@ -1938,16 +1938,16 @@ class MainWindow(QMainWindow):
         self.startup_status_label.setAlignment(Qt.AlignCenter)
         center_layout.addWidget(self.startup_status_label)
 
-        self.startup_buttons_container = self._build_startup_buttons_container()
+        self.startup_buttons_container = self.build_startup_buttons_container()
         center_layout.addWidget(self.startup_buttons_container)
 
-        self.startup_wifi_buttons_container = self._build_startup_wifi_buttons_container()
+        self.startup_wifi_buttons_container = self.build_startup_wifi_buttons_container()
         center_layout.addWidget(self.startup_wifi_buttons_container)
 
         center_container.setLayout(center_layout)
         return center_container
 
-    def _build_startup_buttons_container(self):
+    def build_startup_buttons_container(self):
         container = QWidget()
         buttons_layout = QHBoxLayout()
         buttons_layout.setContentsMargins(0, 20, 0, 0)
@@ -2033,7 +2033,7 @@ class MainWindow(QMainWindow):
         container.hide()
         return container
 
-    def _build_startup_wifi_buttons_container(self):
+    def build_startup_wifi_buttons_container(self):
         container = QWidget()
         wifi_buttons_layout = QHBoxLayout()
         wifi_buttons_layout.setContentsMargins(0, 20, 0, 0)
@@ -2129,13 +2129,13 @@ class MainWindow(QMainWindow):
         main_layout.setSpacing(0)
 
         main_layout.addStretch()
-        main_layout.addWidget(self._build_startup_center_container())
+        main_layout.addWidget(self.build_startup_center_container())
         main_layout.addStretch()
 
         page.setLayout(main_layout)
         return page
 
-    def _build_home_title_bar(self):
+    def build_home_title_bar(self):
         self.refresh_countdown_label = QLabel("Refresh in 30s")
         self.refresh_countdown_label.setStyleSheet(
             f"font-family: {self.font_family}; font-size: 14px; color: #666; padding: 0px;"
@@ -2236,12 +2236,12 @@ class MainWindow(QMainWindow):
         self.home_title_label = self._last_title_label
         return title_bar
 
-    def _configure_home_title_effect(self):
+    def configure_home_title_effect(self):
         self.title_opacity_effect = QGraphicsOpacityEffect()
         self.title_opacity_effect.setOpacity(1.0)
         self.home_title_label.setGraphicsEffect(self.title_opacity_effect)
 
-    def _build_home_arrivals_content(self):
+    def build_home_arrivals_content(self):
         content_layout = QVBoxLayout()
         content_layout.setContentsMargins(20, 20, 20, 20)
         content_layout.setSpacing(0)
@@ -2265,16 +2265,16 @@ class MainWindow(QMainWindow):
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(0)
 
-        layout.addWidget(self._build_home_title_bar())
-        self._configure_home_title_effect()
+        layout.addWidget(self.build_home_title_bar())
+        self.configure_home_title_effect()
 
-        layout.addWidget(self._build_home_arrivals_content())
+        layout.addWidget(self.build_home_arrivals_content())
         page.setLayout(layout)
 
         self.setup_message_system()
         return page
 
-    def _combo_box_stylesheet(self):
+    def combo_box_stylesheet(self):
         return """
             QComboBox {
                 font-family: {self.font_family};
@@ -2309,7 +2309,7 @@ class MainWindow(QMainWindow):
             }
         """
 
-    def _checkbox_indicator_stylesheet(self):
+    def checkbox_indicator_stylesheet(self):
         return """
             QCheckBox {
                 spacing: 5px;
@@ -2330,7 +2330,7 @@ class MainWindow(QMainWindow):
             }
         """
 
-    def _build_settings_back_button(self):
+    def build_settings_back_button(self):
         back_button = QPushButton("←")
         back_button.setStyleSheet(
             f"""
@@ -2356,7 +2356,7 @@ class MainWindow(QMainWindow):
         back_button.clicked.connect(self.close_settings_page)
         return back_button
 
-    def _build_settings_heading(self):
+    def build_settings_heading(self):
         heading_layout = QVBoxLayout()
         settings_label = QLabel("Settings")
         settings_label.setStyleSheet(
@@ -2367,16 +2367,16 @@ class MainWindow(QMainWindow):
         heading_layout.addSpacing(10)
         return heading_layout
 
-    def _build_settings_selectors_column(self, label_width):
+    def build_settings_selectors_column(self, label_width):
         selectors_column_layout = QVBoxLayout()
         selectors_column_layout.setSpacing(20)
         selectors_column_layout.setAlignment(Qt.AlignTop)
-        selectors_column_layout.addLayout(self._build_line_selector_row(label_width))
-        selectors_column_layout.addLayout(self._build_station_selector_row(label_width))
-        selectors_column_layout.addLayout(self._build_destination_selector_row(label_width))
+        selectors_column_layout.addLayout(self.build_line_selector_row(label_width))
+        selectors_column_layout.addLayout(self.build_station_selector_row(label_width))
+        selectors_column_layout.addLayout(self.build_destination_selector_row(label_width))
         return selectors_column_layout
 
-    def _build_line_selector_row(self, label_width):
+    def build_line_selector_row(self, label_width):
         line_selector_layout = QHBoxLayout()
         line_selector_layout.setContentsMargins(0, 0, 0, 0)
 
@@ -2388,7 +2388,7 @@ class MainWindow(QMainWindow):
         line_selector_layout.addWidget(line_label)
 
         self.line_combo = QComboBox()
-        self.line_combo.setStyleSheet(self._combo_box_stylesheet())
+        self.line_combo.setStyleSheet(self.combo_box_stylesheet())
         self.line_combo.setMinimumWidth(265)
         self.configure_combo_for_touchscreen(self.line_combo)
         self.line_combo.currentIndexChanged.connect(self.on_line_selected)
@@ -2397,7 +2397,7 @@ class MainWindow(QMainWindow):
         line_selector_layout.addStretch()
         return line_selector_layout
 
-    def _build_station_selector_row(self, label_width):
+    def build_station_selector_row(self, label_width):
         station_selector_layout = QHBoxLayout()
         station_selector_layout.setContentsMargins(0, 0, 0, 0)
 
@@ -2409,7 +2409,7 @@ class MainWindow(QMainWindow):
         station_selector_layout.addWidget(station_label)
 
         self.station_combo = QComboBox()
-        self.station_combo.setStyleSheet(self._combo_box_stylesheet())
+        self.station_combo.setStyleSheet(self.combo_box_stylesheet())
         self.station_combo.setMinimumWidth(265)
         self.configure_combo_for_touchscreen(self.station_combo)
         self.station_combo.currentIndexChanged.connect(self.on_station_selected)
@@ -2418,7 +2418,7 @@ class MainWindow(QMainWindow):
         station_selector_layout.addStretch()
         return station_selector_layout
 
-    def _build_destination_selector_row(self, label_width):
+    def build_destination_selector_row(self, label_width):
         destination_selector_layout = QHBoxLayout()
         destination_selector_layout.setContentsMargins(0, 0, 0, 0)
 
@@ -2430,7 +2430,7 @@ class MainWindow(QMainWindow):
         destination_selector_layout.addWidget(destination_label)
 
         self.destination_combo = QComboBox()
-        self.destination_combo.setStyleSheet(self._combo_box_stylesheet())
+        self.destination_combo.setStyleSheet(self.combo_box_stylesheet())
         self.destination_combo.setMinimumWidth(265)
         self.configure_combo_for_touchscreen(self.destination_combo)
         self.destination_combo.currentIndexChanged.connect(self.on_destination_selected)
@@ -2439,17 +2439,17 @@ class MainWindow(QMainWindow):
         destination_selector_layout.addStretch()
         return destination_selector_layout
 
-    def _build_settings_checkboxes_column(self, label_width):
+    def build_settings_checkboxes_column(self, label_width):
         checkboxes_column_layout = QVBoxLayout()
         checkboxes_column_layout.setSpacing(20)
         checkboxes_column_layout.setAlignment(Qt.AlignTop)
-        checkboxes_column_layout.addLayout(self._build_countdown_checkbox_row(label_width))
-        checkboxes_column_layout.addLayout(self._build_clock_checkbox_row(label_width))
-        checkboxes_column_layout.addLayout(self._build_filter_destination_checkbox_row(label_width))
-        checkboxes_column_layout.addLayout(self._build_filter_direction_checkbox_row(label_width))
+        checkboxes_column_layout.addLayout(self.build_countdown_checkbox_row(label_width))
+        checkboxes_column_layout.addLayout(self.build_clock_checkbox_row(label_width))
+        checkboxes_column_layout.addLayout(self.build_filter_destination_checkbox_row(label_width))
+        checkboxes_column_layout.addLayout(self.build_filter_direction_checkbox_row(label_width))
         return checkboxes_column_layout
 
-    def _build_countdown_checkbox_row(self, label_width):
+    def build_countdown_checkbox_row(self, label_width):
         countdown_checkbox_layout = QHBoxLayout()
         countdown_checkbox_layout.setContentsMargins(0, 0, 0, 0)
 
@@ -2461,7 +2461,7 @@ class MainWindow(QMainWindow):
         countdown_checkbox_layout.addWidget(countdown_label)
 
         self.show_countdown_checkbox = QCheckBox()
-        self.show_countdown_checkbox.setStyleSheet(self._checkbox_indicator_stylesheet())
+        self.show_countdown_checkbox.setStyleSheet(self.checkbox_indicator_stylesheet())
         self.show_countdown_checkbox.setChecked(True)
         self.show_countdown_checkbox.stateChanged.connect(self.toggle_countdown_visibility)
         self.show_countdown_checkbox.stateChanged.connect(self.mark_settings_changed)
@@ -2470,7 +2470,7 @@ class MainWindow(QMainWindow):
         countdown_checkbox_layout.addStretch()
         return countdown_checkbox_layout
 
-    def _build_clock_checkbox_row(self, label_width):
+    def build_clock_checkbox_row(self, label_width):
         clock_checkbox_layout = QHBoxLayout()
         clock_checkbox_layout.setContentsMargins(0, 0, 0, 0)
 
@@ -2490,7 +2490,7 @@ class MainWindow(QMainWindow):
         clock_checkbox_layout.addStretch()
         return clock_checkbox_layout
 
-    def _build_filter_destination_checkbox_row(self, label_width):
+    def build_filter_destination_checkbox_row(self, label_width):
         filter_checkbox_layout = QHBoxLayout()
         filter_checkbox_layout.setContentsMargins(0, 0, 0, 0)
 
@@ -2502,7 +2502,7 @@ class MainWindow(QMainWindow):
         filter_checkbox_layout.addWidget(filter_label)
 
         self.filter_by_destination_checkbox = QCheckBox()
-        self.filter_by_destination_checkbox.setStyleSheet(self._checkbox_indicator_stylesheet())
+        self.filter_by_destination_checkbox.setStyleSheet(self.checkbox_indicator_stylesheet())
         self.filter_by_destination_checkbox.setChecked(False)
         self.filter_by_destination_checkbox.stateChanged.connect(
             self.on_filter_by_destination_changed
@@ -2514,7 +2514,7 @@ class MainWindow(QMainWindow):
         filter_checkbox_layout.addStretch()
         return filter_checkbox_layout
 
-    def _build_filter_direction_checkbox_row(self, label_width):
+    def build_filter_direction_checkbox_row(self, label_width):
         filter_direction_checkbox_layout = QHBoxLayout()
         filter_direction_checkbox_layout.setContentsMargins(0, 0, 0, 0)
 
@@ -2527,7 +2527,7 @@ class MainWindow(QMainWindow):
 
         self.filter_by_destination_direction_checkbox = QCheckBox()
         self.filter_by_destination_direction_checkbox.setStyleSheet(
-            self._checkbox_indicator_stylesheet()
+            self.checkbox_indicator_stylesheet()
         )
         self.filter_by_destination_direction_checkbox.setChecked(False)
         self.filter_by_destination_direction_checkbox.stateChanged.connect(
@@ -2544,30 +2544,30 @@ class MainWindow(QMainWindow):
         filter_direction_checkbox_layout.addStretch()
         return filter_direction_checkbox_layout
 
-    def _build_settings_controls_layout(self):
+    def build_settings_controls_layout(self):
         controls_layout = QHBoxLayout()
         controls_layout.setContentsMargins(40, 20, 40, 0)
         controls_layout.setSpacing(0)
 
         selectors_label_width = 190
         checkboxes_label_width = 310
-        selectors_column_layout = self._build_settings_selectors_column(selectors_label_width)
-        checkboxes_column_layout = self._build_settings_checkboxes_column(checkboxes_label_width)
+        selectors_column_layout = self.build_settings_selectors_column(selectors_label_width)
+        checkboxes_column_layout = self.build_settings_checkboxes_column(checkboxes_label_width)
 
         controls_layout.addLayout(selectors_column_layout)
         controls_layout.addSpacing(40)
-        controls_layout.addWidget(self._build_settings_vertical_separator())
+        controls_layout.addWidget(self.build_settings_vertical_separator())
         controls_layout.addSpacing(39)
         controls_layout.addLayout(checkboxes_column_layout)
         return controls_layout
 
-    def _build_settings_vertical_separator(self):
+    def build_settings_vertical_separator(self):
         separator_line = QWidget()
         separator_line.setStyleSheet("background-color: #d0d0d0;")
         separator_line.setFixedWidth(1)
         return separator_line
 
-    def _build_settings_horizontal_separator(self):
+    def build_settings_horizontal_separator(self):
         separator_container = QHBoxLayout()
         separator_container.setContentsMargins(40, 0, 40, 0)
         horizontal_separator = QWidget()
@@ -2576,7 +2576,7 @@ class MainWindow(QMainWindow):
         separator_container.addWidget(horizontal_separator)
         return separator_container
 
-    def _build_screen_sleep_section(self):
+    def build_screen_sleep_section(self):
         system_settings_layout = QHBoxLayout()
         system_settings_layout.setContentsMargins(40, 0, 40, 0)
         system_settings_layout.setSpacing(0)
@@ -2584,12 +2584,12 @@ class MainWindow(QMainWindow):
         screen_sleep_column_layout = QVBoxLayout()
         screen_sleep_column_layout.setSpacing(15)
         screen_sleep_column_layout.setAlignment(Qt.AlignTop)
-        screen_sleep_column_layout.addLayout(self._build_screen_sleep_enable_row())
-        screen_sleep_column_layout.addLayout(self._build_screen_sleep_slider_row())
+        screen_sleep_column_layout.addLayout(self.build_screen_sleep_enable_row())
+        screen_sleep_column_layout.addLayout(self.build_screen_sleep_slider_row())
         system_settings_layout.addLayout(screen_sleep_column_layout)
         return system_settings_layout
 
-    def _build_screen_sleep_enable_row(self):
+    def build_screen_sleep_enable_row(self):
         screen_sleep_enable_layout = QHBoxLayout()
         screen_sleep_enable_layout.setContentsMargins(0, 0, 0, 0)
 
@@ -2600,14 +2600,14 @@ class MainWindow(QMainWindow):
         screen_sleep_enable_layout.addWidget(screen_sleep_enable_label)
 
         self.screen_sleep_enabled_checkbox = QCheckBox()
-        self.screen_sleep_enabled_checkbox.setStyleSheet(self._checkbox_indicator_stylesheet())
+        self.screen_sleep_enabled_checkbox.setStyleSheet(self.checkbox_indicator_stylesheet())
         self.screen_sleep_enabled_checkbox.setChecked(False)
         self.screen_sleep_enabled_checkbox.stateChanged.connect(self.mark_settings_changed)
         screen_sleep_enable_layout.addWidget(self.screen_sleep_enabled_checkbox)
         screen_sleep_enable_layout.addStretch()
         return screen_sleep_enable_layout
 
-    def _build_screen_sleep_slider_row(self):
+    def build_screen_sleep_slider_row(self):
         screen_sleep_slider_layout = QVBoxLayout()
         screen_sleep_slider_layout.setContentsMargins(0, 0, 0, 0)
         screen_sleep_slider_layout.setSpacing(5)
@@ -2657,7 +2657,7 @@ class MainWindow(QMainWindow):
         screen_sleep_slider_layout.addWidget(self.screen_sleep_slider)
         return screen_sleep_slider_layout
 
-    def _build_settings_left_buttons(self):
+    def build_settings_left_buttons(self):
         left_buttons_container = QWidget()
         left_buttons_layout = QHBoxLayout()
         left_buttons_layout.setContentsMargins(0, 0, 0, 0)
@@ -2714,7 +2714,7 @@ class MainWindow(QMainWindow):
         left_buttons_container.setLayout(left_buttons_layout)
         return left_buttons_container
 
-    def _build_settings_center_section(self):
+    def build_settings_center_section(self):
         center_section_container = QWidget()
         center_section_layout = QVBoxLayout()
         center_section_layout.setContentsMargins(0, 0, 0, 0)
@@ -2768,7 +2768,7 @@ class MainWindow(QMainWindow):
         center_section_container.setLayout(center_section_layout)
         return center_section_container
 
-    def _build_settings_right_buttons(self):
+    def build_settings_right_buttons(self):
         right_buttons_container = QWidget()
         right_buttons_layout = QHBoxLayout()
         right_buttons_layout.setContentsMargins(0, 0, 0, 0)
@@ -2825,25 +2825,25 @@ class MainWindow(QMainWindow):
         right_buttons_container.setLayout(right_buttons_layout)
         return right_buttons_container
 
-    def _build_settings_bottom_row(self):
+    def build_settings_bottom_row(self):
         bottom_row_grid = QGridLayout()
         bottom_row_grid.setContentsMargins(20, 0, 20, 20)
         bottom_row_grid.setHorizontalSpacing(10)
 
         bottom_row_grid.addWidget(
-            self._build_settings_left_buttons(),
+            self.build_settings_left_buttons(),
             0,
             0,
             Qt.AlignLeft | Qt.AlignBottom,
         )
         bottom_row_grid.addWidget(
-            self._build_settings_center_section(),
+            self.build_settings_center_section(),
             0,
             1,
             Qt.AlignCenter | Qt.AlignBottom,
         )
         bottom_row_grid.addWidget(
-            self._build_settings_right_buttons(),
+            self.build_settings_right_buttons(),
             0,
             2,
             Qt.AlignRight | Qt.AlignBottom,
@@ -2861,18 +2861,18 @@ class MainWindow(QMainWindow):
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(0)
 
-        layout.addWidget(self.create_title_bar(self._build_settings_back_button()))
+        layout.addWidget(self.create_title_bar(self.build_settings_back_button()))
         self.settings_title_label = self._last_title_label
 
         content_layout = QVBoxLayout()
-        content_layout.addLayout(self._build_settings_heading())
-        content_layout.addLayout(self._build_settings_controls_layout())
+        content_layout.addLayout(self.build_settings_heading())
+        content_layout.addLayout(self.build_settings_controls_layout())
         content_layout.addSpacing(10)
-        content_layout.addLayout(self._build_settings_horizontal_separator())
+        content_layout.addLayout(self.build_settings_horizontal_separator())
         content_layout.addSpacing(10)
-        content_layout.addLayout(self._build_screen_sleep_section())
+        content_layout.addLayout(self.build_screen_sleep_section())
         content_layout.addStretch()
-        content_layout.addLayout(self._build_settings_bottom_row())
+        content_layout.addLayout(self.build_settings_bottom_row())
 
         content_widget = QWidget()
         content_widget.setLayout(content_layout)

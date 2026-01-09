@@ -16,6 +16,7 @@
 - Python uses 4-space indentation, `snake_case` for functions/vars, `CamelCase` for classes, and `UPPER_SNAKE_CASE` constants (see `services/config_store.py`).
 - Keep UI styling in Qt stylesheets for the desktop app and in the HTML templates for web UI.
 - Prefer module-level helper functions for cross-cutting concerns rather than duplicating subprocess logic.
+- Avoid leading underscores in helper method names; use public-style helpers for UI builders.
 
 ## Testing Guidelines
 - No automated tests are currently present. If adding tests, place them in a `tests/` directory and use `pytest` naming (`test_*.py`).
