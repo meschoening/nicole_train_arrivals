@@ -3,3 +3,4 @@ __pycache__/
 autostart.sh
 usage.csv
 usage_calculator.py
+instructions.md
