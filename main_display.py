@@ -1918,48 +1918,46 @@ class MainWindow(QMainWindow):
         self.current_fade_animation.finished.connect(on_finished)
         self.current_fade_animation.start()
     
-    def create_startup_page(self):
-        """Create the startup/loading page shown before API connection"""
-        page = QWidget()
-        page.setStyleSheet("background-color: lightgray;")
-        
-        # Main layout to center content vertically and horizontally
-        main_layout = QVBoxLayout()
-        main_layout.setContentsMargins(0, 0, 0, 0)
-        main_layout.setSpacing(0)
-        
-        # Add stretch to push content to center
-        main_layout.addStretch()
-        
-        # Center container for title and status
+    def _build_startup_center_container(self):
         center_container = QWidget()
         center_layout = QVBoxLayout()
         center_layout.setAlignment(Qt.AlignCenter)
         center_layout.setSpacing(20)
-        
-        # Title label - large and centered
+
         self.startup_title_label = QLabel(self.default_title_text)
-        self.startup_title_label.setStyleSheet(f"font-family: {self.font_family}; font-size: 48px; font-weight: bold; color: #333;")
+        self.startup_title_label.setStyleSheet(
+            f"font-family: {self.font_family}; font-size: 48px; font-weight: bold; color: #333;"
+        )
         self.startup_title_label.setAlignment(Qt.AlignCenter)
         center_layout.addWidget(self.startup_title_label)
-        
-        # Status label - smaller, below title
+
         self.startup_status_label = QLabel("Connecting to Metro API...")
-        self.startup_status_label.setStyleSheet(f"font-family: {self.font_family}; font-size: 24px; color: #666;")
+        self.startup_status_label.setStyleSheet(
+            f"font-family: {self.font_family}; font-size: 24px; color: #666;"
+        )
         self.startup_status_label.setAlignment(Qt.AlignCenter)
         center_layout.addWidget(self.startup_status_label)
-        
-        # Buttons container (initially hidden)
-        self.startup_buttons_container = QWidget()
+
+        self.startup_buttons_container = self._build_startup_buttons_container()
+        center_layout.addWidget(self.startup_buttons_container)
+
+        self.startup_wifi_buttons_container = self._build_startup_wifi_buttons_container()
+        center_layout.addWidget(self.startup_wifi_buttons_container)
+
+        center_container.setLayout(center_layout)
+        return center_container
+
+    def _build_startup_buttons_container(self):
+        container = QWidget()
         buttons_layout = QHBoxLayout()
         buttons_layout.setContentsMargins(0, 20, 0, 0)
         buttons_layout.setSpacing(20)
         buttons_layout.setAlignment(Qt.AlignCenter)
-        
-        # Exit to Desktop button
+
         self.startup_exit_button = QPushButton("Exit to Desktop")
         self.startup_exit_button.setMinimumWidth(180)
-        self.startup_exit_button.setStyleSheet("""
+        self.startup_exit_button.setStyleSheet(
+            """
             QPushButton {
                 font-family: {self.font_family};
                 font-size: 18px;
@@ -1976,14 +1974,15 @@ class MainWindow(QMainWindow):
                 background-color: #c0c0c0;
                 padding-bottom: 9px;
             }
-        """)
+        """
+        )
         self.startup_exit_button.clicked.connect(QApplication.instance().quit)
         buttons_layout.addWidget(self.startup_exit_button)
-        
-        # Reboot button
+
         self.startup_reboot_button = QPushButton("Reboot")
         self.startup_reboot_button.setMinimumWidth(180)
-        self.startup_reboot_button.setStyleSheet("""
+        self.startup_reboot_button.setStyleSheet(
+            """
             QPushButton {
                 font-family: {self.font_family};
                 font-size: 18px;
@@ -2000,14 +1999,15 @@ class MainWindow(QMainWindow):
                 background-color: #c0c0c0;
                 padding-bottom: 9px;
             }
-        """)
+        """
+        )
         self.startup_reboot_button.clicked.connect(self.perform_system_reboot)
         buttons_layout.addWidget(self.startup_reboot_button)
-        
-        # Shutdown button
+
         self.startup_shutdown_button = QPushButton("Shutdown")
         self.startup_shutdown_button.setMinimumWidth(180)
-        self.startup_shutdown_button.setStyleSheet("""
+        self.startup_shutdown_button.setStyleSheet(
+            """
             QPushButton {
                 font-family: {self.font_family};
                 font-size: 18px;
@@ -2024,25 +2024,26 @@ class MainWindow(QMainWindow):
                 background-color: #c0c0c0;
                 padding-bottom: 9px;
             }
-        """)
+        """
+        )
         self.startup_shutdown_button.clicked.connect(self.perform_system_shutdown)
         buttons_layout.addWidget(self.startup_shutdown_button)
-        
-        self.startup_buttons_container.setLayout(buttons_layout)
-        self.startup_buttons_container.hide()  # Initially hidden
-        center_layout.addWidget(self.startup_buttons_container)
-        
-        # WiFi-specific buttons container (for no WiFi connection state)
-        self.startup_wifi_buttons_container = QWidget()
+
+        container.setLayout(buttons_layout)
+        container.hide()
+        return container
+
+    def _build_startup_wifi_buttons_container(self):
+        container = QWidget()
         wifi_buttons_layout = QHBoxLayout()
         wifi_buttons_layout.setContentsMargins(0, 20, 0, 0)
         wifi_buttons_layout.setSpacing(20)
         wifi_buttons_layout.setAlignment(Qt.AlignCenter)
-        
-        # Launch Setup button (left)
+
         self.startup_launch_setup_button = QPushButton("Launch Setup")
         self.startup_launch_setup_button.setMinimumWidth(180)
-        self.startup_launch_setup_button.setStyleSheet(f"""
+        self.startup_launch_setup_button.setStyleSheet(
+            f"""
             QPushButton {{
                 font-family: {self.font_family};
                 font-size: 18px;
@@ -2059,14 +2060,15 @@ class MainWindow(QMainWindow):
                 background-color: #c0c0c0;
                 padding-bottom: 9px;
             }}
-        """)
+        """
+        )
         self.startup_launch_setup_button.clicked.connect(self.launch_wifi_setup)
         wifi_buttons_layout.addWidget(self.startup_launch_setup_button)
-        
-        # Reboot button (middle)
+
         self.startup_wifi_reboot_button = QPushButton("Reboot")
         self.startup_wifi_reboot_button.setMinimumWidth(180)
-        self.startup_wifi_reboot_button.setStyleSheet(f"""
+        self.startup_wifi_reboot_button.setStyleSheet(
+            f"""
             QPushButton {{
                 font-family: {self.font_family};
                 font-size: 18px;
@@ -2083,14 +2085,15 @@ class MainWindow(QMainWindow):
                 background-color: #c0c0c0;
                 padding-bottom: 9px;
             }}
-        """)
+        """
+        )
         self.startup_wifi_reboot_button.clicked.connect(self.perform_system_reboot)
         wifi_buttons_layout.addWidget(self.startup_wifi_reboot_button)
-        
-        # Shutdown button (right)
+
         self.startup_wifi_shutdown_button = QPushButton("Shutdown")
         self.startup_wifi_shutdown_button.setMinimumWidth(180)
-        self.startup_wifi_shutdown_button.setStyleSheet(f"""
+        self.startup_wifi_shutdown_button.setStyleSheet(
+            f"""
             QPushButton {{
                 font-family: {self.font_family};
                 font-size: 18px;
@@ -2107,52 +2110,55 @@ class MainWindow(QMainWindow):
                 background-color: #c0c0c0;
                 padding-bottom: 9px;
             }}
-        """)
+        """
+        )
         self.startup_wifi_shutdown_button.clicked.connect(self.perform_system_shutdown)
         wifi_buttons_layout.addWidget(self.startup_wifi_shutdown_button)
-        
-        self.startup_wifi_buttons_container.setLayout(wifi_buttons_layout)
-        self.startup_wifi_buttons_container.hide()  # Initially hidden
-        center_layout.addWidget(self.startup_wifi_buttons_container)
 
-        
-        center_container.setLayout(center_layout)
-        main_layout.addWidget(center_container)
-        
-        # Add stretch to push content to center
+        container.setLayout(wifi_buttons_layout)
+        container.hide()
+        return container
+
+    def create_startup_page(self):
+        """Create the startup/loading page shown before API connection"""
+        page = QWidget()
+        page.setStyleSheet("background-color: lightgray;")
+
+        main_layout = QVBoxLayout()
+        main_layout.setContentsMargins(0, 0, 0, 0)
+        main_layout.setSpacing(0)
+
         main_layout.addStretch()
-        
+        main_layout.addWidget(self._build_startup_center_container())
+        main_layout.addStretch()
+
         page.setLayout(main_layout)
         return page
-    
-    def create_home_page(self):
-        """Create the home page"""
-        page = QWidget()
-        layout = QVBoxLayout()
-        layout.setContentsMargins(0, 0, 0, 0)
-        layout.setSpacing(0)
-        
-        # Create countdown label
+
+    def _build_home_title_bar(self):
         self.refresh_countdown_label = QLabel("Refresh in 30s")
-        self.refresh_countdown_label.setStyleSheet(f"font-family: {self.font_family}; font-size: 14px; color: #666; padding: 0px;")
-        self.refresh_countdown_label.setMaximumWidth(500)  # Prevent overlap with title and buttons
+        self.refresh_countdown_label.setStyleSheet(
+            f"font-family: {self.font_family}; font-size: 14px; color: #666; padding: 0px;"
+        )
+        self.refresh_countdown_label.setMaximumWidth(500)
         self.refresh_countdown_label.setWordWrap(False)
         self.refresh_countdown_label.setSizePolicy(QSizePolicy.Maximum, QSizePolicy.Preferred)
         self.refresh_countdown_label.setContentsMargins(0, 0, 0, 0)
         self.refresh_countdown_label.setMargin(0)
         self.refresh_countdown_label.setIndent(0)
-        
-        # Create clock label and timer
+
         self.clock_label = QLabel()
-        self.clock_label.setStyleSheet(f"font-family: {self.font_family}; font-size: 30px; font-weight: bold;")
+        self.clock_label.setStyleSheet(
+            f"font-family: {self.font_family}; font-size: 30px; font-weight: bold;"
+        )
         self.update_clock()
         self.clock_timer = QTimer()
         self.clock_timer.timeout.connect(self.update_clock)
         self.clock_timer.start(1000)
-        
-        # Create update notification label (initially hidden)
+
         self.update_notification_label = QLabel("Update Available")
-        self.update_notification_label.setStyleSheet("""
+        self.update_notification_label.setStyleSheet(
+            """
             font-family: {self.font_family};
             font-size: 14px;
             font-weight: bold;
@@ -2160,12 +2166,13 @@ class MainWindow(QMainWindow):
             background-color: #d4edda;
             padding: 5px 10px;
             border-radius: 4px;
-        """)
-        self.update_notification_label.hide()  # Hidden by default
-        
-        # Create settings button
+        """
+        )
+        self.update_notification_label.hide()
+
         settings_button = QPushButton("⚙")
-        settings_button.setStyleSheet("""
+        settings_button.setStyleSheet(
+            """
             QPushButton {
                 font-family: {self.font_family};
                 font-size: 22px;
@@ -2182,13 +2189,14 @@ class MainWindow(QMainWindow):
                 background-color: #909090;
                 padding-bottom: 4px;
             }
-        """)
+        """
+        )
         settings_button.setFixedHeight(45)
         settings_button.clicked.connect(self.open_settings_page)
-        
-        # Create close button
+
         close_button = QPushButton("✕")
-        close_button.setStyleSheet("""
+        close_button.setStyleSheet(
+            """
             QPushButton {
                 font-family: {self.font_family};
                 font-size: 22px;
@@ -2205,11 +2213,11 @@ class MainWindow(QMainWindow):
                 background-color: #909090;
                 padding-bottom: 4px;
             }
-        """)
+        """
+        )
         close_button.setFixedHeight(45)
         close_button.clicked.connect(QApplication.instance().quit)
-        
-        # Create container widget for both buttons
+
         buttons_container = QWidget()
         buttons_container.setStyleSheet("background-color: lightgray;")
         buttons_layout = QHBoxLayout()
@@ -2218,56 +2226,114 @@ class MainWindow(QMainWindow):
         buttons_layout.addWidget(settings_button)
         buttons_layout.addWidget(close_button)
         buttons_container.setLayout(buttons_layout)
-        
-        # Add title bar with centered clock and update notification
-        layout.addWidget(self.create_title_bar(
-            buttons_container, 
-            self.refresh_countdown_label, 
+
+        title_bar = self.create_title_bar(
+            buttons_container,
+            self.refresh_countdown_label,
             self.clock_label,
-            self.update_notification_label
-        ))
-        
-        # Capture the home page title label and add opacity effect for animations
+            self.update_notification_label,
+        )
         self.home_title_label = self._last_title_label
+        return title_bar
+
+    def _configure_home_title_effect(self):
         self.title_opacity_effect = QGraphicsOpacityEffect()
         self.title_opacity_effect.setOpacity(1.0)
         self.home_title_label.setGraphicsEffect(self.title_opacity_effect)
-        
-        # Add content
+
+    def _build_home_arrivals_content(self):
         content_layout = QVBoxLayout()
         content_layout.setContentsMargins(20, 20, 20, 20)
         content_layout.setSpacing(0)
-        
-        # Create 5 arrival rows
+
         self.arrival_rows = []
         for i in range(5):
             row = self.create_arrival_row(i)
             self.arrival_rows.append(row)
             content_layout.addWidget(row)
-        
+
         content_layout.addStretch()
-        
+
         content_widget = QWidget()
         content_widget.setLayout(content_layout)
-        layout.addWidget(content_widget)
-        
-        page.setLayout(layout)
-        
-        # Initialize message system now that title_label is created
-        self.setup_message_system()
-        
-        return page
+        return content_widget
     
-    def create_settings_page(self):
-        """Create the settings page"""
+    def create_home_page(self):
+        """Create the home page"""
         page = QWidget()
         layout = QVBoxLayout()
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(0)
-        
-        # Create back button
+
+        layout.addWidget(self._build_home_title_bar())
+        self._configure_home_title_effect()
+
+        layout.addWidget(self._build_home_arrivals_content())
+        page.setLayout(layout)
+
+        self.setup_message_system()
+        return page
+
+    def _combo_box_stylesheet(self):
+        return """
+            QComboBox {
+                font-family: {self.font_family};
+                font-size: 18px;
+                padding: 7px;
+                border: 1px solid #ccc;
+                border-radius: 3px;
+                background-color: white;
+            }
+            QComboBox:hover {
+                border: 1px solid #999;
+            }
+            QComboBox QAbstractItemView {
+                font-family: {self.font_family};
+                font-size: 18px;
+                background-color: white;
+                selection-background-color: #e0e0e0;
+                selection-color: #000;
+                color: #000;
+            }
+            QComboBox QAbstractItemView::item {
+                color: #000;
+                padding: 5px;
+            }
+            QComboBox QAbstractItemView::item:selected {
+                background-color: #e0e0e0;
+                color: #000;
+            }
+            QComboBox QAbstractItemView::item:hover {
+                background-color: #e0e0e0;
+                color: #000;
+            }
+        """
+
+    def _checkbox_indicator_stylesheet(self):
+        return """
+            QCheckBox {
+                spacing: 5px;
+            }
+            QCheckBox::indicator {
+                width: 25px;
+                height: 25px;
+                border: 2px solid #ccc;
+                border-radius: 3px;
+                background-color: white;
+            }
+            QCheckBox::indicator:hover {
+                border: 2px solid #999;
+            }
+            QCheckBox::indicator:checked {
+                background-color: #4CAF50;
+                border: 2px solid #4CAF50;
+            }
+        """
+
+    def _build_settings_back_button(self):
         back_button = QPushButton("←")
-        back_button.setStyleSheet(f"""
+        back_button.setStyleSheet(
+            f"""
             QPushButton {{
                 font-family: {self.font_family};
                 font-size: 22px;
@@ -2284,438 +2350,282 @@ class MainWindow(QMainWindow):
                 background-color: #909090;
                 padding-bottom: 4px;
             }}
-        """)
+        """
+        )
         back_button.setFixedHeight(45)
         back_button.clicked.connect(self.close_settings_page)
-        
-        # Add title bar
-        layout.addWidget(self.create_title_bar(back_button))
-        
-        # Capture the settings page title label
-        self.settings_title_label = self._last_title_label
-        
-        # Add settings subtitle
-        content_layout = QVBoxLayout()
+        return back_button
+
+    def _build_settings_heading(self):
+        heading_layout = QVBoxLayout()
         settings_label = QLabel("Settings")
-        settings_label.setStyleSheet(f"font-family: {self.font_family}; font-size: 28px; font-weight: bold;")
+        settings_label.setStyleSheet(
+            f"font-family: {self.font_family}; font-size: 28px; font-weight: bold;"
+        )
         settings_label.setAlignment(Qt.AlignCenter)
-        content_layout.addWidget(settings_label)
-        content_layout.addSpacing(10)
+        heading_layout.addWidget(settings_label)
+        heading_layout.addSpacing(10)
+        return heading_layout
 
-        controls_layout = QHBoxLayout()
-        controls_layout.setContentsMargins(40, 20, 40, 0)
-        controls_layout.setSpacing(0)  # Set to 0, will manually add spacing for separator
-
+    def _build_settings_selectors_column(self, label_width):
         selectors_column_layout = QVBoxLayout()
         selectors_column_layout.setSpacing(20)
         selectors_column_layout.setAlignment(Qt.AlignTop)
+        selectors_column_layout.addLayout(self._build_line_selector_row(label_width))
+        selectors_column_layout.addLayout(self._build_station_selector_row(label_width))
+        selectors_column_layout.addLayout(self._build_destination_selector_row(label_width))
+        return selectors_column_layout
 
+    def _build_line_selector_row(self, label_width):
+        line_selector_layout = QHBoxLayout()
+        line_selector_layout.setContentsMargins(0, 0, 0, 0)
+
+        line_label = QLabel("Select Line:")
+        line_label.setStyleSheet(
+            f"font-family: {self.font_family}; font-size: 21px; font-weight: bold;"
+        )
+        line_label.setFixedWidth(label_width)
+        line_selector_layout.addWidget(line_label)
+
+        self.line_combo = QComboBox()
+        self.line_combo.setStyleSheet(self._combo_box_stylesheet())
+        self.line_combo.setMinimumWidth(265)
+        self.configure_combo_for_touchscreen(self.line_combo)
+        self.line_combo.currentIndexChanged.connect(self.on_line_selected)
+        self.line_combo.currentIndexChanged.connect(self.mark_settings_changed)
+        line_selector_layout.addWidget(self.line_combo)
+        line_selector_layout.addStretch()
+        return line_selector_layout
+
+    def _build_station_selector_row(self, label_width):
+        station_selector_layout = QHBoxLayout()
+        station_selector_layout.setContentsMargins(0, 0, 0, 0)
+
+        station_label = QLabel("Select Station:")
+        station_label.setStyleSheet(
+            f"font-family: {self.font_family}; font-size: 21px; font-weight: bold;"
+        )
+        station_label.setFixedWidth(label_width)
+        station_selector_layout.addWidget(station_label)
+
+        self.station_combo = QComboBox()
+        self.station_combo.setStyleSheet(self._combo_box_stylesheet())
+        self.station_combo.setMinimumWidth(265)
+        self.configure_combo_for_touchscreen(self.station_combo)
+        self.station_combo.currentIndexChanged.connect(self.on_station_selected)
+        self.station_combo.currentIndexChanged.connect(self.mark_settings_changed)
+        station_selector_layout.addWidget(self.station_combo)
+        station_selector_layout.addStretch()
+        return station_selector_layout
+
+    def _build_destination_selector_row(self, label_width):
+        destination_selector_layout = QHBoxLayout()
+        destination_selector_layout.setContentsMargins(0, 0, 0, 0)
+
+        destination_label = QLabel("Select Destination:")
+        destination_label.setStyleSheet(
+            f"font-family: {self.font_family}; font-size: 21px; font-weight: bold;"
+        )
+        destination_label.setFixedWidth(label_width)
+        destination_selector_layout.addWidget(destination_label)
+
+        self.destination_combo = QComboBox()
+        self.destination_combo.setStyleSheet(self._combo_box_stylesheet())
+        self.destination_combo.setMinimumWidth(265)
+        self.configure_combo_for_touchscreen(self.destination_combo)
+        self.destination_combo.currentIndexChanged.connect(self.on_destination_selected)
+        self.destination_combo.currentIndexChanged.connect(self.mark_settings_changed)
+        destination_selector_layout.addWidget(self.destination_combo)
+        destination_selector_layout.addStretch()
+        return destination_selector_layout
+
+    def _build_settings_checkboxes_column(self, label_width):
         checkboxes_column_layout = QVBoxLayout()
         checkboxes_column_layout.setSpacing(20)
         checkboxes_column_layout.setAlignment(Qt.AlignTop)
+        checkboxes_column_layout.addLayout(self._build_countdown_checkbox_row(label_width))
+        checkboxes_column_layout.addLayout(self._build_clock_checkbox_row(label_width))
+        checkboxes_column_layout.addLayout(self._build_filter_destination_checkbox_row(label_width))
+        checkboxes_column_layout.addLayout(self._build_filter_direction_checkbox_row(label_width))
+        return checkboxes_column_layout
 
-        selectors_label_width = 190
-        checkboxes_label_width = 310
-
-        # Add line selector
-        line_selector_layout = QHBoxLayout()
-        line_selector_layout.setContentsMargins(0, 0, 0, 0)
-        
-        line_label = QLabel("Select Line:")
-        line_label.setStyleSheet(f"font-family: {self.font_family}; font-size: 21px; font-weight: bold;")
-        line_label.setFixedWidth(selectors_label_width)
-        line_selector_layout.addWidget(line_label)
-        
-        self.line_combo = QComboBox()
-        self.line_combo.setStyleSheet("""
-            QComboBox {
-                font-family: {self.font_family};
-                font-size: 18px;
-                padding: 7px;
-                border: 1px solid #ccc;
-                border-radius: 3px;
-                background-color: white;
-            }
-            QComboBox:hover {
-                border: 1px solid #999;
-            }
-            QComboBox QAbstractItemView {
-                font-family: {self.font_family};
-                font-size: 18px;
-                background-color: white;
-                selection-background-color: #e0e0e0;
-                selection-color: #000;
-                color: #000;
-            }
-            QComboBox QAbstractItemView::item {
-                color: #000;
-                padding: 5px;
-            }
-            QComboBox QAbstractItemView::item:selected {
-                background-color: #e0e0e0;
-                color: #000;
-            }
-            QComboBox QAbstractItemView::item:hover {
-                background-color: #e0e0e0;
-                color: #000;
-            }
-        """)
-        self.line_combo.setMinimumWidth(265)
-        
-        # Configure for touchscreen use
-        self.configure_combo_for_touchscreen(self.line_combo)
-        
-        # Connect selection change to save config (connect before populating to ensure signals work)
-        self.line_combo.currentIndexChanged.connect(self.on_line_selected)
-        self.line_combo.currentIndexChanged.connect(self.mark_settings_changed)
-        
-        line_selector_layout.addWidget(self.line_combo)
-        line_selector_layout.addStretch()
-        selectors_column_layout.addLayout(line_selector_layout)
-        
-        # Add station selector
-        station_selector_layout = QHBoxLayout()
-        station_selector_layout.setContentsMargins(0, 0, 0, 0)
-        
-        station_label = QLabel("Select Station:")
-        station_label.setStyleSheet(f"font-family: {self.font_family}; font-size: 21px; font-weight: bold;")
-        station_label.setFixedWidth(selectors_label_width)
-        station_selector_layout.addWidget(station_label)
-        
-        self.station_combo = QComboBox()
-        self.station_combo.setStyleSheet("""
-            QComboBox {
-                font-family: {self.font_family};
-                font-size: 18px;
-                padding: 7px;
-                border: 1px solid #ccc;
-                border-radius: 3px;
-                background-color: white;
-            }
-            QComboBox:hover {
-                border: 1px solid #999;
-            }
-            QComboBox QAbstractItemView {
-                font-family: {self.font_family};
-                font-size: 18px;
-                background-color: white;
-                selection-background-color: #e0e0e0;
-                selection-color: #000;
-                color: #000;
-            }
-            QComboBox QAbstractItemView::item {
-                color: #000;
-                padding: 5px;
-            }
-            QComboBox QAbstractItemView::item:selected {
-                background-color: #e0e0e0;
-                color: #000;
-            }
-            QComboBox QAbstractItemView::item:hover {
-                background-color: #e0e0e0;
-                color: #000;
-            }
-        """)
-        self.station_combo.setMinimumWidth(265)
-        
-        # Configure for touchscreen use
-        self.configure_combo_for_touchscreen(self.station_combo)
-        
-        # Connect selection change to save config
-        self.station_combo.currentIndexChanged.connect(self.on_station_selected)
-        self.station_combo.currentIndexChanged.connect(self.mark_settings_changed)
-        
-        station_selector_layout.addWidget(self.station_combo)
-        station_selector_layout.addStretch()
-        selectors_column_layout.addLayout(station_selector_layout)
-        
-        # Add destination selector
-        destination_selector_layout = QHBoxLayout()
-        destination_selector_layout.setContentsMargins(0, 0, 0, 0)
-        
-        destination_label = QLabel("Select Destination:")
-        destination_label.setStyleSheet(f"font-family: {self.font_family}; font-size: 21px; font-weight: bold;")
-        destination_label.setFixedWidth(selectors_label_width)
-        destination_selector_layout.addWidget(destination_label)
-        
-        self.destination_combo = QComboBox()
-        self.destination_combo.setStyleSheet("""
-            QComboBox {
-                font-family: {self.font_family};
-                font-size: 18px;
-                padding: 7px;
-                border: 1px solid #ccc;
-                border-radius: 3px;
-                background-color: white;
-            }
-            QComboBox:hover {
-                border: 1px solid #999;
-            }
-            QComboBox QAbstractItemView {
-                font-family: {self.font_family};
-                font-size: 18px;
-                background-color: white;
-                selection-background-color: #e0e0e0;
-                selection-color: #000;
-                color: #000;
-            }
-            QComboBox QAbstractItemView::item {
-                color: #000;
-                padding: 5px;
-            }
-            QComboBox QAbstractItemView::item:selected {
-                background-color: #e0e0e0;
-                color: #000;
-            }
-            QComboBox QAbstractItemView::item:hover {
-                background-color: #e0e0e0;
-                color: #000;
-            }
-        """)
-        self.destination_combo.setMinimumWidth(265)
-        
-        # Configure for touchscreen use
-        self.configure_combo_for_touchscreen(self.destination_combo)
-        
-        # Connect selection change to save config
-        self.destination_combo.currentIndexChanged.connect(self.on_destination_selected)
-        self.destination_combo.currentIndexChanged.connect(self.mark_settings_changed)
-        
-        destination_selector_layout.addWidget(self.destination_combo)
-        destination_selector_layout.addStretch()
-        selectors_column_layout.addLayout(destination_selector_layout)
-        
-        # Add countdown visibility checkbox
+    def _build_countdown_checkbox_row(self, label_width):
         countdown_checkbox_layout = QHBoxLayout()
         countdown_checkbox_layout.setContentsMargins(0, 0, 0, 0)
-        
+
         countdown_label = QLabel("Show Time to Refresh:")
-        countdown_label.setStyleSheet(f"font-family: {self.font_family}; font-size: 21px; font-weight: bold;")
-        countdown_label.setFixedWidth(checkboxes_label_width)
+        countdown_label.setStyleSheet(
+            f"font-family: {self.font_family}; font-size: 21px; font-weight: bold;"
+        )
+        countdown_label.setFixedWidth(label_width)
         countdown_checkbox_layout.addWidget(countdown_label)
-        
+
         self.show_countdown_checkbox = QCheckBox()
-        self.show_countdown_checkbox.setStyleSheet("""
-            QCheckBox {
-                spacing: 5px;
-            }
-            QCheckBox::indicator {
-                width: 25px;
-                height: 25px;
-                border: 2px solid #ccc;
-                border-radius: 3px;
-                background-color: white;
-            }
-            QCheckBox::indicator:hover {
-                border: 2px solid #999;
-            }
-            QCheckBox::indicator:checked {
-                background-color: #4CAF50;
-                border: 2px solid #4CAF50;
-            }
-        """)
-        self.show_countdown_checkbox.setChecked(True)  # Default to checked
-        
-        # Connect checkbox to toggle method
+        self.show_countdown_checkbox.setStyleSheet(self._checkbox_indicator_stylesheet())
+        self.show_countdown_checkbox.setChecked(True)
         self.show_countdown_checkbox.stateChanged.connect(self.toggle_countdown_visibility)
         self.show_countdown_checkbox.stateChanged.connect(self.mark_settings_changed)
-        
+
         countdown_checkbox_layout.addWidget(self.show_countdown_checkbox)
         countdown_checkbox_layout.addStretch()
-        checkboxes_column_layout.addLayout(countdown_checkbox_layout)
-        
-        # Add clock visibility checkbox
+        return countdown_checkbox_layout
+
+    def _build_clock_checkbox_row(self, label_width):
         clock_checkbox_layout = QHBoxLayout()
         clock_checkbox_layout.setContentsMargins(0, 0, 0, 0)
-        
+
         clock_label = QLabel("Show Clock in Top Bar:")
-        clock_label.setStyleSheet(f"font-family: {self.font_family}; font-size: 21px; font-weight: bold;")
-        clock_label.setFixedWidth(checkboxes_label_width)
+        clock_label.setStyleSheet(
+            f"font-family: {self.font_family}; font-size: 21px; font-weight: bold;"
+        )
+        clock_label.setFixedWidth(label_width)
         clock_checkbox_layout.addWidget(clock_label)
-        
+
         self.show_clock_checkbox = QCheckBox()
         self.show_clock_checkbox.setStyleSheet(self.show_countdown_checkbox.styleSheet())
-        # Default checked; real value loaded in initialize_settings_from_config
         self.show_clock_checkbox.setChecked(True)
         self.show_clock_checkbox.stateChanged.connect(self.toggle_clock_visibility)
         self.show_clock_checkbox.stateChanged.connect(self.mark_settings_changed)
         clock_checkbox_layout.addWidget(self.show_clock_checkbox)
         clock_checkbox_layout.addStretch()
-        checkboxes_column_layout.addLayout(clock_checkbox_layout)
-        
-        # Add filter by selected destination checkbox
+        return clock_checkbox_layout
+
+    def _build_filter_destination_checkbox_row(self, label_width):
         filter_checkbox_layout = QHBoxLayout()
         filter_checkbox_layout.setContentsMargins(0, 0, 0, 0)
-        
+
         filter_label = QLabel("Filter by Selected Destination:")
-        filter_label.setStyleSheet(f"font-family: {self.font_family}; font-size: 21px; font-weight: bold;")
-        filter_label.setFixedWidth(checkboxes_label_width)
+        filter_label.setStyleSheet(
+            f"font-family: {self.font_family}; font-size: 21px; font-weight: bold;"
+        )
+        filter_label.setFixedWidth(label_width)
         filter_checkbox_layout.addWidget(filter_label)
-        
+
         self.filter_by_destination_checkbox = QCheckBox()
-        self.filter_by_destination_checkbox.setStyleSheet("""
-            QCheckBox {
-                spacing: 5px;
-            }
-            QCheckBox::indicator {
-                width: 25px;
-                height: 25px;
-                border: 2px solid #ccc;
-                border-radius: 3px;
-                background-color: white;
-            }
-            QCheckBox::indicator:hover {
-                border: 2px solid #999;
-            }
-            QCheckBox::indicator:checked {
-                background-color: #4CAF50;
-                border: 2px solid #4CAF50;
-            }
-        """)
-        self.filter_by_destination_checkbox.setChecked(False)  # Default to unchecked (show all)
-        
-        # Connect checkbox to refresh arrivals
-        self.filter_by_destination_checkbox.stateChanged.connect(self.on_filter_by_destination_changed)
+        self.filter_by_destination_checkbox.setStyleSheet(self._checkbox_indicator_stylesheet())
+        self.filter_by_destination_checkbox.setChecked(False)
+        self.filter_by_destination_checkbox.stateChanged.connect(
+            self.on_filter_by_destination_changed
+        )
         self.filter_by_destination_checkbox.stateChanged.connect(self.update_arrivals_display)
         self.filter_by_destination_checkbox.stateChanged.connect(self.mark_settings_changed)
-        
+
         filter_checkbox_layout.addWidget(self.filter_by_destination_checkbox)
         filter_checkbox_layout.addStretch()
-        checkboxes_column_layout.addLayout(filter_checkbox_layout)
-        
-        # Add filter by destination direction checkbox
+        return filter_checkbox_layout
+
+    def _build_filter_direction_checkbox_row(self, label_width):
         filter_direction_checkbox_layout = QHBoxLayout()
         filter_direction_checkbox_layout.setContentsMargins(0, 0, 0, 0)
-        
+
         filter_direction_label = QLabel("Filter by Destination Direction:")
-        filter_direction_label.setStyleSheet(f"font-family: {self.font_family}; font-size: 21px; font-weight: bold;")
-        filter_direction_label.setFixedWidth(checkboxes_label_width)
+        filter_direction_label.setStyleSheet(
+            f"font-family: {self.font_family}; font-size: 21px; font-weight: bold;"
+        )
+        filter_direction_label.setFixedWidth(label_width)
         filter_direction_checkbox_layout.addWidget(filter_direction_label)
-        
+
         self.filter_by_destination_direction_checkbox = QCheckBox()
-        self.filter_by_destination_direction_checkbox.setStyleSheet("""
-            QCheckBox {
-                spacing: 5px;
-            }
-            QCheckBox::indicator {
-                width: 25px;
-                height: 25px;
-                border: 2px solid #ccc;
-                border-radius: 3px;
-                background-color: white;
-            }
-            QCheckBox::indicator:hover {
-                border: 2px solid #999;
-            }
-            QCheckBox::indicator:checked {
-                background-color: #4CAF50;
-                border: 2px solid #4CAF50;
-            }
-        """)
-        self.filter_by_destination_direction_checkbox.setChecked(False)  # Default to unchecked (show all)
-        
-        # Connect checkbox to refresh arrivals
-        self.filter_by_destination_direction_checkbox.stateChanged.connect(self.on_filter_by_direction_changed)
-        self.filter_by_destination_direction_checkbox.stateChanged.connect(self.update_arrivals_display)
-        self.filter_by_destination_direction_checkbox.stateChanged.connect(self.mark_settings_changed)
-        
+        self.filter_by_destination_direction_checkbox.setStyleSheet(
+            self._checkbox_indicator_stylesheet()
+        )
+        self.filter_by_destination_direction_checkbox.setChecked(False)
+        self.filter_by_destination_direction_checkbox.stateChanged.connect(
+            self.on_filter_by_direction_changed
+        )
+        self.filter_by_destination_direction_checkbox.stateChanged.connect(
+            self.update_arrivals_display
+        )
+        self.filter_by_destination_direction_checkbox.stateChanged.connect(
+            self.mark_settings_changed
+        )
+
         filter_direction_checkbox_layout.addWidget(self.filter_by_destination_direction_checkbox)
         filter_direction_checkbox_layout.addStretch()
-        checkboxes_column_layout.addLayout(filter_direction_checkbox_layout)
-        
+        return filter_direction_checkbox_layout
+
+    def _build_settings_controls_layout(self):
+        controls_layout = QHBoxLayout()
+        controls_layout.setContentsMargins(40, 20, 40, 0)
+        controls_layout.setSpacing(0)
+
+        selectors_label_width = 190
+        checkboxes_label_width = 310
+        selectors_column_layout = self._build_settings_selectors_column(selectors_label_width)
+        checkboxes_column_layout = self._build_settings_checkboxes_column(checkboxes_label_width)
+
         controls_layout.addLayout(selectors_column_layout)
-        
-        # Add spacing before separator (half of the gap minus half of separator width)
-        controls_layout.addSpacing(40)  # Half of the 80px spacing
-        
-        # Add vertical separator line between columns
+        controls_layout.addSpacing(40)
+        controls_layout.addWidget(self._build_settings_vertical_separator())
+        controls_layout.addSpacing(39)
+        controls_layout.addLayout(checkboxes_column_layout)
+        return controls_layout
+
+    def _build_settings_vertical_separator(self):
         separator_line = QWidget()
         separator_line.setStyleSheet("background-color: #d0d0d0;")
         separator_line.setFixedWidth(1)
-        controls_layout.addWidget(separator_line)
-        
-        # Add spacing after separator (half of the gap minus half of separator width)
-        controls_layout.addSpacing(39)  # 40 - 1px for separator width = 39 to total 80px
-        
-        controls_layout.addLayout(checkboxes_column_layout)
-        content_layout.addLayout(controls_layout)
-        
-        # Add horizontal separator line between top settings and reboot section
-        content_layout.addSpacing(10)
+        return separator_line
+
+    def _build_settings_horizontal_separator(self):
         separator_container = QHBoxLayout()
         separator_container.setContentsMargins(40, 0, 40, 0)
         horizontal_separator = QWidget()
         horizontal_separator.setStyleSheet("background-color: #d0d0d0;")
         horizontal_separator.setFixedHeight(1)
         separator_container.addWidget(horizontal_separator)
-        content_layout.addLayout(separator_container)
-        content_layout.addSpacing(10)
-        
-        # Add screen sleep section below the two-column layout
-        
-        # Main section container with two-column layout matching top section
+        return separator_container
+
+    def _build_screen_sleep_section(self):
         system_settings_layout = QHBoxLayout()
         system_settings_layout.setContentsMargins(40, 0, 40, 0)
-        system_settings_layout.setSpacing(0)  # Set to 0, will manually add spacing for separator
-        
-        # Left column - Screen sleep settings
+        system_settings_layout.setSpacing(0)
+
         screen_sleep_column_layout = QVBoxLayout()
         screen_sleep_column_layout.setSpacing(15)
         screen_sleep_column_layout.setAlignment(Qt.AlignTop)
-        
-        # First row - Enable screen sleep checkbox
+        screen_sleep_column_layout.addLayout(self._build_screen_sleep_enable_row())
+        screen_sleep_column_layout.addLayout(self._build_screen_sleep_slider_row())
+        system_settings_layout.addLayout(screen_sleep_column_layout)
+        return system_settings_layout
+
+    def _build_screen_sleep_enable_row(self):
         screen_sleep_enable_layout = QHBoxLayout()
         screen_sleep_enable_layout.setContentsMargins(0, 0, 0, 0)
-        
+
         screen_sleep_enable_label = QLabel("Enable Screen Sleep:")
-        screen_sleep_enable_label.setStyleSheet(f"font-family: {self.font_family}; font-size: 21px; font-weight: bold;")
+        screen_sleep_enable_label.setStyleSheet(
+            f"font-family: {self.font_family}; font-size: 21px; font-weight: bold;"
+        )
         screen_sleep_enable_layout.addWidget(screen_sleep_enable_label)
-        
+
         self.screen_sleep_enabled_checkbox = QCheckBox()
-        self.screen_sleep_enabled_checkbox.setStyleSheet("""
-            QCheckBox {
-                spacing: 5px;
-            }
-            QCheckBox::indicator {
-                width: 25px;
-                height: 25px;
-                border: 2px solid #ccc;
-                border-radius: 3px;
-                background-color: white;
-            }
-            QCheckBox::indicator:hover {
-                border: 2px solid #999;
-            }
-            QCheckBox::indicator:checked {
-                background-color: #4CAF50;
-                border: 2px solid #4CAF50;
-            }
-        """)
+        self.screen_sleep_enabled_checkbox.setStyleSheet(self._checkbox_indicator_stylesheet())
         self.screen_sleep_enabled_checkbox.setChecked(False)
         self.screen_sleep_enabled_checkbox.stateChanged.connect(self.mark_settings_changed)
         screen_sleep_enable_layout.addWidget(self.screen_sleep_enabled_checkbox)
         screen_sleep_enable_layout.addStretch()
-        
-        screen_sleep_column_layout.addLayout(screen_sleep_enable_layout)
-        
-        # Second row - Screen sleep slider
+        return screen_sleep_enable_layout
+
+    def _build_screen_sleep_slider_row(self):
         screen_sleep_slider_layout = QVBoxLayout()
         screen_sleep_slider_layout.setContentsMargins(0, 0, 0, 0)
         screen_sleep_slider_layout.setSpacing(5)
-        
-        # Label showing current value
+
         self.screen_sleep_value_label = QLabel("Screen Sleep Timeout: 5 min")
-        self.screen_sleep_value_label.setStyleSheet(f"font-family: {self.font_family}; font-size: 21px; font-weight: bold;")
+        self.screen_sleep_value_label.setStyleSheet(
+            f"font-family: {self.font_family}; font-size: 21px; font-weight: bold;"
+        )
         screen_sleep_slider_layout.addWidget(self.screen_sleep_value_label)
-        
-        # Slider
+
         self.screen_sleep_slider = QSlider(Qt.Horizontal)
         self.screen_sleep_slider.setMinimum(1)
         self.screen_sleep_slider.setMaximum(30)
         self.screen_sleep_slider.setValue(5)
         self.screen_sleep_slider.setTickPosition(QSlider.TicksBelow)
         self.screen_sleep_slider.setTickInterval(5)
-        self.screen_sleep_slider.setStyleSheet("""
+        self.screen_sleep_slider.setStyleSheet(
+            """
             QSlider::groove:horizontal {
                 border: 1px solid #ccc;
                 height: 8px;
@@ -2740,33 +2650,22 @@ class MainWindow(QMainWindow):
                 height: 8px;
                 border-radius: 4px;
             }
-        """)
+        """
+        )
         self.screen_sleep_slider.valueChanged.connect(self.update_screen_sleep_label)
         self.screen_sleep_slider.valueChanged.connect(self.mark_settings_changed)
         screen_sleep_slider_layout.addWidget(self.screen_sleep_slider)
-        
-        screen_sleep_column_layout.addLayout(screen_sleep_slider_layout)
-        
-        system_settings_layout.addLayout(screen_sleep_column_layout)
-        
-        content_layout.addLayout(system_settings_layout)
-        
-        # Add stretch to push bottom elements down
-        content_layout.addStretch()
-        
-        # Bottom row using grid layout for true page-centered Save button
-        bottom_row_grid = QGridLayout()
-        bottom_row_grid.setContentsMargins(20, 0, 20, 20)
-        bottom_row_grid.setHorizontalSpacing(10)
-        
-        # Left section: IP, WiFi, and Update buttons (column 0, left-aligned)
+        return screen_sleep_slider_layout
+
+    def _build_settings_left_buttons(self):
         left_buttons_container = QWidget()
         left_buttons_layout = QHBoxLayout()
         left_buttons_layout.setContentsMargins(0, 0, 0, 0)
         left_buttons_layout.setSpacing(10)
-        
+
         self.ip_button = QPushButton("IP")
-        self.ip_button.setStyleSheet(f"""
+        self.ip_button.setStyleSheet(
+            f"""
             QPushButton {{
                 font-family: {self.font_family};
                 font-size: 20px;
@@ -2783,12 +2682,14 @@ class MainWindow(QMainWindow):
                 background-color: #c0c0c0;
                 padding-bottom: 7px;
             }}
-        """)
+        """
+        )
         self.ip_button.installEventFilter(self)
         left_buttons_layout.addWidget(self.ip_button)
-        
+
         self.wifi_button = QPushButton("WiFi Setup")
-        self.wifi_button.setStyleSheet(f"""
+        self.wifi_button.setStyleSheet(
+            f"""
             QPushButton {{
                 font-family: {self.font_family};
                 font-size: 20px;
@@ -2805,21 +2706,23 @@ class MainWindow(QMainWindow):
                 background-color: #c0c0c0;
                 padding-bottom: 7px;
             }}
-        """)
+        """
+        )
         self.wifi_button.clicked.connect(self.launch_wifi_setup)
         left_buttons_layout.addWidget(self.wifi_button)
-        
+
         left_buttons_container.setLayout(left_buttons_layout)
-        bottom_row_grid.addWidget(left_buttons_container, 0, 0, Qt.AlignLeft | Qt.AlignBottom)
-        
-        # Center section: Save Settings button with timestamp/warning labels (column 1, centered)
+        return left_buttons_container
+
+    def _build_settings_center_section(self):
         center_section_container = QWidget()
         center_section_layout = QVBoxLayout()
         center_section_layout.setContentsMargins(0, 0, 0, 0)
         center_section_layout.setSpacing(5)
-        
+
         save_button = QPushButton("Save Settings")
-        save_button.setStyleSheet(f"""
+        save_button.setStyleSheet(
+            f"""
             QPushButton {{
                 font-family: {self.font_family};
                 font-size: 20px;
@@ -2837,38 +2740,43 @@ class MainWindow(QMainWindow):
                 background-color: #3d8b40;
                 padding-bottom: 11px;
             }}
-        """)
+        """
+        )
         save_button.clicked.connect(self.save_settings)
         center_section_layout.addWidget(save_button, alignment=Qt.AlignCenter)
-        
-        # Add timestamp/warning labels container below save button
+
         labels_container = QHBoxLayout()
         labels_container.setSpacing(10)
-        
+
         self.timestamp_label = QLabel()
-        self.timestamp_label.setStyleSheet(f"font-family: {self.font_family}; font-size: 14px; color: #666;")
+        self.timestamp_label.setStyleSheet(
+            f"font-family: {self.font_family}; font-size: 14px; color: #666;"
+        )
         self.timestamp_label.setAlignment(Qt.AlignCenter)
         self.update_timestamp_label()
         labels_container.addWidget(self.timestamp_label)
-        
+
         self.unsaved_warning_label = QLabel("Changes not yet saved!")
-        self.unsaved_warning_label.setStyleSheet(f"font-family: {self.font_family}; font-size: 14px; color: #e74c3c;")
+        self.unsaved_warning_label.setStyleSheet(
+            f"font-family: {self.font_family}; font-size: 14px; color: #e74c3c;"
+        )
         self.unsaved_warning_label.setAlignment(Qt.AlignCenter)
-        self.unsaved_warning_label.hide()  # Initially hidden
+        self.unsaved_warning_label.hide()
         labels_container.addWidget(self.unsaved_warning_label)
-        
+
         center_section_layout.addLayout(labels_container)
         center_section_container.setLayout(center_section_layout)
-        bottom_row_grid.addWidget(center_section_container, 0, 1, Qt.AlignCenter | Qt.AlignBottom)
-        
-        # Right section: Update and Shutdown buttons (column 2, right-aligned)
+        return center_section_container
+
+    def _build_settings_right_buttons(self):
         right_buttons_container = QWidget()
         right_buttons_layout = QHBoxLayout()
         right_buttons_layout.setContentsMargins(0, 0, 0, 0)
         right_buttons_layout.setSpacing(10)
-        
+
         self.update_button = QPushButton("Update")
-        self.update_button.setStyleSheet(f"""
+        self.update_button.setStyleSheet(
+            f"""
             QPushButton {{
                 font-family: {self.font_family};
                 font-size: 20px;
@@ -2885,12 +2793,14 @@ class MainWindow(QMainWindow):
                 background-color: #c0c0c0;
                 padding-bottom: 7px;
             }}
-        """)
+        """
+        )
         self.update_button.clicked.connect(self.on_update_button_clicked)
         right_buttons_layout.addWidget(self.update_button)
-        
+
         self.shutdown_exit_button = QPushButton("Shutdown")
-        self.shutdown_exit_button.setStyleSheet(f"""
+        self.shutdown_exit_button.setStyleSheet(
+            f"""
             QPushButton {{
                 font-family: {self.font_family};
                 font-size: 20px;
@@ -2907,24 +2817,67 @@ class MainWindow(QMainWindow):
                 background-color: #c0c0c0;
                 padding-bottom: 7px;
             }}
-        """)
+        """
+        )
         self.shutdown_exit_button.clicked.connect(self.on_shutdown_exit_button_clicked)
         right_buttons_layout.addWidget(self.shutdown_exit_button)
-        
+
         right_buttons_container.setLayout(right_buttons_layout)
-        bottom_row_grid.addWidget(right_buttons_container, 0, 2, Qt.AlignRight | Qt.AlignBottom)
-        
-        # Set equal column stretches so center column is truly centered on page
+        return right_buttons_container
+
+    def _build_settings_bottom_row(self):
+        bottom_row_grid = QGridLayout()
+        bottom_row_grid.setContentsMargins(20, 0, 20, 20)
+        bottom_row_grid.setHorizontalSpacing(10)
+
+        bottom_row_grid.addWidget(
+            self._build_settings_left_buttons(),
+            0,
+            0,
+            Qt.AlignLeft | Qt.AlignBottom,
+        )
+        bottom_row_grid.addWidget(
+            self._build_settings_center_section(),
+            0,
+            1,
+            Qt.AlignCenter | Qt.AlignBottom,
+        )
+        bottom_row_grid.addWidget(
+            self._build_settings_right_buttons(),
+            0,
+            2,
+            Qt.AlignRight | Qt.AlignBottom,
+        )
+
         bottom_row_grid.setColumnStretch(0, 1)
         bottom_row_grid.setColumnStretch(1, 1)
         bottom_row_grid.setColumnStretch(2, 1)
-        
-        content_layout.addLayout(bottom_row_grid)
-        
+        return bottom_row_grid
+    
+    def create_settings_page(self):
+        """Create the settings page"""
+        page = QWidget()
+        layout = QVBoxLayout()
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(0)
+
+        layout.addWidget(self.create_title_bar(self._build_settings_back_button()))
+        self.settings_title_label = self._last_title_label
+
+        content_layout = QVBoxLayout()
+        content_layout.addLayout(self._build_settings_heading())
+        content_layout.addLayout(self._build_settings_controls_layout())
+        content_layout.addSpacing(10)
+        content_layout.addLayout(self._build_settings_horizontal_separator())
+        content_layout.addSpacing(10)
+        content_layout.addLayout(self._build_screen_sleep_section())
+        content_layout.addStretch()
+        content_layout.addLayout(self._build_settings_bottom_row())
+
         content_widget = QWidget()
         content_widget.setLayout(content_layout)
         layout.addWidget(content_widget)
-        
+
         page.setLayout(layout)
         return page
 

@@ -23,6 +23,17 @@ class RebootWarningOverlay(QWidget):
 
         self.setStyleSheet("background-color: rgba(0, 0, 0, 180);")
 
+        main_layout.addStretch()
+        container_holder = QHBoxLayout()
+        container_holder.addStretch()
+        container_holder.addWidget(self._build_center_container(font_family))
+        container_holder.addStretch()
+        main_layout.addLayout(container_holder)
+        main_layout.addStretch()
+
+        self.setLayout(main_layout)
+
+    def _build_center_container(self, font_family):
         center_container = QWidget()
         center_container.setStyleSheet(
             """
@@ -38,7 +49,19 @@ class RebootWarningOverlay(QWidget):
         center_layout = QVBoxLayout()
         center_layout.setContentsMargins(40, 40, 40, 40)
         center_layout.setSpacing(20)
+        center_layout.addWidget(self._build_warning_label(font_family))
 
+        self.countdown_label = self._build_countdown_label(font_family)
+        center_layout.addWidget(self.countdown_label)
+        center_layout.addSpacing(10)
+
+        self.cancel_button = self._build_cancel_button(font_family)
+        center_layout.addWidget(self.cancel_button, alignment=Qt.AlignCenter)
+
+        center_container.setLayout(center_layout)
+        return center_container
+
+    def _build_warning_label(self, font_family):
         warning_label = QLabel("⚠ REBOOT WARNING ⚠")
         warning_label.setStyleSheet(
             f"""
@@ -49,10 +72,11 @@ class RebootWarningOverlay(QWidget):
         """
         )
         warning_label.setAlignment(Qt.AlignCenter)
-        center_layout.addWidget(warning_label)
+        return warning_label
 
-        self.countdown_label = QLabel("System will reboot in 60 seconds")
-        self.countdown_label.setStyleSheet(
+    def _build_countdown_label(self, font_family):
+        countdown_label = QLabel("System will reboot in 60 seconds")
+        countdown_label.setStyleSheet(
             f"""
             font-family: {font_family};
             font-size: 24px;
@@ -60,14 +84,13 @@ class RebootWarningOverlay(QWidget):
             color: white;
         """
         )
-        self.countdown_label.setAlignment(Qt.AlignCenter)
-        self.countdown_label.setWordWrap(True)
-        center_layout.addWidget(self.countdown_label)
+        countdown_label.setAlignment(Qt.AlignCenter)
+        countdown_label.setWordWrap(True)
+        return countdown_label
 
-        center_layout.addSpacing(10)
-
-        self.cancel_button = QPushButton("Cancel Reboot")
-        self.cancel_button.setStyleSheet(
+    def _build_cancel_button(self, font_family):
+        cancel_button = QPushButton("Cancel Reboot")
+        cancel_button.setStyleSheet(
             f"""
             QPushButton {{
                 font-family: {font_family};
@@ -88,19 +111,7 @@ class RebootWarningOverlay(QWidget):
             }}
         """
         )
-        center_layout.addWidget(self.cancel_button, alignment=Qt.AlignCenter)
-
-        center_container.setLayout(center_layout)
-
-        main_layout.addStretch()
-        container_holder = QHBoxLayout()
-        container_holder.addStretch()
-        container_holder.addWidget(center_container)
-        container_holder.addStretch()
-        main_layout.addLayout(container_holder)
-        main_layout.addStretch()
-
-        self.setLayout(main_layout)
+        return cancel_button
 
     def update_countdown(self, seconds):
         """Update the countdown display."""

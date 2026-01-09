@@ -29,35 +29,12 @@ class IPPopout(QWidget):
         content_layout.setContentsMargins(15, 10, 15, 10)
         content_layout.setSpacing(8)
 
-        ip_line = QHBoxLayout()
-        ip_line.setSpacing(10)
-        ip_label = QLabel("Device IP:")
-        ip_label.setStyleSheet(
-            f"font-family: {font_family}; font-size: 16px; font-weight: bold; color: #333; border: none;"
+        content_layout.addLayout(
+            self._build_info_row("Device IP:", ip_address, font_family)
         )
-        ip_line.addWidget(ip_label)
-
-        ip_value = QLabel(ip_address)
-        ip_value.setStyleSheet(
-            f"font-family: {font_family}; font-size: 16px; color: #666; border: none;"
+        content_layout.addLayout(
+            self._build_info_row("Tailscale Address:", tailscale_address, font_family)
         )
-        ip_line.addWidget(ip_value)
-        content_layout.addLayout(ip_line)
-
-        tailscale_line = QHBoxLayout()
-        tailscale_line.setSpacing(10)
-        tailscale_label = QLabel("Tailscale Address:")
-        tailscale_label.setStyleSheet(
-            f"font-family: {font_family}; font-size: 16px; font-weight: bold; color: #333; border: none;"
-        )
-        tailscale_line.addWidget(tailscale_label)
-
-        tailscale_value = QLabel(tailscale_address)
-        tailscale_value.setStyleSheet(
-            f"font-family: {font_family}; font-size: 16px; color: #666; border: none;"
-        )
-        tailscale_line.addWidget(tailscale_value)
-        content_layout.addLayout(tailscale_line)
 
         container = QWidget()
         container.setLayout(content_layout)
@@ -78,6 +55,23 @@ class IPPopout(QWidget):
 
         self.adjustSize()
 
+    def _build_info_row(self, label_text, value_text, font_family):
+        row = QHBoxLayout()
+        row.setSpacing(10)
+
+        label = QLabel(label_text)
+        label.setStyleSheet(
+            f"font-family: {font_family}; font-size: 16px; font-weight: bold; color: #333; border: none;"
+        )
+        row.addWidget(label)
+
+        value = QLabel(value_text)
+        value.setStyleSheet(
+            f"font-family: {font_family}; font-size: 16px; color: #666; border: none;"
+        )
+        row.addWidget(value)
+        return row
+
 
 class UpdatePopout(QWidget):
     """A popout widget that displays git pull terminal output."""
@@ -95,24 +89,26 @@ class UpdatePopout(QWidget):
         content_layout.setContentsMargins(3, 3, 3, 3)
         content_layout.setSpacing(0)
 
-        header = QWidget()
-        header.setStyleSheet(
-            "background-color: #f0f0f0; border-bottom: 1px solid #999; border: none;"
-        )
-        header.setFixedHeight(30)
-        header_layout = QHBoxLayout()
-        header_layout.setContentsMargins(10, 5, 5, 5)
+        content_layout.addWidget(self._build_header(font_family))
+        content_layout.addWidget(self._build_output_text())
+        content_layout.addWidget(self._build_success_label(font_family))
 
-        self.header_label = QLabel("Update Status")
-        self.header_label.setStyleSheet(
+        container = self._wrap_container(content_layout)
+
+        main_layout = QVBoxLayout()
+        main_layout.setContentsMargins(0, 0, 0, 0)
+        main_layout.addWidget(container)
+        self.setLayout(main_layout)
+
+        self.setFixedSize(500, 300)
+
+    def _header_label_stylesheet(self, font_family):
+        return (
             f"font-family: {font_family}; font-size: 14px; font-weight: bold; color: #333; border: none;"
         )
-        header_layout.addWidget(self.header_label)
-        header_layout.addStretch()
 
-        self.close_button = QPushButton("✕")
-        self.close_button.setStyleSheet(
-            f"""
+    def _close_button_stylesheet(self, font_family):
+        return f"""
             QPushButton {{
                 font-family: {font_family};
                 font-size: 16px;
@@ -131,13 +127,43 @@ class UpdatePopout(QWidget):
                 background-color: #d0d0d0;
             }}
         """
+
+    def _success_label_stylesheet(self, font_family):
+        return f"""
+            QLabel {{
+                font-family: {font_family};
+                font-size: 13px;
+                font-weight: bold;
+                color: #2a7a2a;
+                background-color: #e8f5e9;
+                border: none;
+                padding: 8px 10px;
+            }}
+        """
+
+    def _build_header(self, font_family):
+        header = QWidget()
+        header.setStyleSheet(
+            "background-color: #f0f0f0; border-bottom: 1px solid #999; border: none;"
         )
+        header.setFixedHeight(30)
+        header_layout = QHBoxLayout()
+        header_layout.setContentsMargins(10, 5, 5, 5)
+
+        self.header_label = QLabel("Update Status")
+        self.header_label.setStyleSheet(self._header_label_stylesheet(font_family))
+        header_layout.addWidget(self.header_label)
+        header_layout.addStretch()
+
+        self.close_button = QPushButton("✕")
+        self.close_button.setStyleSheet(self._close_button_stylesheet(font_family))
         self.close_button.setFixedSize(20, 20)
         header_layout.addWidget(self.close_button)
 
         header.setLayout(header_layout)
-        content_layout.addWidget(header)
+        return header
 
+    def _build_output_text(self):
         self.output_text = QPlainTextEdit()
         self.output_text.setReadOnly(True)
         self.output_text.setStyleSheet(
@@ -152,26 +178,16 @@ class UpdatePopout(QWidget):
             }
         """
         )
-        content_layout.addWidget(self.output_text)
+        return self.output_text
 
+    def _build_success_label(self, font_family):
         self.success_label = QLabel()
-        self.success_label.setStyleSheet(
-            f"""
-            QLabel {{
-                font-family: {font_family};
-                font-size: 13px;
-                font-weight: bold;
-                color: #2a7a2a;
-                background-color: #e8f5e9;
-                border: none;
-                padding: 8px 10px;
-            }}
-        """
-        )
+        self.success_label.setStyleSheet(self._success_label_stylesheet(font_family))
         self.success_label.setWordWrap(True)
         self.success_label.hide()
-        content_layout.addWidget(self.success_label)
+        return self.success_label
 
+    def _wrap_container(self, content_layout):
         container = QWidget()
         container.setLayout(content_layout)
         container.setStyleSheet(
@@ -183,13 +199,7 @@ class UpdatePopout(QWidget):
             }
         """
         )
-
-        main_layout = QVBoxLayout()
-        main_layout.setContentsMargins(0, 0, 0, 0)
-        main_layout.addWidget(container)
-        self.setLayout(main_layout)
-
-        self.setFixedSize(500, 300)
+        return container
 
     def append_output(self, text):
         """Append text to the output area."""
@@ -202,43 +212,9 @@ class UpdatePopout(QWidget):
         """Clear the output area and hide success label."""
         font_family = get_font_family(self.config_store)
 
-        self.header_label.setStyleSheet(
-            f"font-family: {font_family}; font-size: 14px; font-weight: bold; color: #333; border: none;"
-        )
-        self.close_button.setStyleSheet(
-            f"""
-            QPushButton {{
-                font-family: {font_family};
-                font-size: 16px;
-                font-weight: bold;
-                padding: 0px;
-                background-color: transparent;
-                border: none;
-                color: #666;
-            }}
-            QPushButton:hover {{
-                color: #000;
-                background-color: #e0e0e0;
-                border-radius: 3px;
-            }}
-            QPushButton:pressed {{
-                background-color: #d0d0d0;
-            }}
-        """
-        )
-        self.success_label.setStyleSheet(
-            f"""
-            QLabel {{
-                font-family: {font_family};
-                font-size: 13px;
-                font-weight: bold;
-                color: #2a7a2a;
-                background-color: #e8f5e9;
-                border: none;
-                padding: 8px 10px;
-            }}
-        """
-        )
+        self.header_label.setStyleSheet(self._header_label_stylesheet(font_family))
+        self.close_button.setStyleSheet(self._close_button_stylesheet(font_family))
+        self.success_label.setStyleSheet(self._success_label_stylesheet(font_family))
 
         self.output_text.clear()
         self.success_label.hide()
@@ -268,52 +244,10 @@ class ShutdownPopout(QWidget):
         layout.setContentsMargins(15, 10, 15, 10)
         layout.setSpacing(10)
 
-        self.reboot_button = QPushButton("Reboot")
-        self.reboot_button.setMinimumWidth(200)
-        self.reboot_button.setStyleSheet(
-            f"""
-            QPushButton {{
-                font-family: {self.font_family};
-                font-size: 18px;
-                font-weight: bold;
-                padding: 10px 20px;
-                background-color: #e0e0e0;
-                border: none;
-                border-radius: 5px;
-            }}
-            QPushButton:hover {{
-                background-color: #d0d0d0;
-            }}
-            QPushButton:pressed {{
-                background-color: #c0c0c0;
-                padding-bottom: 9px;
-            }}
-        """
-        )
+        self.reboot_button = self._build_default_action_button("Reboot")
         layout.addWidget(self.reboot_button)
 
-        self.shutdown_button = QPushButton("Shutdown")
-        self.shutdown_button.setMinimumWidth(200)
-        self.shutdown_button.setStyleSheet(
-            f"""
-            QPushButton {{
-                font-family: {self.font_family};
-                font-size: 18px;
-                font-weight: bold;
-                padding: 10px 20px;
-                background-color: #e0e0e0;
-                border: none;
-                border-radius: 5px;
-            }}
-            QPushButton:hover {{
-                background-color: #d0d0d0;
-            }}
-            QPushButton:pressed {{
-                background-color: #c0c0c0;
-                padding-bottom: 9px;
-            }}
-        """
-        )
+        self.shutdown_button = self._build_default_action_button("Shutdown")
         layout.addWidget(self.shutdown_button)
 
         self.setLayout(layout)
@@ -330,15 +264,8 @@ class ShutdownPopout(QWidget):
 
         self.adjustSize()
 
-    def reset_shutdown_state(self):
-        """Reset the shutdown button to its initial state."""
-        self.font_family = get_font_family(self.config_store)
-
-        self.shutdown_confirmed = False
-        self.shutdown_button.setText("Shutdown")
-        self.shutdown_button.setMinimumWidth(200)
-        self.shutdown_button.setStyleSheet(
-            f"""
+    def _default_action_button_stylesheet(self):
+        return f"""
             QPushButton {{
                 font-family: {self.font_family};
                 font-size: 18px;
@@ -356,7 +283,21 @@ class ShutdownPopout(QWidget):
                 padding-bottom: 9px;
             }}
         """
-        )
+
+    def _build_default_action_button(self, label):
+        button = QPushButton(label)
+        button.setMinimumWidth(200)
+        button.setStyleSheet(self._default_action_button_stylesheet())
+        return button
+
+    def reset_shutdown_state(self):
+        """Reset the shutdown button to its initial state."""
+        self.font_family = get_font_family(self.config_store)
+
+        self.shutdown_confirmed = False
+        self.shutdown_button.setText("Shutdown")
+        self.shutdown_button.setMinimumWidth(200)
+        self.shutdown_button.setStyleSheet(self._default_action_button_stylesheet())
 
     def reset_reboot_state(self):
         """Reset the reboot button to its initial state."""
@@ -365,26 +306,7 @@ class ShutdownPopout(QWidget):
         self.reboot_confirmed = False
         self.reboot_button.setText("Reboot")
         self.reboot_button.setMinimumWidth(200)
-        self.reboot_button.setStyleSheet(
-            f"""
-            QPushButton {{
-                font-family: {self.font_family};
-                font-size: 18px;
-                font-weight: bold;
-                padding: 10px 20px;
-                background-color: #e0e0e0;
-                border: none;
-                border-radius: 5px;
-            }}
-            QPushButton:hover {{
-                background-color: #d0d0d0;
-            }}
-            QPushButton:pressed {{
-                background-color: #c0c0c0;
-                padding-bottom: 9px;
-            }}
-        """
-        )
+        self.reboot_button.setStyleSheet(self._default_action_button_stylesheet())
 
     def set_reboot_confirm_state(self):
         """Set the reboot button to confirmation state (red)."""
