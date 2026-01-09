@@ -314,7 +314,7 @@ def start_web_settings_server(data_handler, host="0.0.0.0", port=443):
         config = config_store.load()
         return config.get("title_text", "Nicole's Train Tracker!")
 
-    def _check_for_updates():
+    def check_for_updates():
         """
         Check if git updates are available by comparing local and remote HEADs.
         Returns True if updates are available, False otherwise.
@@ -403,7 +403,7 @@ def start_web_settings_server(data_handler, host="0.0.0.0", port=443):
             commit_version=_get_commit_version(),
             ssl_enabled=_ssl_enabled,
             display_name=_get_display_name(),
-            update_available=_check_for_updates()
+            update_available=check_for_updates()
         )
 
     @app.get("/update")

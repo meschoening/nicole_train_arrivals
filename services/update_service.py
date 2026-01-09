@@ -38,7 +38,7 @@ def has_updates(output_text):
     return False
 
 
-def _build_git_command(args, git_user=None):
+def build_git_command(args, git_user=None):
     if git_user:
         return ["sudo", "-u", git_user, "git"] + list(args)
     return ["git"] + list(args)
@@ -46,7 +46,7 @@ def _build_git_command(args, git_user=None):
 
 def run_git_command(args, cwd, git_user=None, timeout=5):
     return subprocess.run(
-        _build_git_command(args, git_user=git_user),
+        build_git_command(args, git_user=git_user),
         cwd=cwd,
         capture_output=True,
         text=True,
@@ -56,7 +56,7 @@ def run_git_command(args, cwd, git_user=None, timeout=5):
 
 def popen_git_command(args, cwd, git_user=None, **kwargs):
     return subprocess.Popen(
-        _build_git_command(args, git_user=git_user),
+        build_git_command(args, git_user=git_user),
         cwd=cwd,
         **kwargs,
     )
@@ -123,7 +123,7 @@ class UpdateService(QObject):
         self.git_output = ""
         self.update_available = False
 
-    def _log(self, message):
+    def log(self, message):
         """Log git operation debug info with timestamp."""
         if _GIT_DEBUG:
             from datetime import datetime
@@ -134,19 +134,19 @@ class UpdateService(QObject):
 
     def wait_for_fetch_if_running(self):
         """Wait for any running background git fetch to complete before proceeding."""
-        self._log("wait_for_fetch_if_running: Checking for running git operations...")
+        self.log("wait_for_fetch_if_running: Checking for running git operations...")
         if self.git_fetch_process is not None and self.git_fetch_process.state() == QProcess.Running:
-            self._log("wait_for_fetch_if_running: Local git_fetch_process is running, waiting...")
+            self.log("wait_for_fetch_if_running: Local git_fetch_process is running, waiting...")
             self.pull_output.emit("Waiting for background update check to finish...\n")
             self.git_fetch_process.waitForFinished(10000)
-            self._log("wait_for_fetch_if_running: Local git_fetch_process finished")
+            self.log("wait_for_fetch_if_running: Local git_fetch_process finished")
 
         if self.settings_server.is_git_operation_in_progress():
-            self._log("wait_for_fetch_if_running: Web server git operation in progress, polling...")
+            self.log("wait_for_fetch_if_running: Web server git operation in progress, polling...")
             self.pull_output.emit("Waiting for web server git operation to finish...\n")
             for i in range(100):
                 if not self.settings_server.is_git_operation_in_progress():
-                    self._log(
+                    self.log(
                         f"wait_for_fetch_if_running: Web server git operation finished after {i} polls"
                     )
                     break
@@ -154,25 +154,25 @@ class UpdateService(QObject):
                     self._process_events()
                 time.sleep(0.1)
             else:
-                self._log("wait_for_fetch_if_running: Timeout waiting for web server git operation!")
-        self._log("wait_for_fetch_if_running: Done checking, proceeding...")
+                self.log("wait_for_fetch_if_running: Timeout waiting for web server git operation!")
+        self.log("wait_for_fetch_if_running: Done checking, proceeding...")
 
     def run_pull(self):
         """Start the git pull process."""
-        self._log("run_git_pull: Starting...")
+        self.log("run_git_pull: Starting...")
         self.wait_for_fetch_if_running()
 
-        self._log("run_git_pull: Setting flag to True")
+        self.log("run_git_pull: Setting flag to True")
         self.settings_server.set_git_operation_in_progress(True)
 
         self.git_output = ""
         self.git_process = QProcess()
         self.git_process.setWorkingDirectory(self.working_dir)
-        self.git_process.readyReadStandardOutput.connect(self._on_git_output_ready)
-        self.git_process.readyReadStandardError.connect(self._on_git_output_ready)
-        self.git_process.finished.connect(self._on_git_finished)
+        self.git_process.readyReadStandardOutput.connect(self.on_git_output_ready)
+        self.git_process.readyReadStandardError.connect(self.on_git_output_ready)
+        self.git_process.finished.connect(self.on_git_finished)
 
-        self._log("run_git_pull: Starting 'git pull' via QProcess")
+        self.log("run_git_pull: Starting 'git pull' via QProcess")
         self.pull_output.emit("Running git pull...\n")
         self.git_process.start("git", ["pull"])
 
@@ -185,24 +185,24 @@ class UpdateService(QObject):
     def check_for_updates(self):
         """Check for available git updates in the background (non-destructive)."""
         if self.git_fetch_process is not None and self.git_fetch_process.state() == QProcess.Running:
-            self._log("check_for_git_updates: Skipping - local git_fetch_process still running")
+            self.log("check_for_git_updates: Skipping - local git_fetch_process still running")
             return
 
         if self.settings_server.is_git_operation_in_progress():
-            self._log("check_for_git_updates: Skipping - web server git operation in progress")
+            self.log("check_for_git_updates: Skipping - web server git operation in progress")
             return
 
-        self._log("check_for_git_updates: Starting background git fetch")
+        self.log("check_for_git_updates: Starting background git fetch")
         self.settings_server.set_git_operation_in_progress(True)
 
         self.git_fetch_process = QProcess()
         self.git_fetch_process.setWorkingDirectory(self.working_dir)
-        self.git_fetch_process.finished.connect(self._on_git_fetch_finished)
+        self.git_fetch_process.finished.connect(self.on_git_fetch_finished)
 
-        self._log("check_for_git_updates: Starting 'git fetch' via QProcess")
+        self.log("check_for_git_updates: Starting 'git fetch' via QProcess")
         self.git_fetch_process.start("git", ["fetch"])
 
-    def _on_git_output_ready(self):
+    def on_git_output_ready(self):
         if self.git_process is None:
             return
 
@@ -216,25 +216,25 @@ class UpdateService(QObject):
             self.git_output += stderr
             self.pull_output.emit(stderr.rstrip("\n"))
 
-    def _on_git_finished(self, exit_code, exit_status):
-        self._log(f"on_git_finished: exit_code={exit_code}, exit_status={exit_status}")
+    def on_git_finished(self, exit_code, exit_status):
+        self.log(f"on_git_finished: exit_code={exit_code}, exit_status={exit_status}")
         preview = self.git_output[:500] if self.git_output else "(empty)"
-        self._log(f"on_git_finished: git_output={preview}")
-        self._log("on_git_finished: Clearing flag to False")
+        self.log(f"on_git_finished: git_output={preview}")
+        self.log("on_git_finished: Clearing flag to False")
         self.settings_server.set_git_operation_in_progress(False)
 
         self.pull_output.emit(f"\nProcess finished with exit code: {exit_code}")
 
-        has_error = exit_code != 0 or self._has_git_error()
-        has_updates = False
+        has_error = exit_code != 0 or has_git_error(self.git_output)
+        updates_found = False
         commit_message = None
 
         if not has_error:
-            has_updates = self._parse_git_output()
-            if has_updates:
-                commit_message = self._get_latest_commit_message()
+            updates_found = has_updates(self.git_output)
+            if updates_found:
+                commit_message = get_latest_commit_message(self.working_dir)
 
-        if has_updates or (not has_error):
+        if updates_found or (not has_error):
             if self.update_available:
                 self.update_available = False
                 self.update_available_changed.emit(False)
@@ -242,27 +242,18 @@ class UpdateService(QObject):
         result = {
             "exit_code": exit_code,
             "has_error": has_error,
-            "has_updates": has_updates,
+            "has_updates": updates_found,
             "commit_message": commit_message,
         }
         self.pull_finished.emit(result)
 
-    def _has_git_error(self):
-        return has_git_error(self.git_output)
-
-    def _parse_git_output(self):
-        return has_updates(self.git_output)
-
-    def _get_latest_commit_message(self):
-        return get_latest_commit_message(self.working_dir)
-
-    def _on_git_fetch_finished(self, exit_code, exit_status):
-        self._log(f"on_git_fetch_finished: exit_code={exit_code}, exit_status={exit_status}")
-        self._log("on_git_fetch_finished: Clearing flag to False")
+    def on_git_fetch_finished(self, exit_code, exit_status):
+        self.log(f"on_git_fetch_finished: exit_code={exit_code}, exit_status={exit_status}")
+        self.log("on_git_fetch_finished: Clearing flag to False")
         self.settings_server.set_git_operation_in_progress(False)
 
         if exit_code != 0:
-            self._log(f"on_git_fetch_finished: Fetch failed with exit_code={exit_code}")
+            self.log(f"on_git_fetch_finished: Fetch failed with exit_code={exit_code}")
             return
 
         try:
