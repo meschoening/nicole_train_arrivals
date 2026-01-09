@@ -3,6 +3,7 @@ from flask import Flask, request, jsonify, render_template, redirect, url_for, R
 from services.config_store import ConfigStore
 from services.message_store import MessageStore
 from services.system_service import SystemService
+from services.update_service import UpdateServiceRunner, has_git_error, has_updates
 import os
 from datetime import datetime
 import subprocess
@@ -218,6 +219,11 @@ def start_web_settings_server(data_handler, host="0.0.0.0", port=443):
     config_store = ConfigStore()
     message_store = MessageStore()
     system_service = SystemService()
+    git_user = "max"
+    update_service = UpdateServiceRunner(
+        working_dir=os.path.dirname(os.path.abspath(__file__)),
+        git_user=git_user,
+    )
     
     # Check for SSL certificates
     ssl_context = None
@@ -314,42 +320,11 @@ def start_web_settings_server(data_handler, host="0.0.0.0", port=443):
         Returns True if updates are available, False otherwise.
         Does NOT run git fetch - relies on fetch having been run recently (by the display app).
         """
-        cwd = os.path.dirname(os.path.abspath(__file__))
-        
         try:
-            # Get local HEAD
-            local_result = subprocess.run(
-                ["git", "rev-parse", "HEAD"],
-                cwd=cwd,
-                capture_output=True,
-                text=True,
-                timeout=5
-            )
-            
-            if local_result.returncode != 0:
+            local_head, remote_head = update_service.get_heads(timeout=5)
+            if not local_head or not remote_head:
                 return False
-            
-            local_head = local_result.stdout.strip()
-            
-            # Get remote HEAD (try origin/main first, then origin/master)
-            remote_head = None
-            for branch in ["origin/main", "origin/master"]:
-                remote_result = subprocess.run(
-                    ["git", "rev-parse", branch],
-                    cwd=cwd,
-                    capture_output=True,
-                    text=True,
-                    timeout=5
-                )
-                if remote_result.returncode == 0:
-                    remote_head = remote_result.stdout.strip()
-                    break
-            
-            if remote_head is None:
-                return False
-            
             return local_head != remote_head
-            
         except Exception:
             return False
 
@@ -750,32 +725,6 @@ def start_web_settings_server(data_handler, host="0.0.0.0", port=443):
         except Exception as e:
             return jsonify({"success": False, "error": str(e)}), 500
 
-    def _has_git_error(output_text):
-        if not output_text:
-            return False
-        lower = output_text.lower()
-        for token in ("error:", "fatal:", "could not", "failed to", "permission denied", "cannot"):
-            if token in lower:
-                return True
-        return False
-
-    def _has_updates(output_text):
-        if not output_text:
-            return False
-        lower = output_text.lower()
-        if "already up to date" in lower or "already up-to-date" in lower:
-            return False
-        for token in ("updating", "fast-forward", "files changed", "file changed", "insertions", "deletions"):
-            if token in lower:
-                return True
-        # Heuristic: if we have some substantial lines and no error keywords
-        if "error" not in lower and "fatal" not in lower:
-            lines = [ln.strip() for ln in output_text.split('\n') if ln.strip()]
-            substantial = [ln for ln in lines if not ln.startswith('From') and not ln.startswith('remote:')]
-            if len(substantial) > 1:
-                return True
-        return False
-
     @app.get("/api/update/run")
     def api_update_run():
         def generate():
@@ -786,13 +735,8 @@ def start_web_settings_server(data_handler, host="0.0.0.0", port=443):
                 # Set flag so main display knows git operation is in progress
                 set_git_operation_in_progress(True, caller="api_update_run")
                 try:
-                    cwd = os.path.dirname(os.path.abspath(__file__))
-                    _git_debug_log(f"api_update_run: Starting 'git pull' in {cwd}")
-                    # Run `git pull` as user 'max' to avoid ownership issues
-                    # Use sudo -u max to run git commands under the max user
-                    process = subprocess.Popen(
-                        ["sudo", "-u", "max", "git", "pull"],
-                        cwd=cwd,
+                    _git_debug_log("api_update_run: Starting 'git pull'")
+                    process = update_service.popen_pull(
                         stdout=subprocess.PIPE,
                         stderr=subprocess.STDOUT,
                         text=True,
@@ -812,26 +756,17 @@ def start_web_settings_server(data_handler, host="0.0.0.0", port=443):
                         combined_output = "\n".join(all_output_lines)
                         _git_debug_log(f"api_update_run: git pull finished with exit_code={exit_code}")
                         _git_debug_log(f"api_update_run: git output: {combined_output[:500]}")
-                        has_updates = _has_updates(combined_output)
+                        updates_found = has_updates(combined_output)
                         done_payload = {
                             "exit_code": exit_code,
-                            "has_error": _has_git_error(combined_output) or (exit_code != 0),
-                            "has_updates": has_updates,
+                            "has_error": has_git_error(combined_output) or (exit_code != 0),
+                            "has_updates": updates_found,
                         }
                         # If update succeeded with changes, get the latest commit message
-                        if has_updates and not done_payload["has_error"]:
-                            try:
-                                commit_result = subprocess.run(
-                                    ["sudo", "-u", "max", "git", "log", "-1", "--format=%s"],
-                                    cwd=cwd,
-                                    capture_output=True,
-                                    text=True,
-                                    timeout=5
-                                )
-                                if commit_result.returncode == 0 and commit_result.stdout.strip():
-                                    done_payload["commit_message"] = commit_result.stdout.strip()
-                            except Exception:
-                                pass
+                        if updates_found and not done_payload["has_error"]:
+                            commit_message = update_service.get_latest_commit_message()
+                            if commit_message:
+                                done_payload["commit_message"] = commit_message
                         _git_debug_log(f"api_update_run: done_payload={done_payload}")
                         yield "event: done\n"
                         yield f"data: {json.dumps(done_payload)}\n\n"
@@ -878,18 +813,9 @@ def start_web_settings_server(data_handler, host="0.0.0.0", port=443):
             # Set flag so main display knows git operation is in progress
             set_git_operation_in_progress(True, caller="api_check_for_updates")
             try:
-                cwd = os.path.dirname(os.path.abspath(__file__))
-                
                 try:
                     _git_debug_log("api_check_for_updates: Starting 'git fetch'")
-                    # Run git fetch to get latest remote state
-                    fetch_result = subprocess.run(
-                        ["sudo", "-u", "max", "git", "fetch"],
-                        cwd=cwd,
-                        capture_output=True,
-                        text=True,
-                        timeout=30
-                    )
+                    fetch_result = update_service.fetch(timeout=30)
                     _git_debug_log(f"api_check_for_updates: git fetch completed with returncode={fetch_result.returncode}")
                     
                     if fetch_result.returncode != 0:
@@ -899,38 +825,13 @@ def start_web_settings_server(data_handler, host="0.0.0.0", port=443):
                             "error": "Failed to fetch from remote"
                         })
                     
-                    # Get local HEAD commit
-                    local_result = subprocess.run(
-                        ["sudo", "-u", "max", "git", "rev-parse", "HEAD"],
-                        cwd=cwd,
-                        capture_output=True,
-                        text=True,
-                        timeout=10
-                    )
-                    
-                    if local_result.returncode != 0:
+                    local_head, remote_head = update_service.get_heads(timeout=10)
+                    if not local_head:
                         return jsonify({
                             "updates_available": False,
                             "error": "Failed to get local HEAD"
                         })
-                    
-                    local_head = local_result.stdout.strip()
-                    
-                    # Get remote HEAD commit (try origin/main first, then origin/master)
-                    remote_head = None
-                    for branch in ["origin/main", "origin/master"]:
-                        remote_result = subprocess.run(
-                            ["sudo", "-u", "max", "git", "rev-parse", branch],
-                            cwd=cwd,
-                            capture_output=True,
-                            text=True,
-                            timeout=10
-                        )
-                        if remote_result.returncode == 0:
-                            remote_head = remote_result.stdout.strip()
-                            break
-                    
-                    if remote_head is None:
+                    if not remote_head:
                         return jsonify({
                             "updates_available": False,
                             "error": "Could not determine remote branch"

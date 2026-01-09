@@ -5,7 +5,7 @@ Python program to show train arrivals for any line, station, and direction combo
 - main_display.py - contains code for the interface.
 - MetroAPI.py - interfaces with the official WMATA API to download data.
 - data_handler.py - caches API data while the program is open. Helps reduce lag when switching windows and changing settings.
-- config_handler.py - saves selected settings in a file for retrieval every time the app opens.
+- services/config_store.py - saves selected settings in a file for retrieval every time the app opens.
 - config.json - the file that stores your selected settings to be loaded when the app restarts.
 - web_settings_server.py - routes the locally hosted web-based config pages to the right files.
 - wifi_setup.py - enables connecting to a new WiFi network if connection fails on startup!

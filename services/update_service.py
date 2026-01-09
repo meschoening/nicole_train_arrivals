@@ -11,6 +11,101 @@ from PyQt5.QtWidgets import QApplication
 _GIT_DEBUG = True
 
 
+def has_git_error(output_text):
+    if not output_text:
+        return False
+    lower = output_text.lower()
+    for token in ("error:", "fatal:", "could not", "failed to", "permission denied", "cannot"):
+        if token in lower:
+            return True
+    return False
+
+
+def has_updates(output_text):
+    if not output_text:
+        return False
+    lower = output_text.lower()
+    if "already up to date" in lower or "already up-to-date" in lower:
+        return False
+    for token in ("updating", "fast-forward", "files changed", "file changed", "insertions", "deletions"):
+        if token in lower:
+            return True
+    if "error" not in lower and "fatal" not in lower:
+        lines = [ln.strip() for ln in output_text.split("\n") if ln.strip()]
+        substantial = [ln for ln in lines if not ln.startswith("From") and not ln.startswith("remote:")]
+        if len(substantial) > 1:
+            return True
+    return False
+
+
+def _build_git_command(args, git_user=None):
+    if git_user:
+        return ["sudo", "-u", git_user, "git"] + list(args)
+    return ["git"] + list(args)
+
+
+def run_git_command(args, cwd, git_user=None, timeout=5):
+    return subprocess.run(
+        _build_git_command(args, git_user=git_user),
+        cwd=cwd,
+        capture_output=True,
+        text=True,
+        timeout=timeout,
+    )
+
+
+def popen_git_command(args, cwd, git_user=None, **kwargs):
+    return subprocess.Popen(
+        _build_git_command(args, git_user=git_user),
+        cwd=cwd,
+        **kwargs,
+    )
+
+
+def get_latest_commit_message(working_dir, git_user=None):
+    try:
+        result = run_git_command(
+            ["log", "-1", "--format=%s"],
+            cwd=working_dir,
+            git_user=git_user,
+            timeout=5,
+        )
+        if result.returncode == 0 and result.stdout.strip():
+            return result.stdout.strip()
+    except Exception:
+        pass
+    return None
+
+
+def get_git_heads(working_dir, git_user=None, branches=None, timeout=5):
+    if branches is None:
+        branches = ["origin/main", "origin/master"]
+
+    local_result = run_git_command(
+        ["rev-parse", "HEAD"],
+        cwd=working_dir,
+        git_user=git_user,
+        timeout=timeout,
+    )
+    if local_result.returncode != 0:
+        return None, None
+    local_head = local_result.stdout.strip()
+
+    remote_head = None
+    for branch in branches:
+        remote_result = run_git_command(
+            ["rev-parse", branch],
+            cwd=working_dir,
+            git_user=git_user,
+            timeout=timeout,
+        )
+        if remote_result.returncode == 0:
+            remote_head = remote_result.stdout.strip()
+            break
+
+    return local_head, remote_head
+
+
 class UpdateService(QObject):
     """Runs git pull/fetch operations and reports results via signals."""
 
@@ -153,67 +248,13 @@ class UpdateService(QObject):
         self.pull_finished.emit(result)
 
     def _has_git_error(self):
-        output_lower = self.git_output.lower()
-        error_indicators = [
-            "error:",
-            "fatal:",
-            "could not",
-            "failed to",
-            "permission denied",
-            "cannot",
-        ]
-
-        for indicator in error_indicators:
-            if indicator in output_lower:
-                return True
-
-        return False
+        return has_git_error(self.git_output)
 
     def _parse_git_output(self):
-        output_lower = self.git_output.lower()
-
-        if "already up to date" in output_lower or "already up-to-date" in output_lower:
-            return False
-
-        update_indicators = [
-            "updating",
-            "fast-forward",
-            "files changed",
-            "file changed",
-            "insertions",
-            "deletions",
-        ]
-
-        for indicator in update_indicators:
-            if indicator in output_lower:
-                return True
-
-        if self.git_output and "error" not in output_lower and "fatal" not in output_lower:
-            lines = [line.strip() for line in self.git_output.split("\n") if line.strip()]
-            substantial_lines = [
-                line
-                for line in lines
-                if not line.startswith("From") and not line.startswith("remote:")
-            ]
-            if len(substantial_lines) > 1:
-                return True
-
-        return False
+        return has_updates(self.git_output)
 
     def _get_latest_commit_message(self):
-        try:
-            result = subprocess.run(
-                ["git", "log", "-1", "--format=%s"],
-                cwd=self.working_dir,
-                capture_output=True,
-                text=True,
-                timeout=5,
-            )
-            if result.returncode == 0 and result.stdout.strip():
-                return result.stdout.strip()
-        except Exception:
-            pass
-        return None
+        return get_latest_commit_message(self.working_dir)
 
     def _on_git_fetch_finished(self, exit_code, exit_status):
         self._log(f"on_git_fetch_finished: exit_code={exit_code}, exit_status={exit_status}")
@@ -225,32 +266,8 @@ class UpdateService(QObject):
             return
 
         try:
-            local_result = subprocess.run(
-                ["git", "rev-parse", "HEAD"],
-                cwd=self.working_dir,
-                capture_output=True,
-                text=True,
-                timeout=5,
-            )
-            if local_result.returncode != 0:
-                return
-
-            local_head = local_result.stdout.strip()
-
-            remote_head = None
-            for branch in ["origin/main", "origin/master"]:
-                remote_result = subprocess.run(
-                    ["git", "rev-parse", branch],
-                    cwd=self.working_dir,
-                    capture_output=True,
-                    text=True,
-                    timeout=5,
-                )
-                if remote_result.returncode == 0:
-                    remote_head = remote_result.stdout.strip()
-                    break
-
-            if remote_head is None:
+            local_head, remote_head = get_git_heads(self.working_dir)
+            if not local_head or not remote_head:
                 return
 
             if local_head != remote_head and not self.update_available:
@@ -261,3 +278,58 @@ class UpdateService(QObject):
                 self.update_available_changed.emit(False)
         except Exception:
             pass
+
+
+class UpdateServiceRunner:
+    """Runs git update commands for non-Qt environments."""
+
+    def __init__(self, working_dir=None, git_user=None):
+        self.working_dir = working_dir or os.getcwd()
+        self.git_user = git_user
+
+    def popen_pull(self, **kwargs):
+        return popen_git_command(
+            ["pull"],
+            cwd=self.working_dir,
+            git_user=self.git_user,
+            **kwargs,
+        )
+
+    def fetch(self, timeout=30):
+        return run_git_command(
+            ["fetch"],
+            cwd=self.working_dir,
+            git_user=self.git_user,
+            timeout=timeout,
+        )
+
+    def get_heads(self, timeout=10):
+        return get_git_heads(
+            self.working_dir,
+            git_user=self.git_user,
+            timeout=timeout,
+        )
+
+    def get_latest_commit_message(self):
+        return get_latest_commit_message(self.working_dir, git_user=self.git_user)
+
+    def check_for_updates(self, fetch_timeout=30, head_timeout=10):
+        fetch_result = self.fetch(timeout=fetch_timeout)
+        if fetch_result.returncode != 0:
+            return {
+                "updates_available": False,
+                "error": "Failed to fetch from remote",
+            }
+
+        local_head, remote_head = self.get_heads(timeout=head_timeout)
+        if not local_head or not remote_head:
+            return {
+                "updates_available": False,
+                "error": "Could not determine remote branch",
+            }
+
+        return {
+            "updates_available": local_head != remote_head,
+            "local_head": local_head,
+            "remote_head": remote_head,
+        }

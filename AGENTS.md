@@ -1,7 +1,7 @@
 # Repository Guidelines
 
 ## Project Structure & Module Organization
-- Root Python modules: `main_display.py` (PyQt5 UI + app startup), `web_settings_server.py` (Flask settings server), `MetroAPI.py` (WMATA API), `data_handler.py` (caching), `config_handler.py` and `message_handler.py` (local JSON settings), `wifi_setup.py` and `wifi_portal_server.py` (provisioning flow).
+- Root Python modules: `main_display.py` (PyQt5 UI + app startup), `web_settings_server.py` (Flask settings server), `MetroAPI.py` (WMATA API), `data_handler.py` (caching), `services/config_store.py` and `services/message_store.py` (local JSON settings), `wifi_setup.py` and `wifi_portal_server.py` (provisioning flow).
 - Web UI templates live in `templates/` and are Jinja-rendered HTML pages.
 - Static assets (fonts) live in `assets/`.
 - Deployment and system notes live in `docs/` (see `docs/README.md`, `docs/PORT80_SETUP.md`, `docs/SUDO_COMMANDS.txt`).
@@ -13,7 +13,7 @@
 - There is no build step; dependencies are system packages (PyQt5, Flask, requests, pandas). See `docs/redeployment_steps.txt` for provisioning commands.
 
 ## Coding Style & Naming Conventions
-- Python uses 4-space indentation, `snake_case` for functions/vars, `CamelCase` for classes, and `UPPER_SNAKE_CASE` constants (see `config_handler.py`).
+- Python uses 4-space indentation, `snake_case` for functions/vars, `CamelCase` for classes, and `UPPER_SNAKE_CASE` constants (see `services/config_store.py`).
 - Keep UI styling in Qt stylesheets for the desktop app and in the HTML templates for web UI.
 - Prefer module-level helper functions for cross-cutting concerns rather than duplicating subprocess logic.
 
