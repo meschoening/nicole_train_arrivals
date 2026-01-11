@@ -15,6 +15,7 @@ DEFAULT_CONFIG = {
     "title_text": "Nicole's Train Tracker!",
     "update_check_interval_seconds": 60,
     "font_family": "Quicksand",
+    "git_branch": "main",
 }
 
 

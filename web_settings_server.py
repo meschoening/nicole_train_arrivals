@@ -319,9 +319,12 @@ def start_web_settings_server(data_handler, host="0.0.0.0", port=443):
         Check if git updates are available by comparing local and remote HEADs.
         Returns True if updates are available, False otherwise.
         Does NOT run git fetch - relies on fetch having been run recently (by the display app).
+        Uses the configured git_branch setting to determine which branch to check.
         """
         try:
-            local_head, remote_head = update_service.get_heads(timeout=5)
+            config = config_store.load()
+            configured_branch = config.get("git_branch", "main")
+            local_head, remote_head = update_service.get_heads(timeout=5, branch=configured_branch)
             if not local_head or not remote_head:
                 return False
             return local_head != remote_head
@@ -409,11 +412,15 @@ def start_web_settings_server(data_handler, host="0.0.0.0", port=443):
     @app.get("/update")
     def get_update():
         config = config_store.load()
+        current_branch = update_service.get_current_branch(timeout=5) or "unknown"
+        configured_branch = config.get("git_branch", "main")
         return render_template(
             "update.html",
             display_name=_get_display_name(),
             update_check_interval=config.get("update_check_interval_seconds", 60),
-            last_saved=_get_config_last_saved()
+            last_saved=_get_config_last_saved(),
+            current_branch=current_branch,
+            configured_branch=configured_branch
         )
 
     @app.get("/api-key")
@@ -825,7 +832,10 @@ def start_web_settings_server(data_handler, host="0.0.0.0", port=443):
                             "error": "Failed to fetch from remote"
                         })
                     
-                    local_head, remote_head = update_service.get_heads(timeout=10)
+                    # Use configured branch for update check
+                    config = config_store.load()
+                    configured_branch = config.get("git_branch", "main")
+                    local_head, remote_head = update_service.get_heads(timeout=10, branch=configured_branch)
                     if not local_head:
                         return jsonify({
                             "updates_available": False,
@@ -862,6 +872,72 @@ def start_web_settings_server(data_handler, host="0.0.0.0", port=443):
                 _git_debug_log("api_check_for_updates: Clearing flag and releasing lock")
                 # Clear the flag when operation completes
                 set_git_operation_in_progress(False, caller="api_check_for_updates")
+
+    @app.get("/api/git-branches")
+    def api_git_branches():
+        """Get list of available remote git branches."""
+        try:
+            branches = update_service.get_remote_branches(timeout=10)
+            return jsonify({"success": True, "branches": branches})
+        except Exception as e:
+            return jsonify({"success": False, "error": str(e), "branches": []}), 500
+
+    @app.get("/api/current-branch")
+    def api_current_branch():
+        """Get the current local git branch."""
+        try:
+            branch = update_service.get_current_branch(timeout=5)
+            if branch:
+                return jsonify({"success": True, "branch": branch})
+            else:
+                return jsonify({"success": False, "error": "Could not determine current branch", "branch": None})
+        except Exception as e:
+            return jsonify({"success": False, "error": str(e), "branch": None}), 500
+
+    @app.post("/api/switch-branch")
+    def api_switch_branch():
+        """Switch to a different git branch."""
+        data = request.get_json() or {}
+        branch = data.get("branch", "").strip()
+        
+        if not branch:
+            return jsonify({"success": False, "error": "Branch name is required"}), 400
+        
+        # Validate branch name (basic sanitization)
+        import re
+        if not re.match(r'^[\w./-]+$', branch):
+            return jsonify({"success": False, "error": "Invalid branch name"}), 400
+        
+        _git_debug_log(f"api_switch_branch: Attempting to switch to branch '{branch}'")
+        
+        # Acquire lock to prevent concurrent git operations
+        with _git_operation_lock:
+            _git_debug_log("api_switch_branch: Lock acquired, setting flag to True")
+            set_git_operation_in_progress(True, caller="api_switch_branch")
+            try:
+                result = update_service.switch_branch(branch, timeout=60)
+                
+                if result["success"]:
+                    # Save the branch to config
+                    config_store.save("git_branch", branch)
+                    _git_debug_log(f"api_switch_branch: Successfully switched to branch '{branch}'")
+                    return jsonify({
+                        "success": True,
+                        "branch": branch,
+                        "message": result.get("message", f"Switched to branch '{branch}'")
+                    })
+                else:
+                    _git_debug_log(f"api_switch_branch: Failed to switch branch: {result.get('error')}")
+                    return jsonify({
+                        "success": False,
+                        "error": result.get("error", "Unknown error switching branch")
+                    }), 500
+            except Exception as e:
+                _git_debug_log(f"api_switch_branch: Exception: {e}")
+                return jsonify({"success": False, "error": str(e)}), 500
+            finally:
+                _git_debug_log("api_switch_branch: Clearing flag and releasing lock")
+                set_git_operation_in_progress(False, caller="api_switch_branch")
 
     @app.post("/api/restart")
     def api_restart():
