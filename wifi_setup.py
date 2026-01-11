@@ -18,7 +18,7 @@ import sys
 import subprocess
 import argparse
 import threading
-import config_handler
+from services.config_store import ConfigStore
 
 
 class WiFiSetupWindow(QMainWindow):
@@ -26,9 +26,10 @@ class WiFiSetupWindow(QMainWindow):
     
     def __init__(self):
         super().__init__()
-        
+
         # Load config to get font family
-        config = config_handler.load_config()
+        config_store = ConfigStore()
+        config = config_store.load()
         self.font_family = config.get('font_family', 'Quicksand')
         
         self.title_text = "WiFi Configuration"
@@ -90,15 +91,27 @@ class WiFiSetupWindow(QMainWindow):
         layout.setContentsMargins(20, 0, 20, 0)
         
         # Title label
-        title_label = QLabel(self.title_text)
-        title_label.setStyleSheet(f"font-family: {self.font_family}; font-size: 30px; font-weight: bold;")
-        layout.addWidget(title_label, alignment=Qt.AlignVCenter | Qt.AlignLeft)
+        layout.addWidget(self.build_header_title_label(), alignment=Qt.AlignVCenter | Qt.AlignLeft)
         
         layout.addStretch()
         
         # Return to Main Display button (right-aligned)
+        layout.addWidget(self.build_return_button(), alignment=Qt.AlignVCenter | Qt.AlignRight)
+        
+        header.setLayout(layout)
+        return header
+
+    def build_header_title_label(self):
+        title_label = QLabel(self.title_text)
+        title_label.setStyleSheet(
+            f"font-family: {self.font_family}; font-size: 30px; font-weight: bold;"
+        )
+        return title_label
+
+    def build_return_button(self):
         return_button = QPushButton("Return to Main Display")
-        return_button.setStyleSheet(f"""
+        return_button.setStyleSheet(
+            f"""
             QPushButton {{
                 font-family: {self.font_family};
                 font-size: 18px;
@@ -115,81 +128,46 @@ class WiFiSetupWindow(QMainWindow):
                 background-color: #c0c0c0;
                 padding-bottom: 9px;
             }}
-        """)
+        """
+        )
         return_button.setFixedHeight(45)
         return_button.clicked.connect(self.return_to_main_display)
-        layout.addWidget(return_button, alignment=Qt.AlignVCenter | Qt.AlignRight)
-        
-        header.setLayout(layout)
-        return header
-    
-    def create_content_area(self):
-        """Create the main content area with status labels and manual connection."""
-        content = QWidget()
-        content.setStyleSheet("background-color: #f0f0f0;")
-        
-        # Outer vertical layout to control expansion
-        outer_layout = QVBoxLayout()
-        outer_layout.setContentsMargins(40, 15, 40, 15)
-        outer_layout.setSpacing(20)
-        
-        # Inner horizontal layout for two columns
-        columns_layout = QHBoxLayout()
-        columns_layout.setSpacing(20)
-        
-        # ===== LEFT COLUMN: Two stacked boxes =====
-        left_column_layout = QVBoxLayout()
-        left_column_layout.setSpacing(20)
-        
-        # --- Status Box ---
+        return return_button
+
+    def build_status_row(self, title, value_attr, initial_value):
+        row = QHBoxLayout()
+        title_label = QLabel(title)
+        title_label.setStyleSheet(
+            f"font-family: {self.font_family}; font-size: 24px; font-weight: bold;"
+        )
+        title_label.setFixedWidth(150)
+        value_label = QLabel(initial_value)
+        value_label.setStyleSheet(f"font-family: {self.font_family}; font-size: 24px;")
+        setattr(self, value_attr, value_label)
+        row.addWidget(title_label)
+        row.addWidget(value_label)
+        row.addStretch()
+        return row
+
+    def build_status_box(self):
         status_container = QWidget()
-        status_container.setStyleSheet("""
+        status_container.setStyleSheet(
+            """
             background-color: #e8e8e8;
             border-radius: 10px;
-        """)
+        """
+        )
         status_layout = QVBoxLayout()
         status_layout.setContentsMargins(30, 30, 30, 30)
         status_layout.setSpacing(15)
-        
-        # Status label
-        status_row = QHBoxLayout()
-        status_title = QLabel("Status:")
-        status_title.setStyleSheet(f"font-family: {self.font_family}; font-size: 24px; font-weight: bold;")
-        status_title.setFixedWidth(150)
-        self.status_value = QLabel("Checking...")
-        self.status_value.setStyleSheet(f"font-family: {self.font_family}; font-size: 24px;")
-        status_row.addWidget(status_title)
-        status_row.addWidget(self.status_value)
-        status_row.addStretch()
-        status_layout.addLayout(status_row)
-        
-        # AP Name label
-        ap_row = QHBoxLayout()
-        ap_title = QLabel("AP Name:")
-        ap_title.setStyleSheet(f"font-family: {self.font_family}; font-size: 24px; font-weight: bold;")
-        ap_title.setFixedWidth(150)
-        self.ap_name_value = QLabel("—")
-        self.ap_name_value.setStyleSheet(f"font-family: {self.font_family}; font-size: 24px;")
-        ap_row.addWidget(ap_title)
-        ap_row.addWidget(self.ap_name_value)
-        ap_row.addStretch()
-        status_layout.addLayout(ap_row)
-        
-        # IP Address label
-        ip_row = QHBoxLayout()
-        ip_title = QLabel("IP Address:")
-        ip_title.setStyleSheet(f"font-family: {self.font_family}; font-size: 24px; font-weight: bold;")
-        ip_title.setFixedWidth(150)
-        self.ip_value = QLabel("—")
-        self.ip_value.setStyleSheet(f"font-family: {self.font_family}; font-size: 24px;")
-        ip_row.addWidget(ip_title)
-        ip_row.addWidget(self.ip_value)
-        ip_row.addStretch()
-        status_layout.addLayout(ip_row)
-        
-        # Broadcast button right under IP Address
+
+        status_layout.addLayout(self.build_status_row("Status:", "status_value", "Checking..."))
+        status_layout.addLayout(self.build_status_row("AP Name:", "ap_name_value", "—"))
+        status_layout.addLayout(self.build_status_row("IP Address:", "ip_value", "—"))
+
         self.broadcast_button = QPushButton("Broadcast Setup Network")
-        self.broadcast_button.setStyleSheet(f"""
+        self.broadcast_button.setStyleSheet(
+            f"""
             QPushButton {{
                 font-family: {self.font_family};
                 font-size: 18px;
@@ -207,39 +185,44 @@ class WiFiSetupWindow(QMainWindow):
                 background-color: #3d8b40;
                 padding-bottom: 9px;
             }}
-        """)
+        """
+        )
         self.broadcast_button.setFixedHeight(45)
         self.broadcast_button.clicked.connect(self.toggle_broadcast)
         status_layout.addWidget(self.broadcast_button)
-        
-        # Connection result (shown after stopping broadcast)
+
         self.connection_result_label = QLabel("")
-        self.connection_result_label.setStyleSheet(f"font-family: {self.font_family}; font-size: 20px; color: #666;")
+        self.connection_result_label.setStyleSheet(
+            f"font-family: {self.font_family}; font-size: 20px; color: #666;"
+        )
         self.connection_result_label.setWordWrap(True)
         self.connection_result_label.hide()
         status_layout.addWidget(self.connection_result_label)
-        
+
         status_container.setLayout(status_layout)
-        left_column_layout.addWidget(status_container)
-        
-        # --- Manual Connection Box ---
+        return status_container
+
+    def build_manual_connection_box(self):
         manual_container = QWidget()
-        manual_container.setStyleSheet("""
+        manual_container.setStyleSheet(
+            """
             background-color: #e8e8e8;
             border-radius: 10px;
-        """)
+        """
+        )
         manual_layout = QVBoxLayout()
         manual_layout.setContentsMargins(30, 30, 30, 30)
         manual_layout.setSpacing(15)
-        
-        # Section title
+
         manual_title = QLabel("Manual Connection")
-        manual_title.setStyleSheet(f"font-family: {self.font_family}; font-size: 22px; font-weight: bold;")
+        manual_title.setStyleSheet(
+            f"font-family: {self.font_family}; font-size: 22px; font-weight: bold;"
+        )
         manual_layout.addWidget(manual_title)
-        
-        # Saved networks dropdown
+
         self.saved_networks_combo = QComboBox()
-        self.saved_networks_combo.setStyleSheet(f"""
+        self.saved_networks_combo.setStyleSheet(
+            f"""
             QComboBox {{
                 font-family: {self.font_family};
                 font-size: 18px;
@@ -271,16 +254,16 @@ class WiFiSetupWindow(QMainWindow):
                 background-color: #e0e0e0;
                 color: #000;
             }}
-        """)
+        """
+        )
         manual_layout.addWidget(self.saved_networks_combo)
-        
-        # Buttons row (Refresh and Connect side by side)
+
         buttons_row = QHBoxLayout()
         buttons_row.setSpacing(10)
-        
-        # Refresh List button
+
         self.refresh_networks_button = QPushButton("Refresh List")
-        self.refresh_networks_button.setStyleSheet(f"""
+        self.refresh_networks_button.setStyleSheet(
+            f"""
             QPushButton {{
                 font-family: {self.font_family};
                 font-size: 16px;
@@ -296,13 +279,14 @@ class WiFiSetupWindow(QMainWindow):
             QPushButton:pressed {{
                 background-color: #c0c0c0;
             }}
-        """)
+        """
+        )
         self.refresh_networks_button.clicked.connect(self.load_saved_networks)
         buttons_row.addWidget(self.refresh_networks_button)
-        
-        # Connect/Disconnect button
+
         self.connect_button = QPushButton("Connect to Network")
-        self.connect_button.setStyleSheet(f"""
+        self.connect_button.setStyleSheet(
+            f"""
             QPushButton {{
                 font-family: {self.font_family};
                 font-size: 16px;
@@ -323,39 +307,37 @@ class WiFiSetupWindow(QMainWindow):
                 background-color: #cccccc;
                 color: #666666;
             }}
-        """)
+        """
+        )
         self.connect_button.clicked.connect(self.toggle_manual_connection)
         buttons_row.addWidget(self.connect_button)
-        
+
         manual_layout.addLayout(buttons_row)
-        
         manual_container.setLayout(manual_layout)
-        left_column_layout.addWidget(manual_container)
-        
-        # Add stretch at bottom to push boxes to top
-        left_column_layout.addStretch()
-        
-        columns_layout.addLayout(left_column_layout, 1)  # stretch factor 1
-        
-        # ===== RIGHT COLUMN: Console Output Section =====
+        return manual_container
+
+    def build_console_section(self):
         console_container = QWidget()
-        console_container.setStyleSheet("""
+        console_container.setStyleSheet(
+            """
             background-color: #e8e8e8;
             border-radius: 10px;
-        """)
+        """
+        )
         console_layout = QVBoxLayout()
         console_layout.setContentsMargins(30, 30, 30, 30)
         console_layout.setSpacing(15)
-        
-        # Console Output label
+
         console_title = QLabel("Console Output:")
-        console_title.setStyleSheet(f"font-family: {self.font_family}; font-size: 22px; font-weight: bold;")
+        console_title.setStyleSheet(
+            f"font-family: {self.font_family}; font-size: 22px; font-weight: bold;"
+        )
         console_layout.addWidget(console_title)
-        
-        # Console output (fills remaining space)
+
         self.connection_console = QPlainTextEdit()
         self.connection_console.setReadOnly(True)
-        self.connection_console.setStyleSheet("""
+        self.connection_console.setStyleSheet(
+            """
             QPlainTextEdit {
                 font-family: monospace;
                 font-size: 14px;
@@ -365,11 +347,35 @@ class WiFiSetupWindow(QMainWindow):
                 border-radius: 5px;
                 padding: 10px;
             }
-        """)
-        console_layout.addWidget(self.connection_console, 1)  # stretch factor 1
-        
+        """
+        )
+        console_layout.addWidget(self.connection_console, 1)
+
         console_container.setLayout(console_layout)
-        columns_layout.addWidget(console_container, 1)  # stretch factor 1
+        return console_container
+    
+    def create_content_area(self):
+        """Create the main content area with status labels and manual connection."""
+        content = QWidget()
+        content.setStyleSheet("background-color: #f0f0f0;")
+        
+        # Outer vertical layout to control expansion
+        outer_layout = QVBoxLayout()
+        outer_layout.setContentsMargins(40, 15, 40, 15)
+        outer_layout.setSpacing(20)
+        
+        # Inner horizontal layout for two columns
+        columns_layout = QHBoxLayout()
+        columns_layout.setSpacing(20)
+        
+        left_column_layout = QVBoxLayout()
+        left_column_layout.setSpacing(20)
+        left_column_layout.addWidget(self.build_status_box())
+        left_column_layout.addWidget(self.build_manual_connection_box())
+        left_column_layout.addStretch()
+        columns_layout.addLayout(left_column_layout, 1)
+
+        columns_layout.addWidget(self.build_console_section(), 1)
         
         # Add the columns to the outer layout
         outer_layout.addLayout(columns_layout, 1)  # stretch factor 1 to fill height

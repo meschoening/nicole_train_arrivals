@@ -1,584 +1,22 @@
-from PyQt5.QtWidgets import QApplication, QMainWindow, QVBoxLayout, QHBoxLayout, QGridLayout, QLabel, QWidget, QPushButton, QStackedWidget, QComboBox, QCheckBox, QPlainTextEdit, QSizePolicy, QSlider, QLineEdit, QGraphicsOpacityEffect, QAbstractItemView
-from PyQt5.QtCore import QSize, Qt, QTimer, QEvent, QProcess, QPropertyAnimation, QEasingCurve, QObject
+from PyQt5.QtWidgets import QApplication, QMainWindow, QVBoxLayout, QHBoxLayout, QGridLayout, QLabel, QWidget, QPushButton, QStackedWidget, QComboBox, QCheckBox, QSizePolicy, QSlider, QLineEdit, QGraphicsOpacityEffect
+from PyQt5.QtCore import QSize, Qt, QTimer, QEvent, QPropertyAnimation, QEasingCurve
 from PyQt5.QtGui import QFontDatabase, QColor, QPalette, QPixmap, QPainter, QIcon
 from MetroAPI import MetroAPI, MetroAPIError
 from data_handler import DataHandler
-import config_handler
-import message_handler
+from services.config_store import ConfigStore
+from services.message_store import MessageStore
+from services.settings_server_client import SettingsServerClient
+from services.system_service import SystemService
+from services.update_service import UpdateService
+from views.filters import TouchscreenComboViewFilter
+from views.overlays import RebootWarningOverlay
+from views.popouts import IPPopout, UpdatePopout, ShutdownPopout
 import os
-import sys
-import socket
 import subprocess
 import random
 import time
 import argparse
 from datetime import datetime, timedelta
-from web_settings_server import start_web_settings_server, get_pending_message_trigger, get_pending_settings_change, is_git_operation_in_progress, set_git_operation_in_progress
-
-# Debug logging for git operations
-_GIT_DEBUG = True
-
-def _git_debug_log(message):
-    """Log git operation debug info with timestamp."""
-    if _GIT_DEBUG:
-        timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S.%f')[:-3]
-        flag_state = is_git_operation_in_progress()
-        print(f"[GIT-DEBUG {timestamp}] [main_display] [flag={flag_state}] {message}", flush=True)
-
-
-class TouchscreenComboViewFilter(QObject):
-    """Event filter for QComboBox views to handle touchscreen taps correctly"""
-    def __init__(self, combo_box):
-        super().__init__()
-        self.combo_box = combo_box
-        self.pressed_index = None
-    
-    def eventFilter(self, obj, event):
-        """Filter events to prevent dropdown from closing on mouse press for touchscreens"""
-        from PyQt5.QtWidgets import QAbstractItemView
-        from PyQt5.QtGui import QMouseEvent
-        
-        # Only filter events for the combo box view
-        view = self.combo_box.view()
-        if isinstance(obj, QAbstractItemView) and obj == view:
-            # On mouse press, remember the item index
-            if event.type() == QEvent.MouseButtonPress:
-                if isinstance(event, QMouseEvent):
-                    index = obj.indexAt(event.pos())
-                    if index.isValid():
-                        self.pressed_index = index.row()
-                        # Select the item on press (for visual feedback) but don't close yet
-                        obj.setCurrentIndex(index)
-                        # Block the event to prevent default closing behavior
-                        return True
-            
-            # On mouse release, close the dropdown and set the selection
-            elif event.type() == QEvent.MouseButtonRelease:
-                if isinstance(event, QMouseEvent):
-                    index = obj.indexAt(event.pos())
-                    # If we have a valid press and the release is on the same or nearby item
-                    if self.pressed_index is not None:
-                        if index.isValid():
-                            # Set the combo box selection to the item under the release
-                            self.combo_box.setCurrentIndex(index.row())
-                        else:
-                            # If release is outside, use the pressed index
-                            self.combo_box.setCurrentIndex(self.pressed_index)
-                        # Close the dropdown
-                        self.combo_box.hidePopup()
-                        self.pressed_index = None
-                        return True
-                    self.pressed_index = None
-        
-        return False
-
-class IPPopout(QWidget):
-    """A popout widget that displays the device IP address and Tailscale address"""
-    def __init__(self, ip_address, tailscale_address, parent=None):
-        super().__init__(parent)
-        
-        # Load font config
-        config = config_handler.load_config()
-        font_family = config.get('font_family', 'Quicksand')
-        
-        self.setWindowFlags(Qt.ToolTip | Qt.FramelessWindowHint)
-        self.setAttribute(Qt.WA_TranslucentBackground, True)
-        
-        # Create content layout with labels (vertical layout for multiple lines)
-        content_layout = QVBoxLayout()
-        content_layout.setContentsMargins(15, 10, 15, 10)
-        content_layout.setSpacing(8)
-        
-        # First line: Device IP
-        ip_line = QHBoxLayout()
-        ip_line.setSpacing(10)
-        ip_label = QLabel("Device IP:")
-        ip_label.setStyleSheet(f"font-family: {font_family}; font-size: 16px; font-weight: bold; color: #333; border: none;")
-        ip_line.addWidget(ip_label)
-        
-        ip_value = QLabel(ip_address)
-        ip_value.setStyleSheet(f"font-family: {font_family}; font-size: 16px; color: #666; border: none;")
-        ip_line.addWidget(ip_value)
-        content_layout.addLayout(ip_line)
-        
-        # Second line: Tailscale Address
-        tailscale_line = QHBoxLayout()
-        tailscale_line.setSpacing(10)
-        tailscale_label = QLabel("Tailscale Address:")
-        tailscale_label.setStyleSheet(f"font-family: {font_family}; font-size: 16px; font-weight: bold; color: #333; border: none;")
-        tailscale_line.addWidget(tailscale_label)
-        
-        tailscale_value = QLabel(tailscale_address)
-        tailscale_value.setStyleSheet(f"font-family: {font_family}; font-size: 16px; color: #666; border: none;")
-        tailscale_line.addWidget(tailscale_value)
-        content_layout.addLayout(tailscale_line)
-        
-        # Create a container widget for the border and background
-        container = QWidget()
-        container.setLayout(content_layout)
-        container.setStyleSheet("""
-            QWidget {
-                background-color: white;
-                border: 2px solid white;
-                border-radius: 10px;
-            }
-        """)
-        
-        # Main layout to hold the container
-        main_layout = QVBoxLayout()
-        main_layout.setContentsMargins(0, 0, 0, 0)
-        main_layout.addWidget(container)
-        self.setLayout(main_layout)
-        
-        self.adjustSize()
-
-class UpdatePopout(QWidget):
-    """A popout widget that displays git pull terminal output"""
-    def __init__(self, parent=None):
-        super().__init__(parent)
-        
-        # Load font config
-        config = config_handler.load_config()
-        font_family = config.get('font_family', 'Quicksand')
-        
-        self.setWindowFlags(Qt.ToolTip | Qt.FramelessWindowHint)
-        self.setAttribute(Qt.WA_TranslucentBackground, False)
-        
-        # Create content layout (will have header and output)
-        content_layout = QVBoxLayout()
-        content_layout.setContentsMargins(3, 3, 3, 3)  # Space for border
-        content_layout.setSpacing(0)
-        
-        # Create header with close button
-        header = QWidget()
-        header.setStyleSheet("background-color: #f0f0f0; border-bottom: 1px solid #999; border: none;")
-        header.setFixedHeight(30)
-        header_layout = QHBoxLayout()
-        header_layout.setContentsMargins(10, 5, 5, 5)
-        
-        self.header_label = QLabel("Update Status")
-        self.header_label.setStyleSheet(f"font-family: {font_family}; font-size: 14px; font-weight: bold; color: #333; border: none;")
-        header_layout.addWidget(self.header_label)
-        header_layout.addStretch()
-        
-        self.close_button = QPushButton("✕")
-        self.close_button.setStyleSheet(f"""
-            QPushButton {{
-                font-family: {font_family};
-                font-size: 16px;
-                font-weight: bold;
-                padding: 0px;
-                background-color: transparent;
-                border: none;
-                color: #666;
-            }}
-            QPushButton:hover {{
-                color: #000;
-                background-color: #e0e0e0;
-                border-radius: 3px;
-            }}
-            QPushButton:pressed {{
-                background-color: #d0d0d0;
-            }}
-        """)
-        self.close_button.setFixedSize(20, 20)
-        header_layout.addWidget(self.close_button)
-        
-        header.setLayout(header_layout)
-        content_layout.addWidget(header)
-        
-        # Create text area for terminal output
-        self.output_text = QPlainTextEdit()
-        self.output_text.setReadOnly(True)
-        self.output_text.setStyleSheet("""
-            QPlainTextEdit {
-                font-family: Consolas, Monaco, monospace;
-                font-size: 12px;
-                background-color: #1e1e1e;
-                color: #d4d4d4;
-                border: none;
-                padding: 10px;
-            }
-        """)
-        content_layout.addWidget(self.output_text)
-        
-        # Create success label for displaying installed update info (hidden by default)
-        self.success_label = QLabel()
-        self.success_label.setStyleSheet(f"""
-            QLabel {{
-                font-family: {font_family};
-                font-size: 13px;
-                font-weight: bold;
-                color: #2a7a2a;
-                background-color: #e8f5e9;
-                border: none;
-                padding: 8px 10px;
-            }}
-        """)
-        self.success_label.setWordWrap(True)
-        self.success_label.hide()
-        content_layout.addWidget(self.success_label)
-        
-        # Create a container widget for the border
-        container = QWidget()
-        container.setLayout(content_layout)
-        container.setStyleSheet("""
-            QWidget {
-                background-color: white;
-                border: 3px solid #666;
-                border-radius: 5px;
-            }
-        """)
-        
-        # Main layout to hold the container
-        main_layout = QVBoxLayout()
-        main_layout.setContentsMargins(0, 0, 0, 0)
-        main_layout.addWidget(container)
-        self.setLayout(main_layout)
-        
-        # Set fixed size
-        self.setFixedSize(500, 300)
-    
-    def append_output(self, text):
-        """Append text to the output area"""
-        self.output_text.appendPlainText(text)
-        # Auto-scroll to bottom
-        self.output_text.verticalScrollBar().setValue(
-            self.output_text.verticalScrollBar().maximum()
-        )
-    
-    def clear_output(self):
-        """Clear the output area and hide success label"""
-        # Reload font from config in case it changed
-        config = config_handler.load_config()
-        font_family = config.get('font_family', 'Quicksand')
-        
-        # Update font styling for labels and buttons
-        self.header_label.setStyleSheet(f"font-family: {font_family}; font-size: 14px; font-weight: bold; color: #333; border: none;")
-        self.close_button.setStyleSheet(f"""
-            QPushButton {{
-                font-family: {font_family};
-                font-size: 16px;
-                font-weight: bold;
-                padding: 0px;
-                background-color: transparent;
-                border: none;
-                color: #666;
-            }}
-            QPushButton:hover {{
-                color: #000;
-                background-color: #e0e0e0;
-                border-radius: 3px;
-            }}
-            QPushButton:pressed {{
-                background-color: #d0d0d0;
-            }}
-        """)
-        self.success_label.setStyleSheet(f"""
-            QLabel {{
-                font-family: {font_family};
-                font-size: 13px;
-                font-weight: bold;
-                color: #2a7a2a;
-                background-color: #e8f5e9;
-                border: none;
-                padding: 8px 10px;
-            }}
-        """)
-        
-        self.output_text.clear()
-        self.success_label.hide()
-    
-    def show_success_message(self, commit_message):
-        """Show the installed update success message"""
-        self.success_label.setText(f"Installed Update: {commit_message}")
-        self.success_label.show()
-
-class RebootWarningOverlay(QWidget):
-    """A fullscreen modal overlay that displays reboot countdown warning"""
-    def __init__(self, parent=None):
-        super().__init__(parent)
-        
-        # Load font config
-        config = config_handler.load_config()
-        font_family = config.get('font_family', 'Quicksand')
-        
-        self.setWindowFlags(Qt.Window | Qt.FramelessWindowHint | Qt.WindowStaysOnTopHint)
-        self.setAttribute(Qt.WA_TranslucentBackground, True)
-        
-        # Main layout
-        main_layout = QVBoxLayout()
-        main_layout.setContentsMargins(0, 0, 0, 0)
-        
-        # Semi-transparent background
-        self.setStyleSheet("background-color: rgba(0, 0, 0, 180);")
-        
-        # Center container
-        center_container = QWidget()
-        center_container.setStyleSheet("""
-            QWidget {
-                background-color: #f44336;
-                border: 3px solid #c62828;
-                border-radius: 15px;
-            }
-        """)
-        center_container.setFixedSize(600, 300)
-        
-        center_layout = QVBoxLayout()
-        center_layout.setContentsMargins(40, 40, 40, 40)
-        center_layout.setSpacing(20)
-        
-        # Warning icon/text
-        warning_label = QLabel("⚠ REBOOT WARNING ⚠")
-        warning_label.setStyleSheet(f"""
-            font-family: {font_family};
-            font-size: 32px;
-            font-weight: bold;
-            color: white;
-        """)
-        warning_label.setAlignment(Qt.AlignCenter)
-        center_layout.addWidget(warning_label)
-        
-        # Countdown message
-        self.countdown_label = QLabel("System will reboot in 60 seconds")
-        self.countdown_label.setStyleSheet(f"""
-            font-family: {font_family};
-            font-size: 24px;
-            font-weight: bold;
-            color: white;
-        """)
-        self.countdown_label.setAlignment(Qt.AlignCenter)
-        self.countdown_label.setWordWrap(True)
-        center_layout.addWidget(self.countdown_label)
-        
-        center_layout.addSpacing(10)
-        
-        # Cancel button
-        self.cancel_button = QPushButton("Cancel Reboot")
-        self.cancel_button.setStyleSheet(f"""
-            QPushButton {{
-                font-family: {font_family};
-                font-size: 22px;
-                font-weight: bold;
-                padding: 15px 40px;
-                background-color: white;
-                color: #f44336;
-                border: none;
-                border-radius: 8px;
-            }}
-            QPushButton:hover {{
-                background-color: #f0f0f0;
-            }}
-            QPushButton:pressed {{
-                background-color: #e0e0e0;
-                padding-bottom: 14px;
-            }}
-        """)
-        center_layout.addWidget(self.cancel_button, alignment=Qt.AlignCenter)
-        
-        center_container.setLayout(center_layout)
-        
-        # Add center container to main layout with centering
-        main_layout.addStretch()
-        container_holder = QHBoxLayout()
-        container_holder.addStretch()
-        container_holder.addWidget(center_container)
-        container_holder.addStretch()
-        main_layout.addLayout(container_holder)
-        main_layout.addStretch()
-        
-        self.setLayout(main_layout)
-    
-    def update_countdown(self, seconds):
-        """Update the countdown display"""
-        self.countdown_label.setText(f"System will reboot in {seconds} seconds")
-
-class ShutdownPopout(QWidget):
-    """A popout widget that displays shutdown and exit options"""
-    def __init__(self, parent=None):
-        super().__init__(parent)
-        
-        # Load font config
-        config = config_handler.load_config()
-        self.font_family = config.get('font_family', 'Quicksand')
-        
-        self.setWindowFlags(Qt.ToolTip | Qt.FramelessWindowHint)
-        self.setAttribute(Qt.WA_TranslucentBackground, False)
-        
-        # Track shutdown confirmation state
-        self.shutdown_confirmed = False
-        # Track reboot confirmation state
-        self.reboot_confirmed = False
-        
-        # Create layout
-        layout = QVBoxLayout()
-        layout.setContentsMargins(15, 10, 15, 10)
-        layout.setSpacing(10)
-        
-        # Create Reboot button
-        self.reboot_button = QPushButton("Reboot")
-        self.reboot_button.setMinimumWidth(200)
-        self.reboot_button.setStyleSheet(f"""
-            QPushButton {{
-                font-family: {self.font_family};
-                font-size: 18px;
-                font-weight: bold;
-                padding: 10px 20px;
-                background-color: #e0e0e0;
-                border: none;
-                border-radius: 5px;
-            }}
-            QPushButton:hover {{
-                background-color: #d0d0d0;
-            }}
-            QPushButton:pressed {{
-                background-color: #c0c0c0;
-                padding-bottom: 9px;
-            }}
-        """)
-        layout.addWidget(self.reboot_button)
-        
-        # Create Shutdown button
-        self.shutdown_button = QPushButton("Shutdown")
-        self.shutdown_button.setMinimumWidth(200)
-        self.shutdown_button.setStyleSheet(f"""
-            QPushButton {{
-                font-family: {self.font_family};
-                font-size: 18px;
-                font-weight: bold;
-                padding: 10px 20px;
-                background-color: #e0e0e0;
-                border: none;
-                border-radius: 5px;
-            }}
-            QPushButton:hover {{
-                background-color: #d0d0d0;
-            }}
-            QPushButton:pressed {{
-                background-color: #c0c0c0;
-                padding-bottom: 9px;
-            }}
-        """)
-        layout.addWidget(self.shutdown_button)
-        
-        self.setLayout(layout)
-        
-        # Style the popout
-        self.setStyleSheet("""
-            ShutdownPopout {
-                background-color: white;
-                border: 2px solid #999;
-                border-radius: 5px;
-            }
-        """)
-        
-        self.adjustSize()
-    
-    def reset_shutdown_state(self):
-        """Reset the shutdown button to its initial state"""
-        # Reload font from config in case it changed
-        config = config_handler.load_config()
-        self.font_family = config.get('font_family', 'Quicksand')
-        
-        self.shutdown_confirmed = False
-        self.shutdown_button.setText("Shutdown")
-        self.shutdown_button.setMinimumWidth(200)
-        self.shutdown_button.setStyleSheet(f"""
-            QPushButton {{
-                font-family: {self.font_family};
-                font-size: 18px;
-                font-weight: bold;
-                padding: 10px 20px;
-                background-color: #e0e0e0;
-                border: none;
-                border-radius: 5px;
-            }}
-            QPushButton:hover {{
-                background-color: #d0d0d0;
-            }}
-            QPushButton:pressed {{
-                background-color: #c0c0c0;
-                padding-bottom: 9px;
-            }}
-        """)
-    
-    def reset_reboot_state(self):
-        """Reset the reboot button to its initial state"""
-        # Reload font from config in case it changed
-        config = config_handler.load_config()
-        self.font_family = config.get('font_family', 'Quicksand')
-        
-        self.reboot_confirmed = False
-        self.reboot_button.setText("Reboot")
-        self.reboot_button.setMinimumWidth(200)
-        self.reboot_button.setStyleSheet(f"""
-            QPushButton {{
-                font-family: {self.font_family};
-                font-size: 18px;
-                font-weight: bold;
-                padding: 10px 20px;
-                background-color: #e0e0e0;
-                border: none;
-                border-radius: 5px;
-            }}
-            QPushButton:hover {{
-                background-color: #d0d0d0;
-            }}
-            QPushButton:pressed {{
-                background-color: #c0c0c0;
-                padding-bottom: 9px;
-            }}
-        """)
-    
-    def set_reboot_confirm_state(self):
-        """Set the reboot button to confirmation state (red)"""
-        self.reboot_confirmed = True
-        self.reboot_button.setText("Confirm Reboot")
-        self.reboot_button.setMinimumWidth(200)
-        self.reboot_button.setStyleSheet(f"""
-            QPushButton {{
-                font-family: {self.font_family};
-                font-size: 18px;
-                font-weight: bold;
-                padding: 10px 20px;
-                background-color: #f44336;
-                color: white;
-                border: none;
-                border-radius: 5px;
-            }}
-            QPushButton:hover {{
-                background-color: #da190b;
-            }}
-            QPushButton:pressed {{
-                background-color: #c1170a;
-                padding-bottom: 9px;
-            }}
-        """)
-    
-    def set_shutdown_confirm_state(self):
-        """Set the shutdown button to confirmation state (red)"""
-        self.shutdown_confirmed = True
-        self.shutdown_button.setText("Confirm Shutdown")
-        self.shutdown_button.setMinimumWidth(200)
-        self.shutdown_button.setStyleSheet(f"""
-            QPushButton {{
-                font-family: {self.font_family};
-                font-size: 18px;
-                font-weight: bold;
-                padding: 10px 20px;
-                background-color: #f44336;
-                color: white;
-                border: none;
-                border-radius: 5px;
-            }}
-            QPushButton:hover {{
-                background-color: #da190b;
-            }}
-            QPushButton:pressed {{
-                background-color: #c1170a;
-                padding-bottom: 9px;
-            }}
-        """)
 
 class MainWindow(QMainWindow):
     # Metro line color mapping
@@ -591,11 +29,18 @@ class MainWindow(QMainWindow):
         'SV': '#919D9D',  # Silver
     }
     
-    def __init__(self):
+    def __init__(self, data_handler, config_store, message_store, settings_server, system_service, update_service):
         super().__init__()
 
         # Load config to get properties
-        config = config_handler.load_config()
+        self.data_handler = data_handler
+        self.config_store = config_store
+        self.message_store = message_store
+        self.settings_server = settings_server
+        self.system_service = system_service
+        self.update_service = update_service
+
+        config = self.config_store.load()
         self.default_title_text = config.get('title_text', "Nicole's Train Tracker!")
         self.font_family = config.get('font_family', 'Quicksand')
 
@@ -620,7 +65,7 @@ class MainWindow(QMainWindow):
         self.setWindowIcon(QIcon(pixmap))
         
         # Message display system (initialize before creating pages)
-        self.message_config = message_handler.load_messages()
+        self.message_config = self.message_store.load()
         self.home_title_label = None  # Will be set in create_home_page
         self.settings_title_label = None  # Will be set in create_settings_page
         self.title_opacity_effect = None
@@ -658,7 +103,7 @@ class MainWindow(QMainWindow):
         self.initialize_settings_from_config()
         
         # Load refresh rate from config (needed for timers after initial load)
-        config = config_handler.load_config()
+        config = self.config_store.load()
         self.refresh_rate_seconds = config.get('refresh_rate_seconds', 30)
         
         # Set up auto-refresh timer (will be started after initial load succeeds)
@@ -674,11 +119,12 @@ class MainWindow(QMainWindow):
         self.initial_load_triggered = False
         
         # Update button state management
-        self.git_process = None
-        self.git_output = ""
         self.checking_animation_timer = QTimer()
         self.checking_animation_timer.timeout.connect(self.update_checking_animation)
         self.checking_animation_state = 0
+        self.update_service.pull_output.connect(self.on_update_service_output)
+        self.update_service.pull_finished.connect(self.on_update_service_finished)
+        self.update_service.update_available_changed.connect(self.on_update_available_changed)
         
         # Reboot scheduling
         self.reboot_check_timer = QTimer()
@@ -696,14 +142,11 @@ class MainWindow(QMainWindow):
         self.api_key_check_timer.timeout.connect(self.check_for_api_key)
         
         # Background update check
-        self.update_available = False
         self.update_check_timer = QTimer()
-        self.update_check_timer.timeout.connect(self.check_for_git_updates)
+        self.update_check_timer.timeout.connect(self.update_service.check_for_updates)
         # Load interval from config and start timer
         update_interval = config.get('update_check_interval_seconds', 60)
         self.update_check_timer.start(update_interval * 1000)
-        # QProcess for git fetch (non-blocking)
-        self.git_fetch_process = None
     
     def showEvent(self, event):
         """Called when the window is shown - trigger initial API load"""
@@ -767,7 +210,7 @@ class MainWindow(QMainWindow):
             self.startup_status_label.setText("Connecting to Metro API...")
             self.startup_status_label.setStyleSheet(f"font-family: {self.font_family}; font-size: 24px; color: #666;")
 
-            config = config_handler.load_config()
+            config = self.config_store.load()
             api_key = config.get('api_key')
             if not api_key:
                 # Stay on startup page and prompt user to add API key
@@ -803,16 +246,12 @@ class MainWindow(QMainWindow):
         if not self.waiting_for_api_key:
             return
         
-        config = config_handler.load_config()
+        config = self.config_store.load()
         api_key = config.get('api_key')
         
         if api_key:
-            # API key has been added, update the global metro_api object
-            # Access metro_api from module scope (defined at bottom of file)
-            import sys
-            current_module = sys.modules[__name__]
-            if hasattr(current_module, 'metro_api'):
-                current_module.metro_api.api_key = api_key
+            if hasattr(self.data_handler, 'metro_api'):
+                self.data_handler.metro_api.api_key = api_key
             
             # API key has been added, reset status label and retry
             self.waiting_for_api_key = False
@@ -831,52 +270,7 @@ class MainWindow(QMainWindow):
         Returns:
             bool: True if connected to a WiFi network, False otherwise
         """
-        try:
-            print("[WiFi Check] Running: nmcli -t -f WIFI general")
-            result = subprocess.run(
-                ["nmcli", "-t", "-f", "WIFI", "general"],
-                capture_output=True,
-                text=True,
-                timeout=5
-            )
-            print(f"[WiFi Check] Return code: {result.returncode}")
-            print(f"[WiFi Check] stdout: {result.stdout.strip()}")
-            print(f"[WiFi Check] stderr: {result.stderr.strip()}")
-            
-            if result.returncode != 0:
-                print("[WiFi Check] Command failed, returning False")
-                return False
-            
-            # Check if WiFi is enabled
-            if "enabled" not in result.stdout.lower():
-                print("[WiFi Check] WiFi not enabled in output, returning False")
-                return False
-            
-            print("[WiFi Check] WiFi is enabled, checking connection status...")
-            print("[WiFi Check] Running: nmcli -t -f TYPE,STATE device")
-            
-            # Check actual connection status
-            conn_result = subprocess.run(
-                ["nmcli", "-t", "-f", "TYPE,STATE", "device"],
-                capture_output=True,
-                text=True,
-                timeout=5
-            )
-            print(f"[WiFi Check] Return code: {conn_result.returncode}")
-            print(f"[WiFi Check] stdout: {conn_result.stdout.strip()}")
-            print(f"[WiFi Check] stderr: {conn_result.stderr.strip()}")
-            
-            if conn_result.returncode == 0:
-                for line in conn_result.stdout.strip().split('\n'):
-                    print(f"[WiFi Check] Checking line: {line}")
-                    if line.startswith('wifi:') and ':connected' in line.lower():
-                        print(f"[WiFi Check] Found connected WiFi! Returning True")
-                        return True
-            print("[WiFi Check] No connected WiFi found, returning False")
-            return False
-        except Exception as e:
-            print(f"[WiFi Check] Exception: {e}")
-            return False
+        return self.system_service.check_wifi_connection()
     
     def launch_wifi_setup(self):
         """Launch the WiFi setup application and terminate main display."""
@@ -900,35 +294,11 @@ class MainWindow(QMainWindow):
     
     def get_device_ip(self):
         """Get the local IP address of the device"""
-        try:
-            # Create a socket to determine the local IP
-            s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-            # Connect to an external address (doesn't actually send data)
-            s.connect(("8.8.8.8", 80))
-            ip_address = s.getsockname()[0]
-            s.close()
-            return ip_address
-        except Exception:
-            return "Unable to detect"
+        return self.system_service.get_device_ip()
     
     def get_tailscale_address(self):
         """Get the Tailscale address of the device"""
-        try:
-            import json
-            result = subprocess.run(
-                ["tailscale", "status", "--json"],
-                capture_output=True,
-                text=True,
-                timeout=5
-            )
-            if result.returncode == 0 and result.stdout:
-                status_data = json.loads(result.stdout)
-                dns_name = status_data.get("Self", {}).get("DNSName", "")
-                if dns_name:
-                    return dns_name.rstrip('.')
-            return "Not available"
-        except (subprocess.TimeoutExpired, subprocess.SubprocessError, json.JSONDecodeError, KeyError, FileNotFoundError):
-            return "Not available"
+        return self.system_service.get_tailscale_address()
     
     def create_colored_circle_icon(self, color_hex):
         """Create a colored circle icon for dropdown items"""
@@ -1036,7 +406,7 @@ class MainWindow(QMainWindow):
         
         # Get stations for the selected line (uses cache, auto-fetches if needed)
         try:
-            stations_data = data_handler.get_cached_stations(line_code)
+            stations_data = self.data_handler.get_cached_stations(line_code)
             if stations_data is not None and not stations_data.empty:
                 # Add stations to combo box
                 for _, station in stations_data.iterrows():
@@ -1057,7 +427,7 @@ class MainWindow(QMainWindow):
         
         # Get predictions for the selected station (uses cache, auto-fetches if needed)
         try:
-            predictions_data = data_handler.get_cached_predictions(station_code)
+            predictions_data = self.data_handler.get_cached_predictions(station_code)
             if predictions_data is not None and not predictions_data.empty:
                 # Create a dictionary to map destinations to lists of their line codes
                 destination_lines = {}
@@ -1104,13 +474,13 @@ class MainWindow(QMainWindow):
         """
         try:
             # Get current station code from config
-            config = config_handler.load_config()
+            config = self.config_store.load()
             current_station_code = config.get('selected_station')
             if not current_station_code:
                 return None
             
             # Get all stations for the destination's line
-            stations_data = data_handler.get_cached_stations(destination_line)
+            stations_data = self.data_handler.get_cached_stations(destination_line)
             if stations_data is None or stations_data.empty:
                 return None
             
@@ -1144,7 +514,7 @@ class MainWindow(QMainWindow):
     
     def get_config_last_saved(self):
         """Get the last modified timestamp of the config file"""
-        config_path = config_handler.CONFIG_FILE
+        config_path = self.config_store.path
         if os.path.exists(config_path):
             mtime = os.path.getmtime(config_path)
             dt = datetime.fromtimestamp(mtime)
@@ -1183,33 +553,33 @@ class MainWindow(QMainWindow):
         current_index = self.line_combo.currentIndex()
         if current_index >= 0:
             line_code = self.line_combo.itemData(current_index)
-            config_handler.save_config('selected_line', line_code)
+            self.config_store.save('selected_line', line_code)
         
         station_index = self.station_combo.currentIndex()
         if station_index >= 0:
             station_code = self.station_combo.itemData(station_index)
-            config_handler.save_config('selected_station', station_code)
+            self.config_store.save('selected_station', station_code)
         
         destination_index = self.destination_combo.currentIndex()
         if destination_index >= 0:
             destination = self.destination_combo.currentText()
-            config_handler.save_config('selected_destination', destination)
+            self.config_store.save('selected_destination', destination)
         
         # Save countdown visibility setting
-        config_handler.save_config('show_countdown', self.show_countdown_checkbox.isChecked())
+        self.config_store.save('show_countdown', self.show_countdown_checkbox.isChecked())
         
         # Save clock visibility setting
-        config_handler.save_config('show_clock', self.show_clock_checkbox.isChecked())
+        self.config_store.save('show_clock', self.show_clock_checkbox.isChecked())
         
         # Save filter by selected destination setting
-        config_handler.save_config('filter_by_direction', self.filter_by_destination_checkbox.isChecked())
+        self.config_store.save('filter_by_direction', self.filter_by_destination_checkbox.isChecked())
         
         # Save filter by destination direction setting
-        config_handler.save_config('filter_by_destination_direction', self.filter_by_destination_direction_checkbox.isChecked())
+        self.config_store.save('filter_by_destination_direction', self.filter_by_destination_direction_checkbox.isChecked())
         
         # Save screen sleep settings
-        config_handler.save_config('screen_sleep_enabled', self.screen_sleep_enabled_checkbox.isChecked())
-        config_handler.save_config('screen_sleep_minutes', self.screen_sleep_slider.value())
+        self.config_store.save('screen_sleep_enabled', self.screen_sleep_enabled_checkbox.isChecked())
+        self.config_store.save('screen_sleep_minutes', self.screen_sleep_slider.value())
         
         # Apply screen sleep settings to system
         self.apply_screen_sleep_settings()
@@ -1232,7 +602,7 @@ class MainWindow(QMainWindow):
         self.destination_combo.clear()
         
         # Load config
-        config = config_handler.load_config()
+        config = self.config_store.load()
         
         # Load and apply countdown visibility setting
         show_countdown = config.get('show_countdown', True)  # Default to True
@@ -1271,7 +641,7 @@ class MainWindow(QMainWindow):
         self.apply_screen_sleep_settings()
 
         # Populate lines
-        lines_data = data_handler.get_cached_lines()
+        lines_data = self.data_handler.get_cached_lines()
 
         if lines_data is not None and not lines_data.empty:
             for _, line in lines_data.iterrows():
@@ -1412,7 +782,7 @@ class MainWindow(QMainWindow):
     def update_arrivals_display(self):
         """Update the arrivals display with latest prediction data"""
         # Get selected station from config
-        config = config_handler.load_config()
+        config = self.config_store.load()
         station_id = config.get('selected_station')
         
         if not station_id:
@@ -1426,7 +796,7 @@ class MainWindow(QMainWindow):
         
         # Get predictions for the selected station
         try:
-            predictions_data = data_handler.get_cached_predictions(station_id)
+            predictions_data = self.data_handler.get_cached_predictions(station_id)
         except MetroAPIError as e:
             # Store error for display in countdown
             self.refresh_error_message = str(e)
@@ -1575,13 +945,13 @@ class MainWindow(QMainWindow):
         # Sync settings from config so web changes apply promptly
         self.sync_settings_from_config()
         # Get selected station from config
-        config = config_handler.load_config()
+        config = self.config_store.load()
         station_id = config.get('selected_station')
         
         if station_id:
             try:
                 # Fetch fresh predictions from API
-                data_handler.fetch_predictions(station_id)
+                self.data_handler.fetch_predictions(station_id)
                 # Clear error message on success
                 self.refresh_error_message = None
             except MetroAPIError as e:
@@ -1592,7 +962,7 @@ class MainWindow(QMainWindow):
         self.update_arrivals_display()
         
         # Reset countdown to configured refresh rate
-        config = config_handler.load_config()
+        config = self.config_store.load()
         self.seconds_until_refresh = config.get('refresh_rate_seconds', 30)
     
     def format_time_display(self, seconds):
@@ -1612,7 +982,7 @@ class MainWindow(QMainWindow):
         self.seconds_until_refresh -= 1
         
         if self.seconds_until_refresh <= 0:
-            config = config_handler.load_config()
+            config = self.config_store.load()
             self.seconds_until_refresh = config.get('refresh_rate_seconds', 30)
         
         # Format the time display
@@ -1653,7 +1023,7 @@ class MainWindow(QMainWindow):
     
     def sync_settings_from_config(self):
         """Sync checkbox and screen sleep settings from config file"""
-        config = config_handler.load_config()
+        config = self.config_store.load()
         # Update title text
         new_title_text = config.get('title_text', "Nicole's Train Tracker!")
         if new_title_text != self.default_title_text:
@@ -1723,7 +1093,7 @@ class MainWindow(QMainWindow):
         if not hasattr(self, 'ip_popout'):
             ip_address = self.get_device_ip()
             tailscale_address = self.get_tailscale_address()
-            self.ip_popout = IPPopout(ip_address, tailscale_address, self.settings_page)
+            self.ip_popout = IPPopout(ip_address, tailscale_address, self.config_store, self.settings_page)
         
         # Position the popout above the IP button
         button_pos = self.ip_button.mapTo(self.settings_page, self.ip_button.rect().topLeft())
@@ -1747,7 +1117,7 @@ class MainWindow(QMainWindow):
         if button_text == "Update":
             # Start the update process
             self.show_update_popout()
-            self.run_git_pull()
+            self.start_update_pull()
         elif button_text == "Reboot":
             # Reboot the system
             self.reboot_application()
@@ -1764,7 +1134,7 @@ class MainWindow(QMainWindow):
     def show_update_popout(self):
         """Show the update popout near the Update button"""
         if not hasattr(self, 'update_popout'):
-            self.update_popout = UpdatePopout(self.settings_page)
+            self.update_popout = UpdatePopout(self.config_store, self.settings_page)
             self.update_popout.close_button.clicked.connect(self.close_update_popout)
         
         # Clear previous output
@@ -1792,10 +1162,7 @@ class MainWindow(QMainWindow):
     
     def close_update_popout(self):
         """Close the update popout and reset state"""
-        # Kill git process if still running
-        if self.git_process is not None and self.git_process.state() == QProcess.Running:
-            self.git_process.kill()
-            self.git_process.waitForFinished()
+        self.update_service.cancel_pull()
         
         # Stop animation timer
         self.checking_animation_timer.stop()
@@ -1912,277 +1279,46 @@ class MainWindow(QMainWindow):
                 }}
             """)
     
-    def wait_for_git_fetch_if_running(self):
-        """Wait for any running background git fetch to complete before proceeding.
-        
-        This prevents race conditions when the user clicks Update while a 
-        background git fetch is in progress.
-        """
-        _git_debug_log("wait_for_git_fetch_if_running: Checking for running git operations...")
-        # Check local QProcess first
-        if self.git_fetch_process is not None and self.git_fetch_process.state() == QProcess.Running:
-            _git_debug_log("wait_for_git_fetch_if_running: Local git_fetch_process is running, waiting...")
-            self.update_popout.append_output("Waiting for background update check to finish...\n")
-            # Wait up to 10 seconds for the fetch to complete
-            self.git_fetch_process.waitForFinished(10000)
-            _git_debug_log("wait_for_git_fetch_if_running: Local git_fetch_process finished")
-        
-        # Also check if web server has a git operation in progress
-        if is_git_operation_in_progress():
-            _git_debug_log("wait_for_git_fetch_if_running: Web server git operation in progress, polling...")
-            self.update_popout.append_output("Waiting for web server git operation to finish...\n")
-            # Poll for up to 10 seconds
-            for i in range(100):
-                if not is_git_operation_in_progress():
-                    _git_debug_log(f"wait_for_git_fetch_if_running: Web server git operation finished after {i} polls")
-                    break
-                QApplication.processEvents()  # Keep UI responsive
-                time.sleep(0.1)
-            else:
-                _git_debug_log("wait_for_git_fetch_if_running: Timeout waiting for web server git operation!")
-        _git_debug_log("wait_for_git_fetch_if_running: Done checking, proceeding...")
-    
-    def run_git_pull(self):
-        """Start the git pull process"""
-        _git_debug_log("run_git_pull: Starting...")
-        # Wait for any background git operations to complete first
-        self.wait_for_git_fetch_if_running()
-        
-        _git_debug_log("run_git_pull: Setting flag to True")
-        # Set the shared flag so web server knows we're doing git operations
-        set_git_operation_in_progress(True)
-        
-        # Change button text, color, and start animation
+    def start_update_pull(self):
+        """Start the update workflow and kick off git pull."""
         self.update_button.setText("Checking")
         self.set_update_button_color("orange")
         self.checking_animation_state = 0
-        self.checking_animation_timer.start(500)  # Update every 500ms
-        
-        # Clear git output
-        self.git_output = ""
-        
-        # Create and configure QProcess
-        self.git_process = QProcess()
-        self.git_process.setWorkingDirectory(os.path.dirname(os.path.abspath(__file__)))
-        
-        # Connect signals
-        self.git_process.readyReadStandardOutput.connect(self.on_git_output_ready)
-        self.git_process.readyReadStandardError.connect(self.on_git_output_ready)
-        self.git_process.finished.connect(self.on_git_finished)
-        
-        # Start git pull
-        _git_debug_log("run_git_pull: Starting 'git pull' via QProcess")
-        self.update_popout.append_output("Running git pull...\n")
-        self.git_process.start("git", ["pull"])
-    
-    def on_git_output_ready(self):
-        """Handle output from git process"""
-        if self.git_process is None:
-            return
-        
-        # Read stdout
-        stdout = self.git_process.readAllStandardOutput().data().decode('utf-8', errors='replace')
-        if stdout:
-            self.git_output += stdout
-            # Remove trailing newline for display to avoid double spacing
-            self.update_popout.append_output(stdout.rstrip('\n'))
-        
-        # Read stderr
-        stderr = self.git_process.readAllStandardError().data().decode('utf-8', errors='replace')
-        if stderr:
-            self.git_output += stderr
-            self.update_popout.append_output(stderr.rstrip('\n'))
-    
-    def on_git_finished(self, exit_code, exit_status):
-        """Handle git process completion"""
-        _git_debug_log(f"on_git_finished: exit_code={exit_code}, exit_status={exit_status}")
-        _git_debug_log(f"on_git_finished: git_output={self.git_output[:500] if self.git_output else '(empty)'}")
-        # Clear the shared flag since git operation is complete
-        _git_debug_log("on_git_finished: Clearing flag to False")
-        set_git_operation_in_progress(False)
-        
-        # Stop animation timer
+        self.checking_animation_timer.start(500)
+        self.update_service.run_pull()
+
+    def on_update_service_output(self, text):
+        """Append git output to the update popout."""
+        if hasattr(self, 'update_popout'):
+            self.update_popout.append_output(text)
+
+    def on_update_service_finished(self, result):
+        """Handle completion of the update workflow."""
         self.checking_animation_timer.stop()
-        
-        # Append completion message
-        self.update_popout.append_output(f"\nProcess finished with exit code: {exit_code}")
-        
-        # Check for errors
-        if exit_code != 0 or self.has_git_error():
-            _git_debug_log(f"on_git_finished: Error detected - exit_code={exit_code}, has_git_error={self.has_git_error()}")
+
+        if result.get("has_error"):
             self.update_button.setText("Error Updating")
             self.set_update_button_color("red")
+            return
+
+        if result.get("has_updates"):
+            self.update_button.setText("Reboot")
+            self.set_update_button_color("orange")
+            commit_message = result.get("commit_message")
+            if commit_message and hasattr(self, 'update_popout'):
+                self.update_popout.show_success_message(commit_message)
+            self.hide_update_notification()
         else:
-            # Check if updates were found
-            has_updates = self.parse_git_output()
-            
-            if has_updates:
-                self.update_button.setText("Reboot")
-                self.set_update_button_color("orange")  # Stay orange to indicate action needed
-                # Get the latest commit message and display it
-                commit_message = self.get_latest_commit_message()
-                if commit_message:
-                    self.update_popout.show_success_message(commit_message)
-                # Clear the update available notification since we just applied it
-                self.update_available = False
-                self.hide_update_notification()
-            else:
-                self.update_button.setText("Up to date!")
-                self.set_update_button_color("green")
-                # Also clear update notification if we're up to date
-                self.update_available = False
-                self.hide_update_notification()
-    
-    def has_git_error(self):
-        """Check if git output contains error indicators"""
-        output_lower = self.git_output.lower()
-        error_indicators = [
-            "error:",
-            "fatal:",
-            "could not",
-            "failed to",
-            "permission denied",
-            "cannot"
-        ]
-        
-        for indicator in error_indicators:
-            if indicator in output_lower:
-                return True
-        
-        return False
-    
-    def parse_git_output(self):
-        """Parse git output to determine if updates occurred"""
-        output_lower = self.git_output.lower()
-        
-        # Check for "already up to date" or "already up-to-date"
-        if "already up to date" in output_lower or "already up-to-date" in output_lower:
-            return False
-        
-        # Check for indicators of updates
-        update_indicators = [
-            "updating",
-            "fast-forward",
-            "files changed",
-            "file changed",
-            "insertions",
-            "deletions"
-        ]
-        
-        for indicator in update_indicators:
-            if indicator in output_lower:
-                return True
-        
-        # If exit code was 0 and we have output but no "already up to date", assume updates
-        if self.git_output and "error" not in output_lower and "fatal" not in output_lower:
-            # Check if there's actual content beyond just "From" lines
-            lines = [line.strip() for line in self.git_output.split('\n') if line.strip()]
-            substantial_lines = [line for line in lines if not line.startswith('From') and not line.startswith('remote:')]
-            if len(substantial_lines) > 1:  # More than just the git pull command echo
-                return True
-        
-        return False
-    
-    def get_latest_commit_message(self):
-        """Get the message text of the latest commit"""
-        try:
-            result = subprocess.run(
-                ["git", "log", "-1", "--format=%s"],
-                cwd=os.path.dirname(os.path.abspath(__file__)),
-                capture_output=True,
-                text=True,
-                timeout=5
-            )
-            if result.returncode == 0 and result.stdout.strip():
-                return result.stdout.strip()
-        except Exception:
-            pass
-        return None
-    
-    def check_for_git_updates(self):
-        """Check for available git updates in the background (non-destructive)"""
-        # Don't start a new check if one is already running
-        if self.git_fetch_process is not None and self.git_fetch_process.state() == QProcess.Running:
-            _git_debug_log("check_for_git_updates: Skipping - local git_fetch_process still running")
-            return
-        
-        # Don't start if web server has a git operation in progress
-        if is_git_operation_in_progress():
-            _git_debug_log("check_for_git_updates: Skipping - web server git operation in progress")
-            return
-        
-        _git_debug_log("check_for_git_updates: Starting background git fetch")
-        # Set the shared flag so web server knows we're doing git operations
-        set_git_operation_in_progress(True)
-        
-        # Create and configure QProcess for git fetch
-        self.git_fetch_process = QProcess()
-        self.git_fetch_process.setWorkingDirectory(os.path.dirname(os.path.abspath(__file__)))
-        self.git_fetch_process.finished.connect(self.on_git_fetch_finished)
-        
-        # Start git fetch
-        _git_debug_log("check_for_git_updates: Starting 'git fetch' via QProcess")
-        self.git_fetch_process.start("git", ["fetch"])
-    
-    def on_git_fetch_finished(self, exit_code, exit_status):
-        """Handle git fetch completion and check if updates are available"""
-        _git_debug_log(f"on_git_fetch_finished: exit_code={exit_code}, exit_status={exit_status}")
-        # Clear the shared flag since git operation is complete
-        _git_debug_log("on_git_fetch_finished: Clearing flag to False")
-        set_git_operation_in_progress(False)
-        
-        if exit_code != 0:
-            _git_debug_log(f"on_git_fetch_finished: Fetch failed with exit_code={exit_code}")
-            # Fetch failed, just skip this check
-            return
-        
-        # Now compare local HEAD with remote
-        cwd = os.path.dirname(os.path.abspath(__file__))
-        
-        try:
-            # Get local HEAD
-            local_result = subprocess.run(
-                ["git", "rev-parse", "HEAD"],
-                cwd=cwd,
-                capture_output=True,
-                text=True,
-                timeout=5
-            )
-            
-            if local_result.returncode != 0:
-                return
-            
-            local_head = local_result.stdout.strip()
-            
-            # Try to get remote HEAD (origin/main first, then origin/master)
-            remote_head = None
-            for branch in ["origin/main", "origin/master"]:
-                remote_result = subprocess.run(
-                    ["git", "rev-parse", branch],
-                    cwd=cwd,
-                    capture_output=True,
-                    text=True,
-                    timeout=5
-                )
-                if remote_result.returncode == 0:
-                    remote_head = remote_result.stdout.strip()
-                    break
-            
-            if remote_head is None:
-                return
-            
-            # Check if updates are available
-            if local_head != remote_head and not self.update_available:
-                self.update_available = True
-                self.show_update_notification()
-            elif local_head == remote_head and self.update_available:
-                # Updates were applied (heads now match), clear notification
-                self.update_available = False
-                self.hide_update_notification()
-                
-        except Exception:
-            # Silently fail - this is a background check
-            pass
+            self.update_button.setText("Up to date!")
+            self.set_update_button_color("green")
+            self.hide_update_notification()
+
+    def on_update_available_changed(self, available):
+        """Reflect update availability in the UI."""
+        if available:
+            self.show_update_notification()
+        else:
+            self.hide_update_notification()
     
     def show_update_notification(self):
         """Show the update available notification in the UI"""
@@ -2228,7 +1364,7 @@ class MainWindow(QMainWindow):
     def show_shutdown_popout(self):
         """Show the shutdown popout near the Shutdown/Exit button"""
         if not hasattr(self, 'shutdown_popout'):
-            self.shutdown_popout = ShutdownPopout(self.settings_page)
+            self.shutdown_popout = ShutdownPopout(self.config_store, self.settings_page)
             # Connect button signals
             self.shutdown_popout.reboot_button.clicked.connect(self.on_reboot_button_clicked)
             self.shutdown_popout.shutdown_button.clicked.connect(self.on_shutdown_button_clicked)
@@ -2330,12 +1466,11 @@ class MainWindow(QMainWindow):
         # Close the popout
         self.close_shutdown_popout()
         
-        # Execute shutdown command for RasPi
-        os.system("sudo shutdown now")
+        self.system_service.shutdown()
     
     def check_reboot_schedule(self):
         """Check if it's time to trigger the reboot countdown"""
-        config = config_handler.load_config()
+        config = self.config_store.load()
         reboot_enabled = config.get('reboot_enabled', False)
         
         if not reboot_enabled:
@@ -2385,7 +1520,7 @@ class MainWindow(QMainWindow):
         
         # Create and show overlay
         if self.reboot_warning_overlay is None:
-            self.reboot_warning_overlay = RebootWarningOverlay(self)
+            self.reboot_warning_overlay = RebootWarningOverlay(self.config_store, self)
             self.reboot_warning_overlay.cancel_button.clicked.connect(self.cancel_reboot)
         
         # Set overlay to cover the entire window
@@ -2431,24 +1566,14 @@ class MainWindow(QMainWindow):
         # Close the popout
         self.close_shutdown_popout()
         
-        # Execute reboot command for RasPi
-        os.system("sudo shutdown -r now")
+        self.system_service.reboot()
     
     def apply_screen_sleep_settings(self):
         """Apply screen sleep settings to the system using xset commands"""
-        config = config_handler.load_config()
+        config = self.config_store.load()
         screen_sleep_enabled = config.get('screen_sleep_enabled', False)
         screen_sleep_minutes = config.get('screen_sleep_minutes', 5)
-        
-        if screen_sleep_enabled:
-            # Convert minutes to seconds
-            timeout_seconds = screen_sleep_minutes * 60
-            
-            # Enable screen saver with timeout
-            os.system(f"xset s {timeout_seconds}")
-        else:
-            # Disable screen saver
-            os.system("xset s off")
+        self.system_service.apply_screen_sleep_settings(screen_sleep_enabled, screen_sleep_minutes)
     
     def create_title_bar(self, button_widget, countdown_label=None, center_widget=None, update_notification_label=None):
         """Create a title bar with fixed center widget regardless of left/right widths"""
@@ -2515,7 +1640,7 @@ class MainWindow(QMainWindow):
             return
         
         # Reload message config to get latest settings
-        self.message_config = message_handler.load_messages()
+        self.message_config = self.message_store.load()
         
         # Set up timer to check for web triggers
         self.web_trigger_check_timer = QTimer()
@@ -2528,12 +1653,12 @@ class MainWindow(QMainWindow):
     def check_for_web_trigger(self):
         """Check if there's a pending message trigger or settings change from the web interface"""
         # Check for message trigger
-        trigger = get_pending_message_trigger()
+        trigger = self.settings_server.get_pending_message_trigger()
         if trigger is not False:  # False means no trigger, None or a string means trigger
             self.trigger_message_display(trigger)
         
         # Check for settings change
-        if get_pending_settings_change():
+        if self.settings_server.get_pending_settings_change():
             self.handle_settings_changed()
     
     def handle_settings_changed(self):
@@ -2677,7 +1802,7 @@ class MainWindow(QMainWindow):
             return
         
         # Reload config to get latest messages
-        self.message_config = message_handler.load_messages()
+        self.message_config = self.message_store.load()
         messages_list = self.message_config.get("messages", [])
         
         if not messages_list:
@@ -2793,48 +1918,46 @@ class MainWindow(QMainWindow):
         self.current_fade_animation.finished.connect(on_finished)
         self.current_fade_animation.start()
     
-    def create_startup_page(self):
-        """Create the startup/loading page shown before API connection"""
-        page = QWidget()
-        page.setStyleSheet("background-color: lightgray;")
-        
-        # Main layout to center content vertically and horizontally
-        main_layout = QVBoxLayout()
-        main_layout.setContentsMargins(0, 0, 0, 0)
-        main_layout.setSpacing(0)
-        
-        # Add stretch to push content to center
-        main_layout.addStretch()
-        
-        # Center container for title and status
+    def build_startup_center_container(self):
         center_container = QWidget()
         center_layout = QVBoxLayout()
         center_layout.setAlignment(Qt.AlignCenter)
         center_layout.setSpacing(20)
-        
-        # Title label - large and centered
+
         self.startup_title_label = QLabel(self.default_title_text)
-        self.startup_title_label.setStyleSheet(f"font-family: {self.font_family}; font-size: 48px; font-weight: bold; color: #333;")
+        self.startup_title_label.setStyleSheet(
+            f"font-family: {self.font_family}; font-size: 48px; font-weight: bold; color: #333;"
+        )
         self.startup_title_label.setAlignment(Qt.AlignCenter)
         center_layout.addWidget(self.startup_title_label)
-        
-        # Status label - smaller, below title
+
         self.startup_status_label = QLabel("Connecting to Metro API...")
-        self.startup_status_label.setStyleSheet(f"font-family: {self.font_family}; font-size: 24px; color: #666;")
+        self.startup_status_label.setStyleSheet(
+            f"font-family: {self.font_family}; font-size: 24px; color: #666;"
+        )
         self.startup_status_label.setAlignment(Qt.AlignCenter)
         center_layout.addWidget(self.startup_status_label)
-        
-        # Buttons container (initially hidden)
-        self.startup_buttons_container = QWidget()
+
+        self.startup_buttons_container = self.build_startup_buttons_container()
+        center_layout.addWidget(self.startup_buttons_container)
+
+        self.startup_wifi_buttons_container = self.build_startup_wifi_buttons_container()
+        center_layout.addWidget(self.startup_wifi_buttons_container)
+
+        center_container.setLayout(center_layout)
+        return center_container
+
+    def build_startup_buttons_container(self):
+        container = QWidget()
         buttons_layout = QHBoxLayout()
         buttons_layout.setContentsMargins(0, 20, 0, 0)
         buttons_layout.setSpacing(20)
         buttons_layout.setAlignment(Qt.AlignCenter)
-        
-        # Exit to Desktop button
+
         self.startup_exit_button = QPushButton("Exit to Desktop")
         self.startup_exit_button.setMinimumWidth(180)
-        self.startup_exit_button.setStyleSheet("""
+        self.startup_exit_button.setStyleSheet(
+            """
             QPushButton {
                 font-family: {self.font_family};
                 font-size: 18px;
@@ -2851,14 +1974,15 @@ class MainWindow(QMainWindow):
                 background-color: #c0c0c0;
                 padding-bottom: 9px;
             }
-        """)
+        """
+        )
         self.startup_exit_button.clicked.connect(QApplication.instance().quit)
         buttons_layout.addWidget(self.startup_exit_button)
-        
-        # Reboot button
+
         self.startup_reboot_button = QPushButton("Reboot")
         self.startup_reboot_button.setMinimumWidth(180)
-        self.startup_reboot_button.setStyleSheet("""
+        self.startup_reboot_button.setStyleSheet(
+            """
             QPushButton {
                 font-family: {self.font_family};
                 font-size: 18px;
@@ -2875,14 +1999,15 @@ class MainWindow(QMainWindow):
                 background-color: #c0c0c0;
                 padding-bottom: 9px;
             }
-        """)
+        """
+        )
         self.startup_reboot_button.clicked.connect(self.perform_system_reboot)
         buttons_layout.addWidget(self.startup_reboot_button)
-        
-        # Shutdown button
+
         self.startup_shutdown_button = QPushButton("Shutdown")
         self.startup_shutdown_button.setMinimumWidth(180)
-        self.startup_shutdown_button.setStyleSheet("""
+        self.startup_shutdown_button.setStyleSheet(
+            """
             QPushButton {
                 font-family: {self.font_family};
                 font-size: 18px;
@@ -2899,25 +2024,26 @@ class MainWindow(QMainWindow):
                 background-color: #c0c0c0;
                 padding-bottom: 9px;
             }
-        """)
+        """
+        )
         self.startup_shutdown_button.clicked.connect(self.perform_system_shutdown)
         buttons_layout.addWidget(self.startup_shutdown_button)
-        
-        self.startup_buttons_container.setLayout(buttons_layout)
-        self.startup_buttons_container.hide()  # Initially hidden
-        center_layout.addWidget(self.startup_buttons_container)
-        
-        # WiFi-specific buttons container (for no WiFi connection state)
-        self.startup_wifi_buttons_container = QWidget()
+
+        container.setLayout(buttons_layout)
+        container.hide()
+        return container
+
+    def build_startup_wifi_buttons_container(self):
+        container = QWidget()
         wifi_buttons_layout = QHBoxLayout()
         wifi_buttons_layout.setContentsMargins(0, 20, 0, 0)
         wifi_buttons_layout.setSpacing(20)
         wifi_buttons_layout.setAlignment(Qt.AlignCenter)
-        
-        # Launch Setup button (left)
+
         self.startup_launch_setup_button = QPushButton("Launch Setup")
         self.startup_launch_setup_button.setMinimumWidth(180)
-        self.startup_launch_setup_button.setStyleSheet(f"""
+        self.startup_launch_setup_button.setStyleSheet(
+            f"""
             QPushButton {{
                 font-family: {self.font_family};
                 font-size: 18px;
@@ -2934,14 +2060,15 @@ class MainWindow(QMainWindow):
                 background-color: #c0c0c0;
                 padding-bottom: 9px;
             }}
-        """)
+        """
+        )
         self.startup_launch_setup_button.clicked.connect(self.launch_wifi_setup)
         wifi_buttons_layout.addWidget(self.startup_launch_setup_button)
-        
-        # Reboot button (middle)
+
         self.startup_wifi_reboot_button = QPushButton("Reboot")
         self.startup_wifi_reboot_button.setMinimumWidth(180)
-        self.startup_wifi_reboot_button.setStyleSheet(f"""
+        self.startup_wifi_reboot_button.setStyleSheet(
+            f"""
             QPushButton {{
                 font-family: {self.font_family};
                 font-size: 18px;
@@ -2958,14 +2085,15 @@ class MainWindow(QMainWindow):
                 background-color: #c0c0c0;
                 padding-bottom: 9px;
             }}
-        """)
+        """
+        )
         self.startup_wifi_reboot_button.clicked.connect(self.perform_system_reboot)
         wifi_buttons_layout.addWidget(self.startup_wifi_reboot_button)
-        
-        # Shutdown button (right)
+
         self.startup_wifi_shutdown_button = QPushButton("Shutdown")
         self.startup_wifi_shutdown_button.setMinimumWidth(180)
-        self.startup_wifi_shutdown_button.setStyleSheet(f"""
+        self.startup_wifi_shutdown_button.setStyleSheet(
+            f"""
             QPushButton {{
                 font-family: {self.font_family};
                 font-size: 18px;
@@ -2982,52 +2110,55 @@ class MainWindow(QMainWindow):
                 background-color: #c0c0c0;
                 padding-bottom: 9px;
             }}
-        """)
+        """
+        )
         self.startup_wifi_shutdown_button.clicked.connect(self.perform_system_shutdown)
         wifi_buttons_layout.addWidget(self.startup_wifi_shutdown_button)
-        
-        self.startup_wifi_buttons_container.setLayout(wifi_buttons_layout)
-        self.startup_wifi_buttons_container.hide()  # Initially hidden
-        center_layout.addWidget(self.startup_wifi_buttons_container)
 
-        
-        center_container.setLayout(center_layout)
-        main_layout.addWidget(center_container)
-        
-        # Add stretch to push content to center
+        container.setLayout(wifi_buttons_layout)
+        container.hide()
+        return container
+
+    def create_startup_page(self):
+        """Create the startup/loading page shown before API connection"""
+        page = QWidget()
+        page.setStyleSheet("background-color: lightgray;")
+
+        main_layout = QVBoxLayout()
+        main_layout.setContentsMargins(0, 0, 0, 0)
+        main_layout.setSpacing(0)
+
         main_layout.addStretch()
-        
+        main_layout.addWidget(self.build_startup_center_container())
+        main_layout.addStretch()
+
         page.setLayout(main_layout)
         return page
-    
-    def create_home_page(self):
-        """Create the home page"""
-        page = QWidget()
-        layout = QVBoxLayout()
-        layout.setContentsMargins(0, 0, 0, 0)
-        layout.setSpacing(0)
-        
-        # Create countdown label
+
+    def build_home_title_bar(self):
         self.refresh_countdown_label = QLabel("Refresh in 30s")
-        self.refresh_countdown_label.setStyleSheet(f"font-family: {self.font_family}; font-size: 14px; color: #666; padding: 0px;")
-        self.refresh_countdown_label.setMaximumWidth(500)  # Prevent overlap with title and buttons
+        self.refresh_countdown_label.setStyleSheet(
+            f"font-family: {self.font_family}; font-size: 14px; color: #666; padding: 0px;"
+        )
+        self.refresh_countdown_label.setMaximumWidth(500)
         self.refresh_countdown_label.setWordWrap(False)
         self.refresh_countdown_label.setSizePolicy(QSizePolicy.Maximum, QSizePolicy.Preferred)
         self.refresh_countdown_label.setContentsMargins(0, 0, 0, 0)
         self.refresh_countdown_label.setMargin(0)
         self.refresh_countdown_label.setIndent(0)
-        
-        # Create clock label and timer
+
         self.clock_label = QLabel()
-        self.clock_label.setStyleSheet(f"font-family: {self.font_family}; font-size: 30px; font-weight: bold;")
+        self.clock_label.setStyleSheet(
+            f"font-family: {self.font_family}; font-size: 30px; font-weight: bold;"
+        )
         self.update_clock()
         self.clock_timer = QTimer()
         self.clock_timer.timeout.connect(self.update_clock)
         self.clock_timer.start(1000)
-        
-        # Create update notification label (initially hidden)
+
         self.update_notification_label = QLabel("Update Available")
-        self.update_notification_label.setStyleSheet("""
+        self.update_notification_label.setStyleSheet(
+            """
             font-family: {self.font_family};
             font-size: 14px;
             font-weight: bold;
@@ -3035,12 +2166,13 @@ class MainWindow(QMainWindow):
             background-color: #d4edda;
             padding: 5px 10px;
             border-radius: 4px;
-        """)
-        self.update_notification_label.hide()  # Hidden by default
-        
-        # Create settings button
+        """
+        )
+        self.update_notification_label.hide()
+
         settings_button = QPushButton("⚙")
-        settings_button.setStyleSheet("""
+        settings_button.setStyleSheet(
+            """
             QPushButton {
                 font-family: {self.font_family};
                 font-size: 22px;
@@ -3057,13 +2189,14 @@ class MainWindow(QMainWindow):
                 background-color: #909090;
                 padding-bottom: 4px;
             }
-        """)
+        """
+        )
         settings_button.setFixedHeight(45)
         settings_button.clicked.connect(self.open_settings_page)
-        
-        # Create close button
+
         close_button = QPushButton("✕")
-        close_button.setStyleSheet("""
+        close_button.setStyleSheet(
+            """
             QPushButton {
                 font-family: {self.font_family};
                 font-size: 22px;
@@ -3080,11 +2213,11 @@ class MainWindow(QMainWindow):
                 background-color: #909090;
                 padding-bottom: 4px;
             }
-        """)
+        """
+        )
         close_button.setFixedHeight(45)
         close_button.clicked.connect(QApplication.instance().quit)
-        
-        # Create container widget for both buttons
+
         buttons_container = QWidget()
         buttons_container.setStyleSheet("background-color: lightgray;")
         buttons_layout = QHBoxLayout()
@@ -3093,56 +2226,114 @@ class MainWindow(QMainWindow):
         buttons_layout.addWidget(settings_button)
         buttons_layout.addWidget(close_button)
         buttons_container.setLayout(buttons_layout)
-        
-        # Add title bar with centered clock and update notification
-        layout.addWidget(self.create_title_bar(
-            buttons_container, 
-            self.refresh_countdown_label, 
+
+        title_bar = self.create_title_bar(
+            buttons_container,
+            self.refresh_countdown_label,
             self.clock_label,
-            self.update_notification_label
-        ))
-        
-        # Capture the home page title label and add opacity effect for animations
+            self.update_notification_label,
+        )
         self.home_title_label = self._last_title_label
+        return title_bar
+
+    def configure_home_title_effect(self):
         self.title_opacity_effect = QGraphicsOpacityEffect()
         self.title_opacity_effect.setOpacity(1.0)
         self.home_title_label.setGraphicsEffect(self.title_opacity_effect)
-        
-        # Add content
+
+    def build_home_arrivals_content(self):
         content_layout = QVBoxLayout()
         content_layout.setContentsMargins(20, 20, 20, 20)
         content_layout.setSpacing(0)
-        
-        # Create 5 arrival rows
+
         self.arrival_rows = []
         for i in range(5):
             row = self.create_arrival_row(i)
             self.arrival_rows.append(row)
             content_layout.addWidget(row)
-        
+
         content_layout.addStretch()
-        
+
         content_widget = QWidget()
         content_widget.setLayout(content_layout)
-        layout.addWidget(content_widget)
-        
-        page.setLayout(layout)
-        
-        # Initialize message system now that title_label is created
-        self.setup_message_system()
-        
-        return page
+        return content_widget
     
-    def create_settings_page(self):
-        """Create the settings page"""
+    def create_home_page(self):
+        """Create the home page"""
         page = QWidget()
         layout = QVBoxLayout()
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(0)
-        
-        # Create back button
+
+        layout.addWidget(self.build_home_title_bar())
+        self.configure_home_title_effect()
+
+        layout.addWidget(self.build_home_arrivals_content())
+        page.setLayout(layout)
+
+        self.setup_message_system()
+        return page
+
+    def combo_box_stylesheet(self):
+        return """
+            QComboBox {
+                font-family: {self.font_family};
+                font-size: 18px;
+                padding: 7px;
+                border: 1px solid #ccc;
+                border-radius: 3px;
+                background-color: white;
+            }
+            QComboBox:hover {
+                border: 1px solid #999;
+            }
+            QComboBox QAbstractItemView {
+                font-family: {self.font_family};
+                font-size: 18px;
+                background-color: white;
+                selection-background-color: #e0e0e0;
+                selection-color: #000;
+                color: #000;
+            }
+            QComboBox QAbstractItemView::item {
+                color: #000;
+                padding: 5px;
+            }
+            QComboBox QAbstractItemView::item:selected {
+                background-color: #e0e0e0;
+                color: #000;
+            }
+            QComboBox QAbstractItemView::item:hover {
+                background-color: #e0e0e0;
+                color: #000;
+            }
+        """
+
+    def checkbox_indicator_stylesheet(self):
+        return """
+            QCheckBox {
+                spacing: 5px;
+            }
+            QCheckBox::indicator {
+                width: 25px;
+                height: 25px;
+                border: 2px solid #ccc;
+                border-radius: 3px;
+                background-color: white;
+            }
+            QCheckBox::indicator:hover {
+                border: 2px solid #999;
+            }
+            QCheckBox::indicator:checked {
+                background-color: #4CAF50;
+                border: 2px solid #4CAF50;
+            }
+        """
+
+    def build_settings_back_button(self):
         back_button = QPushButton("←")
-        back_button.setStyleSheet(f"""
+        back_button.setStyleSheet(
+            f"""
             QPushButton {{
                 font-family: {self.font_family};
                 font-size: 22px;
@@ -3159,438 +2350,282 @@ class MainWindow(QMainWindow):
                 background-color: #909090;
                 padding-bottom: 4px;
             }}
-        """)
+        """
+        )
         back_button.setFixedHeight(45)
         back_button.clicked.connect(self.close_settings_page)
-        
-        # Add title bar
-        layout.addWidget(self.create_title_bar(back_button))
-        
-        # Capture the settings page title label
-        self.settings_title_label = self._last_title_label
-        
-        # Add settings subtitle
-        content_layout = QVBoxLayout()
+        return back_button
+
+    def build_settings_heading(self):
+        heading_layout = QVBoxLayout()
         settings_label = QLabel("Settings")
-        settings_label.setStyleSheet(f"font-family: {self.font_family}; font-size: 28px; font-weight: bold;")
+        settings_label.setStyleSheet(
+            f"font-family: {self.font_family}; font-size: 28px; font-weight: bold;"
+        )
         settings_label.setAlignment(Qt.AlignCenter)
-        content_layout.addWidget(settings_label)
-        content_layout.addSpacing(10)
+        heading_layout.addWidget(settings_label)
+        heading_layout.addSpacing(10)
+        return heading_layout
 
-        controls_layout = QHBoxLayout()
-        controls_layout.setContentsMargins(40, 20, 40, 0)
-        controls_layout.setSpacing(0)  # Set to 0, will manually add spacing for separator
-
+    def build_settings_selectors_column(self, label_width):
         selectors_column_layout = QVBoxLayout()
         selectors_column_layout.setSpacing(20)
         selectors_column_layout.setAlignment(Qt.AlignTop)
+        selectors_column_layout.addLayout(self.build_line_selector_row(label_width))
+        selectors_column_layout.addLayout(self.build_station_selector_row(label_width))
+        selectors_column_layout.addLayout(self.build_destination_selector_row(label_width))
+        return selectors_column_layout
 
+    def build_line_selector_row(self, label_width):
+        line_selector_layout = QHBoxLayout()
+        line_selector_layout.setContentsMargins(0, 0, 0, 0)
+
+        line_label = QLabel("Select Line:")
+        line_label.setStyleSheet(
+            f"font-family: {self.font_family}; font-size: 21px; font-weight: bold;"
+        )
+        line_label.setFixedWidth(label_width)
+        line_selector_layout.addWidget(line_label)
+
+        self.line_combo = QComboBox()
+        self.line_combo.setStyleSheet(self.combo_box_stylesheet())
+        self.line_combo.setMinimumWidth(265)
+        self.configure_combo_for_touchscreen(self.line_combo)
+        self.line_combo.currentIndexChanged.connect(self.on_line_selected)
+        self.line_combo.currentIndexChanged.connect(self.mark_settings_changed)
+        line_selector_layout.addWidget(self.line_combo)
+        line_selector_layout.addStretch()
+        return line_selector_layout
+
+    def build_station_selector_row(self, label_width):
+        station_selector_layout = QHBoxLayout()
+        station_selector_layout.setContentsMargins(0, 0, 0, 0)
+
+        station_label = QLabel("Select Station:")
+        station_label.setStyleSheet(
+            f"font-family: {self.font_family}; font-size: 21px; font-weight: bold;"
+        )
+        station_label.setFixedWidth(label_width)
+        station_selector_layout.addWidget(station_label)
+
+        self.station_combo = QComboBox()
+        self.station_combo.setStyleSheet(self.combo_box_stylesheet())
+        self.station_combo.setMinimumWidth(265)
+        self.configure_combo_for_touchscreen(self.station_combo)
+        self.station_combo.currentIndexChanged.connect(self.on_station_selected)
+        self.station_combo.currentIndexChanged.connect(self.mark_settings_changed)
+        station_selector_layout.addWidget(self.station_combo)
+        station_selector_layout.addStretch()
+        return station_selector_layout
+
+    def build_destination_selector_row(self, label_width):
+        destination_selector_layout = QHBoxLayout()
+        destination_selector_layout.setContentsMargins(0, 0, 0, 0)
+
+        destination_label = QLabel("Select Destination:")
+        destination_label.setStyleSheet(
+            f"font-family: {self.font_family}; font-size: 21px; font-weight: bold;"
+        )
+        destination_label.setFixedWidth(label_width)
+        destination_selector_layout.addWidget(destination_label)
+
+        self.destination_combo = QComboBox()
+        self.destination_combo.setStyleSheet(self.combo_box_stylesheet())
+        self.destination_combo.setMinimumWidth(265)
+        self.configure_combo_for_touchscreen(self.destination_combo)
+        self.destination_combo.currentIndexChanged.connect(self.on_destination_selected)
+        self.destination_combo.currentIndexChanged.connect(self.mark_settings_changed)
+        destination_selector_layout.addWidget(self.destination_combo)
+        destination_selector_layout.addStretch()
+        return destination_selector_layout
+
+    def build_settings_checkboxes_column(self, label_width):
         checkboxes_column_layout = QVBoxLayout()
         checkboxes_column_layout.setSpacing(20)
         checkboxes_column_layout.setAlignment(Qt.AlignTop)
+        checkboxes_column_layout.addLayout(self.build_countdown_checkbox_row(label_width))
+        checkboxes_column_layout.addLayout(self.build_clock_checkbox_row(label_width))
+        checkboxes_column_layout.addLayout(self.build_filter_destination_checkbox_row(label_width))
+        checkboxes_column_layout.addLayout(self.build_filter_direction_checkbox_row(label_width))
+        return checkboxes_column_layout
 
-        selectors_label_width = 190
-        checkboxes_label_width = 310
-
-        # Add line selector
-        line_selector_layout = QHBoxLayout()
-        line_selector_layout.setContentsMargins(0, 0, 0, 0)
-        
-        line_label = QLabel("Select Line:")
-        line_label.setStyleSheet(f"font-family: {self.font_family}; font-size: 21px; font-weight: bold;")
-        line_label.setFixedWidth(selectors_label_width)
-        line_selector_layout.addWidget(line_label)
-        
-        self.line_combo = QComboBox()
-        self.line_combo.setStyleSheet("""
-            QComboBox {
-                font-family: {self.font_family};
-                font-size: 18px;
-                padding: 7px;
-                border: 1px solid #ccc;
-                border-radius: 3px;
-                background-color: white;
-            }
-            QComboBox:hover {
-                border: 1px solid #999;
-            }
-            QComboBox QAbstractItemView {
-                font-family: {self.font_family};
-                font-size: 18px;
-                background-color: white;
-                selection-background-color: #e0e0e0;
-                selection-color: #000;
-                color: #000;
-            }
-            QComboBox QAbstractItemView::item {
-                color: #000;
-                padding: 5px;
-            }
-            QComboBox QAbstractItemView::item:selected {
-                background-color: #e0e0e0;
-                color: #000;
-            }
-            QComboBox QAbstractItemView::item:hover {
-                background-color: #e0e0e0;
-                color: #000;
-            }
-        """)
-        self.line_combo.setMinimumWidth(265)
-        
-        # Configure for touchscreen use
-        self.configure_combo_for_touchscreen(self.line_combo)
-        
-        # Connect selection change to save config (connect before populating to ensure signals work)
-        self.line_combo.currentIndexChanged.connect(self.on_line_selected)
-        self.line_combo.currentIndexChanged.connect(self.mark_settings_changed)
-        
-        line_selector_layout.addWidget(self.line_combo)
-        line_selector_layout.addStretch()
-        selectors_column_layout.addLayout(line_selector_layout)
-        
-        # Add station selector
-        station_selector_layout = QHBoxLayout()
-        station_selector_layout.setContentsMargins(0, 0, 0, 0)
-        
-        station_label = QLabel("Select Station:")
-        station_label.setStyleSheet(f"font-family: {self.font_family}; font-size: 21px; font-weight: bold;")
-        station_label.setFixedWidth(selectors_label_width)
-        station_selector_layout.addWidget(station_label)
-        
-        self.station_combo = QComboBox()
-        self.station_combo.setStyleSheet("""
-            QComboBox {
-                font-family: {self.font_family};
-                font-size: 18px;
-                padding: 7px;
-                border: 1px solid #ccc;
-                border-radius: 3px;
-                background-color: white;
-            }
-            QComboBox:hover {
-                border: 1px solid #999;
-            }
-            QComboBox QAbstractItemView {
-                font-family: {self.font_family};
-                font-size: 18px;
-                background-color: white;
-                selection-background-color: #e0e0e0;
-                selection-color: #000;
-                color: #000;
-            }
-            QComboBox QAbstractItemView::item {
-                color: #000;
-                padding: 5px;
-            }
-            QComboBox QAbstractItemView::item:selected {
-                background-color: #e0e0e0;
-                color: #000;
-            }
-            QComboBox QAbstractItemView::item:hover {
-                background-color: #e0e0e0;
-                color: #000;
-            }
-        """)
-        self.station_combo.setMinimumWidth(265)
-        
-        # Configure for touchscreen use
-        self.configure_combo_for_touchscreen(self.station_combo)
-        
-        # Connect selection change to save config
-        self.station_combo.currentIndexChanged.connect(self.on_station_selected)
-        self.station_combo.currentIndexChanged.connect(self.mark_settings_changed)
-        
-        station_selector_layout.addWidget(self.station_combo)
-        station_selector_layout.addStretch()
-        selectors_column_layout.addLayout(station_selector_layout)
-        
-        # Add destination selector
-        destination_selector_layout = QHBoxLayout()
-        destination_selector_layout.setContentsMargins(0, 0, 0, 0)
-        
-        destination_label = QLabel("Select Destination:")
-        destination_label.setStyleSheet(f"font-family: {self.font_family}; font-size: 21px; font-weight: bold;")
-        destination_label.setFixedWidth(selectors_label_width)
-        destination_selector_layout.addWidget(destination_label)
-        
-        self.destination_combo = QComboBox()
-        self.destination_combo.setStyleSheet("""
-            QComboBox {
-                font-family: {self.font_family};
-                font-size: 18px;
-                padding: 7px;
-                border: 1px solid #ccc;
-                border-radius: 3px;
-                background-color: white;
-            }
-            QComboBox:hover {
-                border: 1px solid #999;
-            }
-            QComboBox QAbstractItemView {
-                font-family: {self.font_family};
-                font-size: 18px;
-                background-color: white;
-                selection-background-color: #e0e0e0;
-                selection-color: #000;
-                color: #000;
-            }
-            QComboBox QAbstractItemView::item {
-                color: #000;
-                padding: 5px;
-            }
-            QComboBox QAbstractItemView::item:selected {
-                background-color: #e0e0e0;
-                color: #000;
-            }
-            QComboBox QAbstractItemView::item:hover {
-                background-color: #e0e0e0;
-                color: #000;
-            }
-        """)
-        self.destination_combo.setMinimumWidth(265)
-        
-        # Configure for touchscreen use
-        self.configure_combo_for_touchscreen(self.destination_combo)
-        
-        # Connect selection change to save config
-        self.destination_combo.currentIndexChanged.connect(self.on_destination_selected)
-        self.destination_combo.currentIndexChanged.connect(self.mark_settings_changed)
-        
-        destination_selector_layout.addWidget(self.destination_combo)
-        destination_selector_layout.addStretch()
-        selectors_column_layout.addLayout(destination_selector_layout)
-        
-        # Add countdown visibility checkbox
+    def build_countdown_checkbox_row(self, label_width):
         countdown_checkbox_layout = QHBoxLayout()
         countdown_checkbox_layout.setContentsMargins(0, 0, 0, 0)
-        
+
         countdown_label = QLabel("Show Time to Refresh:")
-        countdown_label.setStyleSheet(f"font-family: {self.font_family}; font-size: 21px; font-weight: bold;")
-        countdown_label.setFixedWidth(checkboxes_label_width)
+        countdown_label.setStyleSheet(
+            f"font-family: {self.font_family}; font-size: 21px; font-weight: bold;"
+        )
+        countdown_label.setFixedWidth(label_width)
         countdown_checkbox_layout.addWidget(countdown_label)
-        
+
         self.show_countdown_checkbox = QCheckBox()
-        self.show_countdown_checkbox.setStyleSheet("""
-            QCheckBox {
-                spacing: 5px;
-            }
-            QCheckBox::indicator {
-                width: 25px;
-                height: 25px;
-                border: 2px solid #ccc;
-                border-radius: 3px;
-                background-color: white;
-            }
-            QCheckBox::indicator:hover {
-                border: 2px solid #999;
-            }
-            QCheckBox::indicator:checked {
-                background-color: #4CAF50;
-                border: 2px solid #4CAF50;
-            }
-        """)
-        self.show_countdown_checkbox.setChecked(True)  # Default to checked
-        
-        # Connect checkbox to toggle method
+        self.show_countdown_checkbox.setStyleSheet(self.checkbox_indicator_stylesheet())
+        self.show_countdown_checkbox.setChecked(True)
         self.show_countdown_checkbox.stateChanged.connect(self.toggle_countdown_visibility)
         self.show_countdown_checkbox.stateChanged.connect(self.mark_settings_changed)
-        
+
         countdown_checkbox_layout.addWidget(self.show_countdown_checkbox)
         countdown_checkbox_layout.addStretch()
-        checkboxes_column_layout.addLayout(countdown_checkbox_layout)
-        
-        # Add clock visibility checkbox
+        return countdown_checkbox_layout
+
+    def build_clock_checkbox_row(self, label_width):
         clock_checkbox_layout = QHBoxLayout()
         clock_checkbox_layout.setContentsMargins(0, 0, 0, 0)
-        
+
         clock_label = QLabel("Show Clock in Top Bar:")
-        clock_label.setStyleSheet(f"font-family: {self.font_family}; font-size: 21px; font-weight: bold;")
-        clock_label.setFixedWidth(checkboxes_label_width)
+        clock_label.setStyleSheet(
+            f"font-family: {self.font_family}; font-size: 21px; font-weight: bold;"
+        )
+        clock_label.setFixedWidth(label_width)
         clock_checkbox_layout.addWidget(clock_label)
-        
+
         self.show_clock_checkbox = QCheckBox()
         self.show_clock_checkbox.setStyleSheet(self.show_countdown_checkbox.styleSheet())
-        # Default checked; real value loaded in initialize_settings_from_config
         self.show_clock_checkbox.setChecked(True)
         self.show_clock_checkbox.stateChanged.connect(self.toggle_clock_visibility)
         self.show_clock_checkbox.stateChanged.connect(self.mark_settings_changed)
         clock_checkbox_layout.addWidget(self.show_clock_checkbox)
         clock_checkbox_layout.addStretch()
-        checkboxes_column_layout.addLayout(clock_checkbox_layout)
-        
-        # Add filter by selected destination checkbox
+        return clock_checkbox_layout
+
+    def build_filter_destination_checkbox_row(self, label_width):
         filter_checkbox_layout = QHBoxLayout()
         filter_checkbox_layout.setContentsMargins(0, 0, 0, 0)
-        
+
         filter_label = QLabel("Filter by Selected Destination:")
-        filter_label.setStyleSheet(f"font-family: {self.font_family}; font-size: 21px; font-weight: bold;")
-        filter_label.setFixedWidth(checkboxes_label_width)
+        filter_label.setStyleSheet(
+            f"font-family: {self.font_family}; font-size: 21px; font-weight: bold;"
+        )
+        filter_label.setFixedWidth(label_width)
         filter_checkbox_layout.addWidget(filter_label)
-        
+
         self.filter_by_destination_checkbox = QCheckBox()
-        self.filter_by_destination_checkbox.setStyleSheet("""
-            QCheckBox {
-                spacing: 5px;
-            }
-            QCheckBox::indicator {
-                width: 25px;
-                height: 25px;
-                border: 2px solid #ccc;
-                border-radius: 3px;
-                background-color: white;
-            }
-            QCheckBox::indicator:hover {
-                border: 2px solid #999;
-            }
-            QCheckBox::indicator:checked {
-                background-color: #4CAF50;
-                border: 2px solid #4CAF50;
-            }
-        """)
-        self.filter_by_destination_checkbox.setChecked(False)  # Default to unchecked (show all)
-        
-        # Connect checkbox to refresh arrivals
-        self.filter_by_destination_checkbox.stateChanged.connect(self.on_filter_by_destination_changed)
+        self.filter_by_destination_checkbox.setStyleSheet(self.checkbox_indicator_stylesheet())
+        self.filter_by_destination_checkbox.setChecked(False)
+        self.filter_by_destination_checkbox.stateChanged.connect(
+            self.on_filter_by_destination_changed
+        )
         self.filter_by_destination_checkbox.stateChanged.connect(self.update_arrivals_display)
         self.filter_by_destination_checkbox.stateChanged.connect(self.mark_settings_changed)
-        
+
         filter_checkbox_layout.addWidget(self.filter_by_destination_checkbox)
         filter_checkbox_layout.addStretch()
-        checkboxes_column_layout.addLayout(filter_checkbox_layout)
-        
-        # Add filter by destination direction checkbox
+        return filter_checkbox_layout
+
+    def build_filter_direction_checkbox_row(self, label_width):
         filter_direction_checkbox_layout = QHBoxLayout()
         filter_direction_checkbox_layout.setContentsMargins(0, 0, 0, 0)
-        
+
         filter_direction_label = QLabel("Filter by Destination Direction:")
-        filter_direction_label.setStyleSheet(f"font-family: {self.font_family}; font-size: 21px; font-weight: bold;")
-        filter_direction_label.setFixedWidth(checkboxes_label_width)
+        filter_direction_label.setStyleSheet(
+            f"font-family: {self.font_family}; font-size: 21px; font-weight: bold;"
+        )
+        filter_direction_label.setFixedWidth(label_width)
         filter_direction_checkbox_layout.addWidget(filter_direction_label)
-        
+
         self.filter_by_destination_direction_checkbox = QCheckBox()
-        self.filter_by_destination_direction_checkbox.setStyleSheet("""
-            QCheckBox {
-                spacing: 5px;
-            }
-            QCheckBox::indicator {
-                width: 25px;
-                height: 25px;
-                border: 2px solid #ccc;
-                border-radius: 3px;
-                background-color: white;
-            }
-            QCheckBox::indicator:hover {
-                border: 2px solid #999;
-            }
-            QCheckBox::indicator:checked {
-                background-color: #4CAF50;
-                border: 2px solid #4CAF50;
-            }
-        """)
-        self.filter_by_destination_direction_checkbox.setChecked(False)  # Default to unchecked (show all)
-        
-        # Connect checkbox to refresh arrivals
-        self.filter_by_destination_direction_checkbox.stateChanged.connect(self.on_filter_by_direction_changed)
-        self.filter_by_destination_direction_checkbox.stateChanged.connect(self.update_arrivals_display)
-        self.filter_by_destination_direction_checkbox.stateChanged.connect(self.mark_settings_changed)
-        
+        self.filter_by_destination_direction_checkbox.setStyleSheet(
+            self.checkbox_indicator_stylesheet()
+        )
+        self.filter_by_destination_direction_checkbox.setChecked(False)
+        self.filter_by_destination_direction_checkbox.stateChanged.connect(
+            self.on_filter_by_direction_changed
+        )
+        self.filter_by_destination_direction_checkbox.stateChanged.connect(
+            self.update_arrivals_display
+        )
+        self.filter_by_destination_direction_checkbox.stateChanged.connect(
+            self.mark_settings_changed
+        )
+
         filter_direction_checkbox_layout.addWidget(self.filter_by_destination_direction_checkbox)
         filter_direction_checkbox_layout.addStretch()
-        checkboxes_column_layout.addLayout(filter_direction_checkbox_layout)
-        
+        return filter_direction_checkbox_layout
+
+    def build_settings_controls_layout(self):
+        controls_layout = QHBoxLayout()
+        controls_layout.setContentsMargins(40, 20, 40, 0)
+        controls_layout.setSpacing(0)
+
+        selectors_label_width = 190
+        checkboxes_label_width = 310
+        selectors_column_layout = self.build_settings_selectors_column(selectors_label_width)
+        checkboxes_column_layout = self.build_settings_checkboxes_column(checkboxes_label_width)
+
         controls_layout.addLayout(selectors_column_layout)
-        
-        # Add spacing before separator (half of the gap minus half of separator width)
-        controls_layout.addSpacing(40)  # Half of the 80px spacing
-        
-        # Add vertical separator line between columns
+        controls_layout.addSpacing(40)
+        controls_layout.addWidget(self.build_settings_vertical_separator())
+        controls_layout.addSpacing(39)
+        controls_layout.addLayout(checkboxes_column_layout)
+        return controls_layout
+
+    def build_settings_vertical_separator(self):
         separator_line = QWidget()
         separator_line.setStyleSheet("background-color: #d0d0d0;")
         separator_line.setFixedWidth(1)
-        controls_layout.addWidget(separator_line)
-        
-        # Add spacing after separator (half of the gap minus half of separator width)
-        controls_layout.addSpacing(39)  # 40 - 1px for separator width = 39 to total 80px
-        
-        controls_layout.addLayout(checkboxes_column_layout)
-        content_layout.addLayout(controls_layout)
-        
-        # Add horizontal separator line between top settings and reboot section
-        content_layout.addSpacing(10)
+        return separator_line
+
+    def build_settings_horizontal_separator(self):
         separator_container = QHBoxLayout()
         separator_container.setContentsMargins(40, 0, 40, 0)
         horizontal_separator = QWidget()
         horizontal_separator.setStyleSheet("background-color: #d0d0d0;")
         horizontal_separator.setFixedHeight(1)
         separator_container.addWidget(horizontal_separator)
-        content_layout.addLayout(separator_container)
-        content_layout.addSpacing(10)
-        
-        # Add screen sleep section below the two-column layout
-        
-        # Main section container with two-column layout matching top section
+        return separator_container
+
+    def build_screen_sleep_section(self):
         system_settings_layout = QHBoxLayout()
         system_settings_layout.setContentsMargins(40, 0, 40, 0)
-        system_settings_layout.setSpacing(0)  # Set to 0, will manually add spacing for separator
-        
-        # Left column - Screen sleep settings
+        system_settings_layout.setSpacing(0)
+
         screen_sleep_column_layout = QVBoxLayout()
         screen_sleep_column_layout.setSpacing(15)
         screen_sleep_column_layout.setAlignment(Qt.AlignTop)
-        
-        # First row - Enable screen sleep checkbox
+        screen_sleep_column_layout.addLayout(self.build_screen_sleep_enable_row())
+        screen_sleep_column_layout.addLayout(self.build_screen_sleep_slider_row())
+        system_settings_layout.addLayout(screen_sleep_column_layout)
+        return system_settings_layout
+
+    def build_screen_sleep_enable_row(self):
         screen_sleep_enable_layout = QHBoxLayout()
         screen_sleep_enable_layout.setContentsMargins(0, 0, 0, 0)
-        
+
         screen_sleep_enable_label = QLabel("Enable Screen Sleep:")
-        screen_sleep_enable_label.setStyleSheet(f"font-family: {self.font_family}; font-size: 21px; font-weight: bold;")
+        screen_sleep_enable_label.setStyleSheet(
+            f"font-family: {self.font_family}; font-size: 21px; font-weight: bold;"
+        )
         screen_sleep_enable_layout.addWidget(screen_sleep_enable_label)
-        
+
         self.screen_sleep_enabled_checkbox = QCheckBox()
-        self.screen_sleep_enabled_checkbox.setStyleSheet("""
-            QCheckBox {
-                spacing: 5px;
-            }
-            QCheckBox::indicator {
-                width: 25px;
-                height: 25px;
-                border: 2px solid #ccc;
-                border-radius: 3px;
-                background-color: white;
-            }
-            QCheckBox::indicator:hover {
-                border: 2px solid #999;
-            }
-            QCheckBox::indicator:checked {
-                background-color: #4CAF50;
-                border: 2px solid #4CAF50;
-            }
-        """)
+        self.screen_sleep_enabled_checkbox.setStyleSheet(self.checkbox_indicator_stylesheet())
         self.screen_sleep_enabled_checkbox.setChecked(False)
         self.screen_sleep_enabled_checkbox.stateChanged.connect(self.mark_settings_changed)
         screen_sleep_enable_layout.addWidget(self.screen_sleep_enabled_checkbox)
         screen_sleep_enable_layout.addStretch()
-        
-        screen_sleep_column_layout.addLayout(screen_sleep_enable_layout)
-        
-        # Second row - Screen sleep slider
+        return screen_sleep_enable_layout
+
+    def build_screen_sleep_slider_row(self):
         screen_sleep_slider_layout = QVBoxLayout()
         screen_sleep_slider_layout.setContentsMargins(0, 0, 0, 0)
         screen_sleep_slider_layout.setSpacing(5)
-        
-        # Label showing current value
+
         self.screen_sleep_value_label = QLabel("Screen Sleep Timeout: 5 min")
-        self.screen_sleep_value_label.setStyleSheet(f"font-family: {self.font_family}; font-size: 21px; font-weight: bold;")
+        self.screen_sleep_value_label.setStyleSheet(
+            f"font-family: {self.font_family}; font-size: 21px; font-weight: bold;"
+        )
         screen_sleep_slider_layout.addWidget(self.screen_sleep_value_label)
-        
-        # Slider
+
         self.screen_sleep_slider = QSlider(Qt.Horizontal)
         self.screen_sleep_slider.setMinimum(1)
         self.screen_sleep_slider.setMaximum(30)
         self.screen_sleep_slider.setValue(5)
         self.screen_sleep_slider.setTickPosition(QSlider.TicksBelow)
         self.screen_sleep_slider.setTickInterval(5)
-        self.screen_sleep_slider.setStyleSheet("""
+        self.screen_sleep_slider.setStyleSheet(
+            """
             QSlider::groove:horizontal {
                 border: 1px solid #ccc;
                 height: 8px;
@@ -3615,33 +2650,22 @@ class MainWindow(QMainWindow):
                 height: 8px;
                 border-radius: 4px;
             }
-        """)
+        """
+        )
         self.screen_sleep_slider.valueChanged.connect(self.update_screen_sleep_label)
         self.screen_sleep_slider.valueChanged.connect(self.mark_settings_changed)
         screen_sleep_slider_layout.addWidget(self.screen_sleep_slider)
-        
-        screen_sleep_column_layout.addLayout(screen_sleep_slider_layout)
-        
-        system_settings_layout.addLayout(screen_sleep_column_layout)
-        
-        content_layout.addLayout(system_settings_layout)
-        
-        # Add stretch to push bottom elements down
-        content_layout.addStretch()
-        
-        # Bottom row using grid layout for true page-centered Save button
-        bottom_row_grid = QGridLayout()
-        bottom_row_grid.setContentsMargins(20, 0, 20, 20)
-        bottom_row_grid.setHorizontalSpacing(10)
-        
-        # Left section: IP, WiFi, and Update buttons (column 0, left-aligned)
+        return screen_sleep_slider_layout
+
+    def build_settings_left_buttons(self):
         left_buttons_container = QWidget()
         left_buttons_layout = QHBoxLayout()
         left_buttons_layout.setContentsMargins(0, 0, 0, 0)
         left_buttons_layout.setSpacing(10)
-        
+
         self.ip_button = QPushButton("IP")
-        self.ip_button.setStyleSheet(f"""
+        self.ip_button.setStyleSheet(
+            f"""
             QPushButton {{
                 font-family: {self.font_family};
                 font-size: 20px;
@@ -3658,12 +2682,14 @@ class MainWindow(QMainWindow):
                 background-color: #c0c0c0;
                 padding-bottom: 7px;
             }}
-        """)
+        """
+        )
         self.ip_button.installEventFilter(self)
         left_buttons_layout.addWidget(self.ip_button)
-        
+
         self.wifi_button = QPushButton("WiFi Setup")
-        self.wifi_button.setStyleSheet(f"""
+        self.wifi_button.setStyleSheet(
+            f"""
             QPushButton {{
                 font-family: {self.font_family};
                 font-size: 20px;
@@ -3680,21 +2706,23 @@ class MainWindow(QMainWindow):
                 background-color: #c0c0c0;
                 padding-bottom: 7px;
             }}
-        """)
+        """
+        )
         self.wifi_button.clicked.connect(self.launch_wifi_setup)
         left_buttons_layout.addWidget(self.wifi_button)
-        
+
         left_buttons_container.setLayout(left_buttons_layout)
-        bottom_row_grid.addWidget(left_buttons_container, 0, 0, Qt.AlignLeft | Qt.AlignBottom)
-        
-        # Center section: Save Settings button with timestamp/warning labels (column 1, centered)
+        return left_buttons_container
+
+    def build_settings_center_section(self):
         center_section_container = QWidget()
         center_section_layout = QVBoxLayout()
         center_section_layout.setContentsMargins(0, 0, 0, 0)
         center_section_layout.setSpacing(5)
-        
+
         save_button = QPushButton("Save Settings")
-        save_button.setStyleSheet(f"""
+        save_button.setStyleSheet(
+            f"""
             QPushButton {{
                 font-family: {self.font_family};
                 font-size: 20px;
@@ -3712,38 +2740,43 @@ class MainWindow(QMainWindow):
                 background-color: #3d8b40;
                 padding-bottom: 11px;
             }}
-        """)
+        """
+        )
         save_button.clicked.connect(self.save_settings)
         center_section_layout.addWidget(save_button, alignment=Qt.AlignCenter)
-        
-        # Add timestamp/warning labels container below save button
+
         labels_container = QHBoxLayout()
         labels_container.setSpacing(10)
-        
+
         self.timestamp_label = QLabel()
-        self.timestamp_label.setStyleSheet(f"font-family: {self.font_family}; font-size: 14px; color: #666;")
+        self.timestamp_label.setStyleSheet(
+            f"font-family: {self.font_family}; font-size: 14px; color: #666;"
+        )
         self.timestamp_label.setAlignment(Qt.AlignCenter)
         self.update_timestamp_label()
         labels_container.addWidget(self.timestamp_label)
-        
+
         self.unsaved_warning_label = QLabel("Changes not yet saved!")
-        self.unsaved_warning_label.setStyleSheet(f"font-family: {self.font_family}; font-size: 14px; color: #e74c3c;")
+        self.unsaved_warning_label.setStyleSheet(
+            f"font-family: {self.font_family}; font-size: 14px; color: #e74c3c;"
+        )
         self.unsaved_warning_label.setAlignment(Qt.AlignCenter)
-        self.unsaved_warning_label.hide()  # Initially hidden
+        self.unsaved_warning_label.hide()
         labels_container.addWidget(self.unsaved_warning_label)
-        
+
         center_section_layout.addLayout(labels_container)
         center_section_container.setLayout(center_section_layout)
-        bottom_row_grid.addWidget(center_section_container, 0, 1, Qt.AlignCenter | Qt.AlignBottom)
-        
-        # Right section: Update and Shutdown buttons (column 2, right-aligned)
+        return center_section_container
+
+    def build_settings_right_buttons(self):
         right_buttons_container = QWidget()
         right_buttons_layout = QHBoxLayout()
         right_buttons_layout.setContentsMargins(0, 0, 0, 0)
         right_buttons_layout.setSpacing(10)
-        
+
         self.update_button = QPushButton("Update")
-        self.update_button.setStyleSheet(f"""
+        self.update_button.setStyleSheet(
+            f"""
             QPushButton {{
                 font-family: {self.font_family};
                 font-size: 20px;
@@ -3760,12 +2793,14 @@ class MainWindow(QMainWindow):
                 background-color: #c0c0c0;
                 padding-bottom: 7px;
             }}
-        """)
+        """
+        )
         self.update_button.clicked.connect(self.on_update_button_clicked)
         right_buttons_layout.addWidget(self.update_button)
-        
+
         self.shutdown_exit_button = QPushButton("Shutdown")
-        self.shutdown_exit_button.setStyleSheet(f"""
+        self.shutdown_exit_button.setStyleSheet(
+            f"""
             QPushButton {{
                 font-family: {self.font_family};
                 font-size: 20px;
@@ -3782,24 +2817,67 @@ class MainWindow(QMainWindow):
                 background-color: #c0c0c0;
                 padding-bottom: 7px;
             }}
-        """)
+        """
+        )
         self.shutdown_exit_button.clicked.connect(self.on_shutdown_exit_button_clicked)
         right_buttons_layout.addWidget(self.shutdown_exit_button)
-        
+
         right_buttons_container.setLayout(right_buttons_layout)
-        bottom_row_grid.addWidget(right_buttons_container, 0, 2, Qt.AlignRight | Qt.AlignBottom)
-        
-        # Set equal column stretches so center column is truly centered on page
+        return right_buttons_container
+
+    def build_settings_bottom_row(self):
+        bottom_row_grid = QGridLayout()
+        bottom_row_grid.setContentsMargins(20, 0, 20, 20)
+        bottom_row_grid.setHorizontalSpacing(10)
+
+        bottom_row_grid.addWidget(
+            self.build_settings_left_buttons(),
+            0,
+            0,
+            Qt.AlignLeft | Qt.AlignBottom,
+        )
+        bottom_row_grid.addWidget(
+            self.build_settings_center_section(),
+            0,
+            1,
+            Qt.AlignCenter | Qt.AlignBottom,
+        )
+        bottom_row_grid.addWidget(
+            self.build_settings_right_buttons(),
+            0,
+            2,
+            Qt.AlignRight | Qt.AlignBottom,
+        )
+
         bottom_row_grid.setColumnStretch(0, 1)
         bottom_row_grid.setColumnStretch(1, 1)
         bottom_row_grid.setColumnStretch(2, 1)
-        
-        content_layout.addLayout(bottom_row_grid)
-        
+        return bottom_row_grid
+    
+    def create_settings_page(self):
+        """Create the settings page"""
+        page = QWidget()
+        layout = QVBoxLayout()
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(0)
+
+        layout.addWidget(self.create_title_bar(self.build_settings_back_button()))
+        self.settings_title_label = self._last_title_label
+
+        content_layout = QVBoxLayout()
+        content_layout.addLayout(self.build_settings_heading())
+        content_layout.addLayout(self.build_settings_controls_layout())
+        content_layout.addSpacing(10)
+        content_layout.addLayout(self.build_settings_horizontal_separator())
+        content_layout.addSpacing(10)
+        content_layout.addLayout(self.build_screen_sleep_section())
+        content_layout.addStretch()
+        content_layout.addLayout(self.build_settings_bottom_row())
+
         content_widget = QWidget()
         content_widget.setLayout(content_layout)
         layout.addWidget(content_widget)
-        
+
         page.setLayout(layout)
         return page
 
@@ -3813,31 +2891,47 @@ def parse_cli_args():
     )
     return parser.parse_args()
 
-# Load configuration and initialize API
-args = parse_cli_args()
-config = config_handler.load_config()
-metro_api = MetroAPI(config['api_key'])
 
-# Initialize data handler
-data_handler = DataHandler(metro_api)
+def main():
+    """Application entrypoint."""
+    args = parse_cli_args()
+    config_store = ConfigStore()
+    message_store = MessageStore()
+    settings_server = SettingsServerClient()
+    system_service = SystemService()
+    working_dir = os.path.dirname(os.path.abspath(__file__))
+    update_service = UpdateService(settings_server, working_dir=working_dir)
 
-# Fetch lines data on startup
-try:
-    data_handler.fetch_lines()
-except MetroAPIError:
-    # Suppress error during startup - will be shown in UI if needed
-    pass
+    config = config_store.load()
+    metro_api = MetroAPI(config.get('api_key', ''))
+    data_handler = DataHandler(metro_api)
 
-app = QApplication([])
+    try:
+        data_handler.fetch_lines()
+    except MetroAPIError:
+        # Suppress error during startup - will be shown in UI if needed
+        pass
 
-window = MainWindow()
-if args.fullscreen:
-    window.showFullScreen()
-else:
-    window.setFixedSize(1024, 600)
-    window.show()
+    app = QApplication([])
 
-# Start embedded web settings server
-start_web_settings_server(data_handler)
+    window = MainWindow(
+        data_handler=data_handler,
+        config_store=config_store,
+        message_store=message_store,
+        settings_server=settings_server,
+        system_service=system_service,
+        update_service=update_service,
+    )
+    if args.fullscreen:
+        window.showFullScreen()
+    else:
+        window.setFixedSize(1024, 600)
+        window.show()
 
-app.exec()
+    settings_server.start(data_handler)
+
+    app.exec()
+
+
+if __name__ == "__main__":
+    main()
