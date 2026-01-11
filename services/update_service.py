@@ -290,14 +290,14 @@ class UpdateServiceRunner:
         return run_git_command(
             ["fetch"],
             cwd=self.working_dir,
-            git_user=self.git_user,
+            git_user=None,
             timeout=timeout,
         )
 
     def get_heads(self, timeout=10):
         return get_git_heads(
             self.working_dir,
-            git_user=self.git_user,
+            git_user=None,
             timeout=timeout,
         )
 
