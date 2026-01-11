@@ -7,6 +7,8 @@ import time
 from PyQt5.QtCore import QObject, QProcess, pyqtSignal
 from PyQt5.QtWidgets import QApplication
 
+from services.config_store import load_config
+
 
 _GIT_DEBUG = True
 
@@ -77,9 +79,26 @@ def get_latest_commit_message(working_dir, git_user=None):
     return None
 
 
-def get_git_heads(working_dir, git_user=None, branches=None, timeout=5):
-    if branches is None:
-        branches = ["origin/main", "origin/master"]
+def get_git_heads(working_dir, git_user=None, branches=None, branch=None, timeout=5):
+    """Get the local HEAD and remote HEAD for comparison.
+    
+    Args:
+        working_dir: Git repository directory
+        git_user: Optional user to run git commands as
+        branches: List of branches to try (legacy, for fallback)
+        branch: Single branch name to check (e.g., "main"). If provided, checks origin/<branch>
+        timeout: Command timeout in seconds
+    
+    Returns:
+        Tuple of (local_head, remote_head) commit hashes, or (None, None) on error
+    """
+    # If a single branch is specified, use it; otherwise fall back to the branches list
+    if branch is not None:
+        branches_to_check = [f"origin/{branch}"]
+    elif branches is not None:
+        branches_to_check = branches
+    else:
+        branches_to_check = ["origin/main", "origin/master"]
 
     local_result = run_git_command(
         ["rev-parse", "HEAD"],
@@ -92,9 +111,9 @@ def get_git_heads(working_dir, git_user=None, branches=None, timeout=5):
     local_head = local_result.stdout.strip()
 
     remote_head = None
-    for branch in branches:
+    for branch_ref in branches_to_check:
         remote_result = run_git_command(
-            ["rev-parse", branch],
+            ["rev-parse", branch_ref],
             cwd=working_dir,
             git_user=git_user,
             timeout=timeout,
@@ -257,7 +276,10 @@ class UpdateService(QObject):
             return
 
         try:
-            local_head, remote_head = get_git_heads(self.working_dir)
+            # Use configured branch for update check
+            config = load_config()
+            configured_branch = config.get("git_branch", "main")
+            local_head, remote_head = get_git_heads(self.working_dir, branch=configured_branch)
             if not local_head or not remote_head:
                 return
 
@@ -294,12 +316,82 @@ class UpdateServiceRunner:
             timeout=timeout,
         )
 
-    def get_heads(self, timeout=10):
+    def get_heads(self, timeout=10, branch=None):
         return get_git_heads(
             self.working_dir,
             git_user=None,
+            branch=branch,
             timeout=timeout,
         )
+
+    def get_remote_branches(self, timeout=10):
+        """Get list of remote branches from git."""
+        result = run_git_command(
+            ["branch", "-r"],
+            cwd=self.working_dir,
+            git_user=self.git_user,
+            timeout=timeout,
+        )
+        if result.returncode != 0:
+            return []
+        
+        branches = []
+        for line in result.stdout.strip().splitlines():
+            line = line.strip()
+            # Skip HEAD pointer lines like "origin/HEAD -> origin/main"
+            if "->" in line:
+                continue
+            # Remove "origin/" prefix
+            if line.startswith("origin/"):
+                branch_name = line[7:]  # Remove "origin/" prefix
+                branches.append(branch_name)
+        return sorted(branches)
+
+    def get_current_branch(self, timeout=5):
+        """Get the current local branch name."""
+        result = run_git_command(
+            ["branch", "--show-current"],
+            cwd=self.working_dir,
+            git_user=self.git_user,
+            timeout=timeout,
+        )
+        if result.returncode == 0:
+            return result.stdout.strip()
+        return None
+
+    def switch_branch(self, branch, timeout=60):
+        """Switch to a different branch (git fetch + git checkout)."""
+        # First fetch to ensure we have latest refs
+        fetch_result = run_git_command(
+            ["fetch", "--all"],
+            cwd=self.working_dir,
+            git_user=self.git_user,
+            timeout=timeout,
+        )
+        if fetch_result.returncode != 0:
+            return {
+                "success": False,
+                "error": f"Failed to fetch: {fetch_result.stderr.strip()}",
+            }
+        
+        # Checkout the branch
+        checkout_result = run_git_command(
+            ["checkout", branch],
+            cwd=self.working_dir,
+            git_user=self.git_user,
+            timeout=timeout,
+        )
+        if checkout_result.returncode != 0:
+            return {
+                "success": False,
+                "error": f"Failed to checkout: {checkout_result.stderr.strip()}",
+            }
+        
+        return {
+            "success": True,
+            "branch": branch,
+            "message": checkout_result.stdout.strip() or checkout_result.stderr.strip(),
+        }
 
     def get_latest_commit_message(self):
         return get_latest_commit_message(self.working_dir, git_user=self.git_user)
