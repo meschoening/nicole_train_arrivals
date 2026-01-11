@@ -1296,6 +1296,11 @@ class MainWindow(QMainWindow):
         """Handle completion of the update workflow."""
         self.checking_animation_timer.stop()
 
+        if result.get("reason") == "busy":
+            self.update_button.setText("Update Busy")
+            self.set_update_button_color("neutral")
+            return
+
         if result.get("has_error"):
             self.update_button.setText("Error Updating")
             self.set_update_button_color("red")
@@ -1642,13 +1647,29 @@ class MainWindow(QMainWindow):
         # Reload message config to get latest settings
         self.message_config = self.message_store.load()
         
-        # Set up timer to check for web triggers
-        self.web_trigger_check_timer = QTimer()
-        self.web_trigger_check_timer.timeout.connect(self.check_for_web_trigger)
-        self.web_trigger_check_timer.start(500)  # Check every 500ms
+        self.configure_web_trigger_handlers()
         
         # Schedule first automatic message
         self.schedule_next_message()
+
+    def configure_web_trigger_handlers(self):
+        """Connect web trigger signals and handle initial pending events."""
+        signals = getattr(self.settings_server, "signals", None)
+        if signals is None:
+            return
+        signals.message_triggered.connect(self.on_web_message_triggered)
+        signals.settings_changed.connect(self.on_web_settings_changed)
+        self.check_for_web_trigger()
+
+    def on_web_message_triggered(self, message):
+        pending = self.settings_server.get_pending_message_trigger()
+        if pending is False:
+            return
+        self.trigger_message_display(pending)
+
+    def on_web_settings_changed(self):
+        if self.settings_server.get_pending_settings_change():
+            self.handle_settings_changed()
     
     def check_for_web_trigger(self):
         """Check if there's a pending message trigger or settings change from the web interface"""

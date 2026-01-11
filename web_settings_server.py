@@ -1,5 +1,6 @@
 import threading
 from flask import Flask, request, jsonify, render_template, redirect, url_for, Response
+from services.background_jobs import background_jobs
 from services.config_store import ConfigStore
 from services.message_store import MessageStore
 from services.system_service import SystemService
@@ -19,8 +20,7 @@ def _git_debug_log(message, include_stack=False):
     """Log git operation debug info with timestamp."""
     if _GIT_DEBUG:
         timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S.%f')[:-3]
-        with _git_operation_flag_lock:
-            flag_state = _git_operation_in_progress.get("active", False)
+        flag_state = background_jobs.is_git_operation_in_progress()
         print(f"[GIT-DEBUG {timestamp}] [web_server] [flag={flag_state}] {message}", flush=True)
         if include_stack:
             print(f"[GIT-DEBUG {timestamp}] Stack trace:", flush=True)
@@ -28,23 +28,11 @@ def _git_debug_log(message, include_stack=False):
 
 
 _data_lock = threading.Lock()
-_message_trigger = {"message": None, "pending": False}
-_message_trigger_lock = threading.Lock()
-_settings_changed_trigger = {"pending": False}
-_settings_changed_lock = threading.Lock()
-
-# Lock to serialize git operations (fetch, pull) to prevent race conditions
-_git_operation_lock = threading.Lock()
-
-# Shared flag to track if a git operation is in progress (for cross-component coordination)
-_git_operation_in_progress = {"active": False}
-_git_operation_flag_lock = threading.Lock()
 
 
 def is_git_operation_in_progress():
     """Check if a git operation is currently in progress."""
-    with _git_operation_flag_lock:
-        result = _git_operation_in_progress["active"]
+    result = background_jobs.is_git_operation_in_progress()
     if _GIT_DEBUG:
         timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S.%f')[:-3]
         print(f"[GIT-DEBUG {timestamp}] [web_server] is_git_operation_in_progress() -> {result}", flush=True)
@@ -56,8 +44,7 @@ def set_git_operation_in_progress(active, caller="unknown"):
     if _GIT_DEBUG:
         timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S.%f')[:-3]
         print(f"[GIT-DEBUG {timestamp}] [web_server] set_git_operation_in_progress({active}) called by {caller}", flush=True)
-    with _git_operation_flag_lock:
-        _git_operation_in_progress["active"] = active
+    background_jobs.set_git_operation_in_progress(active, caller=caller)
 
 # SSL certificate directory (expanded from ~)
 _SSL_CERT_DIR = os.path.expanduser("~/https")
@@ -100,13 +87,7 @@ def get_pending_message_trigger():
     Returns:
         str or None: Message to display, or None if no trigger pending or for random message
     """
-    with _message_trigger_lock:
-        if _message_trigger["pending"]:
-            message = _message_trigger["message"]
-            _message_trigger["pending"] = False
-            _message_trigger["message"] = None
-            return message
-        return False
+    return background_jobs.consume_message_trigger()
 
 
 def get_pending_settings_change():
@@ -117,11 +98,7 @@ def get_pending_settings_change():
     Returns:
         bool: True if settings were changed, False otherwise
     """
-    with _settings_changed_lock:
-        if _settings_changed_trigger["pending"]:
-            _settings_changed_trigger["pending"] = False
-            return True
-        return False
+    return background_jobs.consume_settings_changed()
 
 
 def _ensure_lines(data_handler):
@@ -356,11 +333,8 @@ def start_web_settings_server(data_handler, host="0.0.0.0", port=443):
     def api_trigger_message():
         data = request.get_json() or {}
         message = data.get("message")
-        
-        with _message_trigger_lock:
-            _message_trigger["message"] = message
-            _message_trigger["pending"] = True
-        
+
+        background_jobs.trigger_message(message)
         return jsonify({"status": "triggered"})
 
     @app.get("/settings")
@@ -735,12 +709,9 @@ def start_web_settings_server(data_handler, host="0.0.0.0", port=443):
     @app.get("/api/update/run")
     def api_update_run():
         def generate():
-            _git_debug_log("api_update_run: Attempting to acquire _git_operation_lock...")
-            # Acquire lock to prevent concurrent git operations
-            with _git_operation_lock:
-                _git_debug_log("api_update_run: Lock acquired, setting flag to True")
-                # Set flag so main display knows git operation is in progress
-                set_git_operation_in_progress(True, caller="api_update_run")
+            _git_debug_log("api_update_run: Attempting to acquire git operation lock...")
+            with background_jobs.git_operation(caller="api_update_run"):
+                _git_debug_log("api_update_run: Lock acquired")
                 try:
                     _git_debug_log("api_update_run: Starting 'git pull'")
                     process = update_service.popen_pull(
@@ -778,9 +749,7 @@ def start_web_settings_server(data_handler, host="0.0.0.0", port=443):
                         yield "event: done\n"
                         yield f"data: {json.dumps(done_payload)}\n\n"
                 finally:
-                    _git_debug_log("api_update_run: Clearing flag and releasing lock")
-                    # Clear the flag when operation completes
-                    set_git_operation_in_progress(False, caller="api_update_run")
+                    _git_debug_log("api_update_run: Releasing git operation lock")
 
         headers = {
             "Cache-Control": "no-cache",
@@ -813,12 +782,9 @@ def start_web_settings_server(data_handler, host="0.0.0.0", port=443):
         Check if updates are available by running git fetch and comparing commits.
         Non-destructive - only checks, does not apply updates.
         """
-        _git_debug_log("api_check_for_updates: Attempting to acquire _git_operation_lock...")
-        # Acquire lock to prevent concurrent git operations
-        with _git_operation_lock:
-            _git_debug_log("api_check_for_updates: Lock acquired, setting flag to True")
-            # Set flag so main display knows git operation is in progress
-            set_git_operation_in_progress(True, caller="api_check_for_updates")
+        _git_debug_log("api_check_for_updates: Attempting to acquire git operation lock...")
+        with background_jobs.git_operation(caller="api_check_for_updates"):
+            _git_debug_log("api_check_for_updates: Lock acquired")
             try:
                 try:
                     _git_debug_log("api_check_for_updates: Starting 'git fetch'")
@@ -869,9 +835,7 @@ def start_web_settings_server(data_handler, host="0.0.0.0", port=443):
                         "error": str(e)
                     })
             finally:
-                _git_debug_log("api_check_for_updates: Clearing flag and releasing lock")
-                # Clear the flag when operation completes
-                set_git_operation_in_progress(False, caller="api_check_for_updates")
+                _git_debug_log("api_check_for_updates: Releasing git operation lock")
 
     @app.get("/api/git-branches")
     def api_git_branches():
@@ -910,10 +874,8 @@ def start_web_settings_server(data_handler, host="0.0.0.0", port=443):
         
         _git_debug_log(f"api_switch_branch: Attempting to switch to branch '{branch}'")
         
-        # Acquire lock to prevent concurrent git operations
-        with _git_operation_lock:
-            _git_debug_log("api_switch_branch: Lock acquired, setting flag to True")
-            set_git_operation_in_progress(True, caller="api_switch_branch")
+        with background_jobs.git_operation(caller="api_switch_branch"):
+            _git_debug_log("api_switch_branch: Lock acquired")
             try:
                 result = update_service.switch_branch(branch, timeout=60)
                 
@@ -936,8 +898,7 @@ def start_web_settings_server(data_handler, host="0.0.0.0", port=443):
                 _git_debug_log(f"api_switch_branch: Exception: {e}")
                 return jsonify({"success": False, "error": str(e)}), 500
             finally:
-                _git_debug_log("api_switch_branch: Clearing flag and releasing lock")
-                set_git_operation_in_progress(False, caller="api_switch_branch")
+                _git_debug_log("api_switch_branch: Releasing git operation lock")
 
     @app.post("/api/restart")
     def api_restart():
@@ -1087,8 +1048,7 @@ def start_web_settings_server(data_handler, host="0.0.0.0", port=443):
             config_store.save("reboot_time", time_str)
 
         # Trigger settings changed flag for main display to refresh
-        with _settings_changed_lock:
-            _settings_changed_trigger["pending"] = True
+        background_jobs.mark_settings_changed()
 
         return redirect(url_for("get_settings"))
 
@@ -1211,8 +1171,7 @@ def start_web_settings_server(data_handler, host="0.0.0.0", port=443):
         config_store.save("font_family", font_family)
         
         # Trigger settings changed flag for main display
-        with _settings_changed_lock:
-            _settings_changed_trigger["pending"] = True
+        background_jobs.mark_settings_changed()
         
         return jsonify({"success": True, "font_family": font_family})
 
@@ -1223,8 +1182,7 @@ def start_web_settings_server(data_handler, host="0.0.0.0", port=443):
         config_store.save("font_family", default_font)
         
         # Trigger settings changed flag for main display
-        with _settings_changed_lock:
-            _settings_changed_trigger["pending"] = True
+        background_jobs.mark_settings_changed()
         
         return jsonify({"success": True, "font_family": default_font})
 

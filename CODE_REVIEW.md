@@ -67,8 +67,8 @@ Reviewed the Python application (PyQt5 main display, Flask settings server, WiFi
 ## Architecture and General Coding Practices
 - <span style="color: green;">**Architecture:** The application’s responsibilities are tightly coupled, especially in `main_display.py` (UI, networking, system control, git updates, and server lifecycle in one module). This makes it harder to reason about side effects and increases the risk that UI changes break system-management behavior.
   - **Recommendation:** Split into focused modules (e.g., UI views/controllers, system services, update services, API client). Pass dependencies into `MainWindow` instead of using module-level globals.</span>
-- **Concurrency model:** Background work is split across QTimers, QProcess, and threads, with some shared flags in `web_settings_server.py`. Coordination is mostly ad hoc (e.g., shared “git in progress” flags).
-  - **Recommendation:** Centralize shared state and provide a single interface for background jobs; prefer Qt signals/slots for cross-thread updates to avoid subtle races.
+- <span style="color: yellow;">**Concurrency model:** Background work is split across QTimers, QProcess, and threads, with some shared flags in `web_settings_server.py`. Coordination is mostly ad hoc (e.g., shared “git in progress” flags).
+  - **Update:** Centralized shared state in `services/background_jobs.py` with a single interface for background jobs; Qt signals/slots now handle cross-thread updates to avoid subtle races.</span>
 - **I/O boundaries:** Direct `os.system` and `subprocess` calls are scattered across UI and server code, and error handling is inconsistent (sometimes logged, sometimes suppressed).
   - **Recommendation:** Wrap system actions behind a small service layer with uniform logging, explicit timeouts, and structured errors so UI and API layers can respond consistently.
 - **Configuration flow:** Config reads/writes are duplicated in several paths (UI refresh, web settings, startup). This increases the chance of inconsistent behavior when new settings are added.
