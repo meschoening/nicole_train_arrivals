@@ -626,13 +626,13 @@
           updateSwitchButton();
           branchSelect.disabled = true;
           switchBranchBtn.disabled = true;
-          branchStatusEl.textContent = 'Branch switched. Restarting application...';
+          branchStatusEl.textContent = 'Branch switched. Rebooting system...';
           branchStatusEl.style.color = '#d49200';
           branchConfirmDialog.classList.remove('visible');
           pendingBranch = null;
           startRebootOverlay();
           try {
-            await fetch('/api/restart-app', { method: 'POST' });
+            await fetch('/api/reboot', { method: 'POST' });
           } catch (e) {
             // Expected - connection may drop during restart
           }
