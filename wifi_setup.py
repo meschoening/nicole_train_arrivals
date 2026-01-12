@@ -15,10 +15,10 @@ from PyQt5.QtCore import Qt, QTimer, QProcess
 
 import os
 import sys
-import subprocess
 import argparse
 import threading
 from services.config_store import ConfigStore
+from services.system_actions import run_command, start_process
 
 
 class WiFiSetupWindow(QMainWindow):
@@ -29,8 +29,7 @@ class WiFiSetupWindow(QMainWindow):
 
         # Load config to get font family
         config_store = ConfigStore()
-        config = config_store.load()
-        self.font_family = config.get('font_family', 'Quicksand')
+        self.font_family = config_store.get_str('font_family', 'Quicksand')
         
         self.title_text = "WiFi Configuration"
         self.setWindowTitle(self.title_text)
@@ -396,17 +395,16 @@ class WiFiSetupWindow(QMainWindow):
                 self.ip_value.setText("192.168.4.1")
             else:
                 # Check WiFi connection status
-                result = subprocess.run(
+                result = run_command(
                     ["nmcli", "-t", "-f", "TYPE,STATE,CONNECTION", "device"],
-                    capture_output=True,
-                    text=True,
-                    timeout=5
+                    timeout_s=5,
+                    log_label="wifi_status",
                 )
                 
                 connected = False
                 connection_name = ""
                 
-                if result.returncode == 0:
+                if result.ok:
                     for line in result.stdout.strip().split('\n'):
                         parts = line.split(':')
                         if len(parts) >= 3 and parts[0] == 'wifi':
@@ -436,13 +434,12 @@ class WiFiSetupWindow(QMainWindow):
     def get_current_ip(self):
         """Get the current IP address of wlan0."""
         try:
-            result = subprocess.run(
+            result = run_command(
                 ["ip", "-4", "addr", "show", "wlan0"],
-                capture_output=True,
-                text=True,
-                timeout=5
+                timeout_s=5,
+                log_label="wifi_current_ip",
             )
-            if result.returncode == 0:
+            if result.ok:
                 for line in result.stdout.split('\n'):
                     if 'inet ' in line:
                         # Extract IP address (format: inet 192.168.1.100/24 ...)
@@ -457,14 +454,13 @@ class WiFiSetupWindow(QMainWindow):
         """Load saved WiFi networks into the dropdown."""
         try:
             self.saved_networks_combo.clear()
-            result = subprocess.run(
+            result = run_command(
                 ["nmcli", "-t", "-f", "NAME,TYPE", "connection", "show"],
-                capture_output=True,
-                text=True,
-                timeout=10
+                timeout_s=10,
+                log_label="wifi_saved_networks",
             )
             
-            if result.returncode == 0:
+            if result.ok:
                 networks = []
                 for line in result.stdout.strip().split('\n'):
                     if not line.strip():
@@ -481,7 +477,8 @@ class WiFiSetupWindow(QMainWindow):
                     self.connection_console.appendPlainText("No saved WiFi networks found")
             else:
                 self.saved_networks_combo.addItem("(Error loading)")
-                self.connection_console.appendPlainText(f"Error: {result.stderr.strip()}")
+                error_text = result.stderr.strip() or result.error or "Command failed"
+                self.connection_console.appendPlainText(f"Error: {error_text}")
                 
         except Exception as e:
             self.saved_networks_combo.addItem("(Error loading)")
@@ -676,41 +673,54 @@ class WiFiSetupWindow(QMainWindow):
             # Step 1: Disconnect from any existing WiFi connection
             self.connection_console.appendPlainText("$ sudo nmcli device disconnect wlan0")
             QApplication.processEvents()
-            subprocess.run(["sudo", "nmcli", "device", "disconnect", "wlan0"], 
-                          capture_output=True, timeout=10)
+            run_command(
+                ["sudo", "nmcli", "device", "disconnect", "wlan0"],
+                timeout_s=10,
+                log_label="ap_disconnect_wifi",
+            )
             
             # Step 2: Set static IP on wlan0
             self.connection_console.appendPlainText("$ sudo ip addr flush dev wlan0")
             QApplication.processEvents()
-            subprocess.run([
-                "sudo", "ip", "addr", "flush", "dev", "wlan0"
-            ], capture_output=True, timeout=5)
+            run_command(
+                ["sudo", "ip", "addr", "flush", "dev", "wlan0"],
+                timeout_s=5,
+                log_label="ap_flush_ip",
+            )
             
             self.connection_console.appendPlainText("$ sudo ip addr add 192.168.4.1/24 dev wlan0")
             QApplication.processEvents()
-            subprocess.run([
-                "sudo", "ip", "addr", "add", "192.168.4.1/24", "dev", "wlan0"
-            ], capture_output=True, timeout=5)
+            run_command(
+                ["sudo", "ip", "addr", "add", "192.168.4.1/24", "dev", "wlan0"],
+                timeout_s=5,
+                log_label="ap_add_ip",
+            )
             
             self.connection_console.appendPlainText("$ sudo ip link set wlan0 up")
             QApplication.processEvents()
-            subprocess.run([
-                "sudo", "ip", "link", "set", "wlan0", "up"
-            ], capture_output=True, timeout=5)
+            run_command(
+                ["sudo", "ip", "link", "set", "wlan0", "up"],
+                timeout_s=5,
+                log_label="ap_link_up",
+            )
             
             # Step 3: Start dnsmasq
             self.connection_console.appendPlainText("$ sudo systemctl start dnsmasq")
             QApplication.processEvents()
-            subprocess.run([
-                "sudo", "systemctl", "start", "dnsmasq"
-            ], capture_output=True, timeout=10)
+            run_command(
+                ["sudo", "systemctl", "start", "dnsmasq"],
+                timeout_s=10,
+                log_label="ap_dnsmasq_start",
+            )
             
             # Step 4: Start hostapd with our config
             self.connection_console.appendPlainText(f"$ sudo hostapd -B {hostapd_conf}")
             QApplication.processEvents()
-            subprocess.run([
-                "sudo", "hostapd", "-B", hostapd_conf
-            ], capture_output=True, timeout=10)
+            run_command(
+                ["sudo", "hostapd", "-B", hostapd_conf],
+                timeout_s=10,
+                log_label="ap_hostapd_start",
+            )
             
             # Step 5: Start Flask captive portal
             self.connection_console.appendPlainText("Starting captive portal server...")
@@ -770,38 +780,48 @@ class WiFiSetupWindow(QMainWindow):
             # Step 2: Stop hostapd
             self.connection_console.appendPlainText("$ sudo killall hostapd")
             QApplication.processEvents()
-            subprocess.run([
-                "sudo", "killall", "hostapd"
-            ], capture_output=True, timeout=10)
+            run_command(
+                ["sudo", "killall", "hostapd"],
+                timeout_s=10,
+                log_label="ap_hostapd_stop",
+            )
             
             # Step 3: Stop dnsmasq
             self.connection_console.appendPlainText("$ sudo systemctl stop dnsmasq")
             QApplication.processEvents()
-            subprocess.run([
-                "sudo", "systemctl", "stop", "dnsmasq"
-            ], capture_output=True, timeout=10)
+            run_command(
+                ["sudo", "systemctl", "stop", "dnsmasq"],
+                timeout_s=10,
+                log_label="ap_dnsmasq_stop",
+            )
             
             # Step 4: Restart systemd-resolved to refresh DNS resolution
             # This is critical - without it, DNS queries fail after stopping dnsmasq
             self.connection_console.appendPlainText("$ sudo systemctl restart systemd-resolved")
             QApplication.processEvents()
-            subprocess.run([
-                "sudo", "systemctl", "restart", "systemd-resolved"
-            ], capture_output=True, timeout=10)
+            run_command(
+                ["sudo", "systemctl", "restart", "systemd-resolved"],
+                timeout_s=10,
+                log_label="ap_dns_restart",
+            )
             
             # Step 5: Flush IP and return interface to managed mode
             self.connection_console.appendPlainText("$ sudo ip addr flush dev wlan0")
             QApplication.processEvents()
-            subprocess.run([
-                "sudo", "ip", "addr", "flush", "dev", "wlan0"
-            ], capture_output=True, timeout=5)
+            run_command(
+                ["sudo", "ip", "addr", "flush", "dev", "wlan0"],
+                timeout_s=5,
+                log_label="ap_flush_ip_stop",
+            )
             
             # Step 6: Restart NetworkManager to take control
             self.connection_console.appendPlainText("$ sudo systemctl restart NetworkManager")
             QApplication.processEvents()
-            subprocess.run([
-                "sudo", "systemctl", "restart", "NetworkManager"
-            ], capture_output=True, timeout=15)
+            run_command(
+                ["sudo", "systemctl", "restart", "NetworkManager"],
+                timeout_s=15,
+                log_label="ap_network_manager_restart",
+            )
             
             # Wait a moment for NetworkManager to initialize
             self.connection_console.appendPlainText("Waiting for NetworkManager to initialize...")
@@ -814,9 +834,11 @@ class WiFiSetupWindow(QMainWindow):
             # by NetworkManager as a user-requested disconnect, preventing auto-reconnect
             self.connection_console.appendPlainText("$ sudo nmcli connection up ifname wlan0")
             QApplication.processEvents()
-            subprocess.run([
-                "sudo", "nmcli", "--wait", "5", "connection", "up", "ifname", "wlan0"
-            ], capture_output=True, timeout=10)
+            run_command(
+                ["sudo", "nmcli", "--wait", "5", "connection", "up", "ifname", "wlan0"],
+                timeout_s=10,
+                log_label="ap_nmcli_connect",
+            )
             
             # Wait for NetworkManager to auto-connect to a saved network (5 seconds max with polling)
             max_wait = 5  # seconds
@@ -839,13 +861,12 @@ class WiFiSetupWindow(QMainWindow):
                 
                 # Check if WiFi is connected
                 try:
-                    result = subprocess.run(
+                    result = run_command(
                         ["nmcli", "-t", "-f", "TYPE,STATE", "device"],
-                        capture_output=True,
-                        text=True,
-                        timeout=2
+                        timeout_s=2,
+                        log_label="wifi_poll_connection",
                     )
-                    if result.returncode == 0:
+                    if result.ok:
                         for line in result.stdout.strip().split('\n'):
                             if line.startswith('wifi:') and ':connected' in line.lower():
                                 connected = True
@@ -916,9 +937,11 @@ class WiFiSetupWindow(QMainWindow):
             main_display_script = os.path.join(script_dir, "main_display.py")
             
             # Launch main_display.py with fullscreen argument
-            subprocess.Popen(
+            start_process(
                 ["python3", main_display_script, "--fullscreen"],
-                cwd=script_dir
+                cwd=script_dir,
+                log_label="launch_main_display",
+                timeout_s=None,
             )
             
             # Terminate this application

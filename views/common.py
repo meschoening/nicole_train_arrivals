@@ -2,5 +2,4 @@
 
 
 def get_font_family(config_store):
-    config = config_store.load()
-    return config.get('font_family', 'Quicksand')
+    return config_store.get_str('font_family', 'Quicksand')

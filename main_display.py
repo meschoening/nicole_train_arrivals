@@ -12,7 +12,7 @@ from views.filters import TouchscreenComboViewFilter
 from views.overlays import RebootWarningOverlay
 from views.popouts import IPPopout, UpdatePopout, ShutdownPopout
 import os
-import subprocess
+from services.system_actions import start_process
 import random
 import time
 import argparse
@@ -35,14 +35,14 @@ class MainWindow(QMainWindow):
         # Load config to get properties
         self.data_handler = data_handler
         self.config_store = config_store
+        self.config_store.subscribe(self.on_config_changed)
         self.message_store = message_store
         self.settings_server = settings_server
         self.system_service = system_service
         self.update_service = update_service
 
-        config = self.config_store.load()
-        self.default_title_text = config.get('title_text', "Nicole's Train Tracker!")
-        self.font_family = config.get('font_family', 'Quicksand')
+        self.default_title_text = self.config_store.get_str('title_text', "Nicole's Train Tracker!")
+        self.font_family = self.config_store.get_str('font_family', 'Quicksand')
 
 
 
@@ -103,8 +103,7 @@ class MainWindow(QMainWindow):
         self.initialize_settings_from_config()
         
         # Load refresh rate from config (needed for timers after initial load)
-        config = self.config_store.load()
-        self.refresh_rate_seconds = config.get('refresh_rate_seconds', 30)
+        self.refresh_rate_seconds = self.config_store.get_int('refresh_rate_seconds', 30)
         
         # Set up auto-refresh timer (will be started after initial load succeeds)
         self.refresh_timer = QTimer()
@@ -145,8 +144,8 @@ class MainWindow(QMainWindow):
         self.update_check_timer = QTimer()
         self.update_check_timer.timeout.connect(self.update_service.check_for_updates)
         # Load interval from config and start timer
-        update_interval = config.get('update_check_interval_seconds', 60)
-        self.update_check_timer.start(update_interval * 1000)
+        self.update_check_interval_seconds = self.config_store.get_int('update_check_interval_seconds', 60)
+        self.update_check_timer.start(self.update_check_interval_seconds * 1000)
     
     def showEvent(self, event):
         """Called when the window is shown - trigger initial API load"""
@@ -210,8 +209,7 @@ class MainWindow(QMainWindow):
             self.startup_status_label.setText("Connecting to Metro API...")
             self.startup_status_label.setStyleSheet(f"font-family: {self.font_family}; font-size: 24px; color: #666;")
 
-            config = self.config_store.load()
-            api_key = config.get('api_key')
+            api_key = self.config_store.get_str('api_key')
             if not api_key:
                 # Stay on startup page and prompt user to add API key
                 message = "API Key Missing. Add it by visiting nicoletrains.local"
@@ -246,8 +244,7 @@ class MainWindow(QMainWindow):
         if not self.waiting_for_api_key:
             return
         
-        config = self.config_store.load()
-        api_key = config.get('api_key')
+        api_key = self.config_store.get_str('api_key')
         
         if api_key:
             if hasattr(self.data_handler, 'metro_api'):
@@ -280,9 +277,11 @@ class MainWindow(QMainWindow):
             wifi_setup_script = os.path.join(script_dir, "wifi_setup.py")
             
             # Launch wifi_setup.py with fullscreen argument
-            subprocess.Popen(
+            start_process(
                 ["python3", wifi_setup_script, "--fullscreen"],
-                cwd=script_dir
+                cwd=script_dir,
+                log_label="launch_wifi_setup",
+                timeout_s=None,
             )
             
             # Terminate this application
@@ -550,36 +549,40 @@ class MainWindow(QMainWindow):
     
     def save_settings(self):
         """Manually save current settings to config file"""
+        updates = {}
         current_index = self.line_combo.currentIndex()
         if current_index >= 0:
             line_code = self.line_combo.itemData(current_index)
-            self.config_store.save('selected_line', line_code)
+            updates['selected_line'] = line_code
         
         station_index = self.station_combo.currentIndex()
         if station_index >= 0:
             station_code = self.station_combo.itemData(station_index)
-            self.config_store.save('selected_station', station_code)
+            updates['selected_station'] = station_code
         
         destination_index = self.destination_combo.currentIndex()
         if destination_index >= 0:
             destination = self.destination_combo.currentText()
-            self.config_store.save('selected_destination', destination)
+            updates['selected_destination'] = destination
         
         # Save countdown visibility setting
-        self.config_store.save('show_countdown', self.show_countdown_checkbox.isChecked())
+        updates['show_countdown'] = self.show_countdown_checkbox.isChecked()
         
         # Save clock visibility setting
-        self.config_store.save('show_clock', self.show_clock_checkbox.isChecked())
+        updates['show_clock'] = self.show_clock_checkbox.isChecked()
         
         # Save filter by selected destination setting
-        self.config_store.save('filter_by_direction', self.filter_by_destination_checkbox.isChecked())
+        updates['filter_by_direction'] = self.filter_by_destination_checkbox.isChecked()
         
         # Save filter by destination direction setting
-        self.config_store.save('filter_by_destination_direction', self.filter_by_destination_direction_checkbox.isChecked())
+        updates['filter_by_destination_direction'] = self.filter_by_destination_direction_checkbox.isChecked()
         
         # Save screen sleep settings
-        self.config_store.save('screen_sleep_enabled', self.screen_sleep_enabled_checkbox.isChecked())
-        self.config_store.save('screen_sleep_minutes', self.screen_sleep_slider.value())
+        updates['screen_sleep_enabled'] = self.screen_sleep_enabled_checkbox.isChecked()
+        updates['screen_sleep_minutes'] = self.screen_sleep_slider.value()
+
+        if updates:
+            self.config_store.set_values(updates)
         
         # Apply screen sleep settings to system
         self.apply_screen_sleep_settings()
@@ -943,9 +946,8 @@ class MainWindow(QMainWindow):
     def refresh_arrivals(self):
         """Refresh arrivals data from API and update display"""
         # Sync settings from config so web changes apply promptly
-        self.sync_settings_from_config()
+        config = self.config_store.refresh_if_changed()
         # Get selected station from config
-        config = self.config_store.load()
         station_id = config.get('selected_station')
         
         if station_id:
@@ -962,8 +964,7 @@ class MainWindow(QMainWindow):
         self.update_arrivals_display()
         
         # Reset countdown to configured refresh rate
-        config = self.config_store.load()
-        self.seconds_until_refresh = config.get('refresh_rate_seconds', 30)
+        self.seconds_until_refresh = self.refresh_rate_seconds
     
     def format_time_display(self, seconds):
         """Format seconds into user-friendly display string"""
@@ -982,8 +983,7 @@ class MainWindow(QMainWindow):
         self.seconds_until_refresh -= 1
         
         if self.seconds_until_refresh <= 0:
-            config = self.config_store.load()
-            self.seconds_until_refresh = config.get('refresh_rate_seconds', 30)
+            self.seconds_until_refresh = self.refresh_rate_seconds
         
         # Format the time display
         time_display = self.format_time_display(self.seconds_until_refresh)
@@ -1021,66 +1021,90 @@ class MainWindow(QMainWindow):
         if hasattr(self, 'clock_label') and hasattr(self, 'show_clock_checkbox'):
             self.clock_label.setVisible(self.show_clock_checkbox.isChecked())
     
-    def sync_settings_from_config(self):
-        """Sync checkbox and screen sleep settings from config file"""
-        config = self.config_store.load()
+    def sync_settings_from_config(self, config=None, changed_keys=None):
+        """Sync checkbox and screen sleep settings from config file."""
+        config = config or self.config_store.load()
+
+        def should_update(*keys):
+            if changed_keys is None:
+                return True
+            return any(key in changed_keys for key in keys)
+
         # Update title text
-        new_title_text = config.get('title_text', "Nicole's Train Tracker!")
-        if new_title_text != self.default_title_text:
-            self.default_title_text = new_title_text
-            self.setWindowTitle(self.default_title_text)
-            # Update the home page title label if it exists and we're not showing a message
-            if hasattr(self, 'home_title_label') and self.home_title_label and not self.is_showing_message:
-                self.home_title_label.setText(self.default_title_text)
-            # Update the settings page title label if it exists
-            if hasattr(self, 'settings_title_label') and self.settings_title_label:
-                self.settings_title_label.setText(self.default_title_text)
+        if should_update('title_text'):
+            new_title_text = config.get('title_text', "Nicole's Train Tracker!")
+            if new_title_text != self.default_title_text:
+                self.default_title_text = new_title_text
+                self.setWindowTitle(self.default_title_text)
+                # Update the home page title label if it exists and we're not showing a message
+                if hasattr(self, 'home_title_label') and self.home_title_label and not self.is_showing_message:
+                    self.home_title_label.setText(self.default_title_text)
+                # Update the settings page title label if it exists
+                if hasattr(self, 'settings_title_label') and self.settings_title_label:
+                    self.settings_title_label.setText(self.default_title_text)
         # Show countdown
-        if hasattr(self, 'show_countdown_checkbox'):
+        if should_update('show_countdown') and hasattr(self, 'show_countdown_checkbox'):
             self.show_countdown_checkbox.blockSignals(True)
             self.show_countdown_checkbox.setChecked(config.get('show_countdown', True))
             self.show_countdown_checkbox.blockSignals(False)
             self.toggle_countdown_visibility()
         # Show clock
-        if hasattr(self, 'show_clock_checkbox'):
+        if should_update('show_clock') and hasattr(self, 'show_clock_checkbox'):
             self.show_clock_checkbox.blockSignals(True)
             self.show_clock_checkbox.setChecked(config.get('show_clock', True))
             self.show_clock_checkbox.blockSignals(False)
             self.toggle_clock_visibility()
         # Filter by selected destination and direction (mutually exclusive)
-        if hasattr(self, 'filter_by_destination_checkbox') and hasattr(self, 'filter_by_destination_direction_checkbox'):
-            filter_by_direction = config.get('filter_by_direction', False)
-            filter_by_destination_direction = config.get('filter_by_destination_direction', False)
-            
-            # Ensure only one filter is checked (prioritize filter_by_direction if both are true)
-            if filter_by_direction and filter_by_destination_direction:
-                filter_by_destination_direction = False
-            
-            self.filter_by_destination_checkbox.blockSignals(True)
-            self.filter_by_destination_checkbox.setChecked(filter_by_direction)
-            self.filter_by_destination_checkbox.blockSignals(False)
-            
-            self.filter_by_destination_direction_checkbox.blockSignals(True)
-            self.filter_by_destination_direction_checkbox.setChecked(filter_by_destination_direction)
-            self.filter_by_destination_direction_checkbox.blockSignals(False)
+        if should_update('filter_by_direction', 'filter_by_destination_direction'):
+            if hasattr(self, 'filter_by_destination_checkbox') and hasattr(self, 'filter_by_destination_direction_checkbox'):
+                filter_by_direction = config.get('filter_by_direction', False)
+                filter_by_destination_direction = config.get('filter_by_destination_direction', False)
+
+                # Ensure only one filter is checked (prioritize filter_by_direction if both are true)
+                if filter_by_direction and filter_by_destination_direction:
+                    filter_by_destination_direction = False
+
+                self.filter_by_destination_checkbox.blockSignals(True)
+                self.filter_by_destination_checkbox.setChecked(filter_by_direction)
+                self.filter_by_destination_checkbox.blockSignals(False)
+
+                self.filter_by_destination_direction_checkbox.blockSignals(True)
+                self.filter_by_destination_direction_checkbox.setChecked(filter_by_destination_direction)
+                self.filter_by_destination_direction_checkbox.blockSignals(False)
         # Screen sleep
-        if hasattr(self, 'screen_sleep_enabled_checkbox'):
-            self.screen_sleep_enabled_checkbox.blockSignals(True)
-            self.screen_sleep_enabled_checkbox.setChecked(config.get('screen_sleep_enabled', False))
-            self.screen_sleep_enabled_checkbox.blockSignals(False)
-        if hasattr(self, 'screen_sleep_slider') and 'screen_sleep_minutes' in config:
-            self.screen_sleep_slider.blockSignals(True)
-            self.screen_sleep_slider.setValue(int(config.get('screen_sleep_minutes', 5)))
-            self.screen_sleep_slider.blockSignals(False)
-            self.update_screen_sleep_label()
-        # Apply to system if needed
-        self.apply_screen_sleep_settings()
+        screen_sleep_changed = should_update('screen_sleep_enabled', 'screen_sleep_minutes')
+        if screen_sleep_changed:
+            if hasattr(self, 'screen_sleep_enabled_checkbox'):
+                self.screen_sleep_enabled_checkbox.blockSignals(True)
+                self.screen_sleep_enabled_checkbox.setChecked(config.get('screen_sleep_enabled', False))
+                self.screen_sleep_enabled_checkbox.blockSignals(False)
+            if hasattr(self, 'screen_sleep_slider') and 'screen_sleep_minutes' in config:
+                self.screen_sleep_slider.blockSignals(True)
+                self.screen_sleep_slider.setValue(int(config.get('screen_sleep_minutes', 5)))
+                self.screen_sleep_slider.blockSignals(False)
+                self.update_screen_sleep_label()
+            # Apply to system if needed
+            self.apply_screen_sleep_settings()
         # Refresh rate
-        if hasattr(self, 'refresh_timer'):
+        if should_update('refresh_rate_seconds'):
             refresh_rate_seconds = config.get('refresh_rate_seconds', 30)
-            self.refresh_timer.stop()
-            self.refresh_timer.start(refresh_rate_seconds * 1000)  # Convert seconds to milliseconds
+            if refresh_rate_seconds != self.refresh_rate_seconds:
+                self.refresh_rate_seconds = refresh_rate_seconds
+                if hasattr(self, 'refresh_timer'):
+                    self.refresh_timer.stop()
+                    self.refresh_timer.start(refresh_rate_seconds * 1000)  # Convert seconds to milliseconds
             self.seconds_until_refresh = refresh_rate_seconds
+        # Background update check interval
+        if should_update('update_check_interval_seconds') and hasattr(self, 'update_check_timer'):
+            update_interval = config.get('update_check_interval_seconds', 60)
+            if update_interval != self.update_check_interval_seconds:
+                self.update_check_interval_seconds = update_interval
+                self.update_check_timer.stop()
+                self.update_check_timer.start(update_interval * 1000)
+
+    def on_config_changed(self, config, changed_keys):
+        """Apply config changes to timers and UI when settings change."""
+        self.sync_settings_from_config(config=config, changed_keys=changed_keys)
     
     def update_screen_sleep_label(self):
         """Update the screen sleep label to show current slider value"""
@@ -1575,9 +1599,8 @@ class MainWindow(QMainWindow):
     
     def apply_screen_sleep_settings(self):
         """Apply screen sleep settings to the system using xset commands"""
-        config = self.config_store.load()
-        screen_sleep_enabled = config.get('screen_sleep_enabled', False)
-        screen_sleep_minutes = config.get('screen_sleep_minutes', 5)
+        screen_sleep_enabled = self.config_store.get_bool('screen_sleep_enabled', False)
+        screen_sleep_minutes = self.config_store.get_int('screen_sleep_minutes', 5)
         self.system_service.apply_screen_sleep_settings(screen_sleep_enabled, screen_sleep_minutes)
     
     def create_title_bar(self, button_widget, countdown_label=None, center_widget=None, update_notification_label=None):
@@ -1688,7 +1711,7 @@ class MainWindow(QMainWindow):
         time.tzset()
         
         # Sync all settings from config file
-        self.sync_settings_from_config()
+        self.config_store.refresh_if_changed()
         
         # Refresh the arrivals display immediately
         try:
@@ -2923,8 +2946,7 @@ def main():
     working_dir = os.path.dirname(os.path.abspath(__file__))
     update_service = UpdateService(settings_server, working_dir=working_dir)
 
-    config = config_store.load()
-    metro_api = MetroAPI(config.get('api_key', ''))
+    metro_api = MetroAPI(config_store.get_str('api_key', ''))
     data_handler = DataHandler(metro_api)
 
     try:

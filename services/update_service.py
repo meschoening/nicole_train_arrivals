@@ -1,13 +1,13 @@
 """Git update workflow used by the UI."""
 
 import os
-import subprocess
 import time
 
 from PyQt5.QtCore import QObject, QProcess, pyqtSignal
 from PyQt5.QtWidgets import QApplication
 
 from services.config_store import load_config
+from services.system_actions import run_command, start_process
 
 
 _GIT_DEBUG = True
@@ -47,19 +47,20 @@ def build_git_command(args, git_user=None):
 
 
 def run_git_command(args, cwd, git_user=None, timeout=5):
-    return subprocess.run(
+    return run_command(
         build_git_command(args, git_user=git_user),
         cwd=cwd,
-        capture_output=True,
-        text=True,
-        timeout=timeout,
+        timeout_s=timeout,
+        log_label="git_command",
     )
 
 
 def popen_git_command(args, cwd, git_user=None, **kwargs):
-    return subprocess.Popen(
+    return start_process(
         build_git_command(args, git_user=git_user),
         cwd=cwd,
+        log_label="git_process",
+        timeout_s=None,
         **kwargs,
     )
 

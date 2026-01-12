@@ -54,6 +54,7 @@ Reviewed the Python application (PyQt5 main display, Flask settings server, WiFi
 - **Description:** The update check timer interval is read once on startup and never updated when `update_check_interval_seconds` changes (`main_display.py:700-704` vs. `main_display.py:1654-1718`).
 - **Why it matters:** The web UI indicates the interval was saved, but the running display ignores it until restart.
 - **Recommendation:** Update `update_check_timer` inside `sync_settings_from_config` or when receiving the settings-changed trigger.
+- <span style="color: yellow;">**Update:** Implemented config change notifications and applied update check interval changes at runtime; not yet validated.</span>
 
 ### [Low] Hard-coded username in git operations
 - **Description:** Git operations are run as the fixed user `max` (`web_settings_server.py:634`, `web_settings_server.py:679`, `web_settings_server.py:811`).
@@ -69,10 +70,10 @@ Reviewed the Python application (PyQt5 main display, Flask settings server, WiFi
   - **Recommendation:** Split into focused modules (e.g., UI views/controllers, system services, update services, API client). Pass dependencies into `MainWindow` instead of using module-level globals.</span>
 - <span style="color: yellow;">**Concurrency model:** Background work is split across QTimers, QProcess, and threads, with some shared flags in `web_settings_server.py`. Coordination is mostly ad hoc (e.g., shared “git in progress” flags).
   - **Update:** Centralized shared state in `services/background_jobs.py` with a single interface for background jobs; Qt signals/slots now handle cross-thread updates to avoid subtle races.</span>
-- **I/O boundaries:** Direct `os.system` and `subprocess` calls are scattered across UI and server code, and error handling is inconsistent (sometimes logged, sometimes suppressed).
-  - **Recommendation:** Wrap system actions behind a small service layer with uniform logging, explicit timeouts, and structured errors so UI and API layers can respond consistently.
-- **Configuration flow:** Config reads/writes are duplicated in several paths (UI refresh, web settings, startup). This increases the chance of inconsistent behavior when new settings are added.
-  - **Recommendation:** Create a single config access module with typed getters/setters, validation, and change notifications to update timers/UI consistently.
+- <span style="color: yellow;">**I/O boundaries:** Direct `os.system` and `subprocess` calls are scattered across UI and server code, and error handling is inconsistent (sometimes logged, sometimes suppressed).
+  - **Update:** Added `services/system_actions.py` and routed system commands through `run_command`/`start_process` with consistent logging, explicit timeouts, and structured error reporting across UI, server, and WiFi provisioning code.</span>
+- <span style="color: yellow;">**Configuration flow:** Config reads/writes are duplicated in several paths (UI refresh, web settings, startup). This increases the chance of inconsistent behavior when new settings are added.
+  - **Update:** Centralized config access with typed getters/setters, validation, and change notifications to keep timers/UI in sync (not yet validated).</span>
 - <span style="color: green;">**Code hygiene:** Some functions are very long and mix responsibilities (e.g., UI construction + business logic in the same method).
   - **Recommendation:** Extract helper methods for complex UI sections and reduce method length to improve readability and maintainability.</span>
 

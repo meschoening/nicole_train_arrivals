@@ -1,13 +1,14 @@
 import threading
 from flask import Flask, request, jsonify, render_template, redirect, url_for, Response
+from subprocess import PIPE, STDOUT
 from services.background_jobs import background_jobs
 from services.config_store import ConfigStore
 from services.message_store import MessageStore
 from services.system_service import SystemService
 from services.update_service import UpdateServiceRunner, has_git_error, has_updates
+from services.system_actions import run_command, start_process
 import os
 from datetime import datetime
-import subprocess
 import sys
 import time
 import json
@@ -153,13 +154,12 @@ def _get_available_timezones():
     )
     
     try:
-        result = subprocess.run(
+        result = run_command(
             ["timedatectl", "list-timezones"],
-            capture_output=True,
-            text=True,
-            timeout=10
+            timeout_s=10,
+            log_label="timezones_list",
         )
-        if result.returncode == 0:
+        if result.ok:
             timezones = [tz.strip() for tz in result.stdout.splitlines() if tz.strip()]
             # Filter to canonical timezones + UTC
             filtered = [tz for tz in timezones if tz.startswith(canonical_prefixes) or tz == "UTC"]
@@ -177,13 +177,12 @@ def _get_available_timezones():
 def _get_current_system_timezone():
     """Get the current system timezone from timedatectl."""
     try:
-        result = subprocess.run(
+        result = run_command(
             ["timedatectl", "show", "--property=Timezone", "--value"],
-            capture_output=True,
-            text=True,
-            timeout=5
+            timeout_s=5,
+            log_label="timezone_current",
         )
-        if result.returncode == 0 and result.stdout.strip():
+        if result.ok and result.stdout.strip():
             return result.stdout.strip()
     except Exception:
         pass
@@ -232,30 +231,28 @@ def start_web_settings_server(data_handler, host="0.0.0.0", port=443):
         """Get the latest git commit version info (short hash, message, author date)."""
         cwd = os.path.dirname(os.path.abspath(__file__))
         try:
-            result = subprocess.run(
+            result = run_command(
                 ["git", "log", "-1", "--format=%h - %s (%ad)", "--date=format:%b %d, %Y %I:%M %p"],
                 cwd=cwd,
-                capture_output=True,
-                text=True,
-                timeout=5
+                timeout_s=5,
+                log_label="git_latest_commit",
             )
-            if result.returncode == 0 and result.stdout.strip():
+            if result.ok and result.stdout.strip():
                 return result.stdout.strip()
             return "Not available"
-        except (subprocess.TimeoutExpired, subprocess.SubprocessError, FileNotFoundError):
+        except Exception:
             return "Not available"
 
     def _check_tailscale_installed():
         """Check if tailscale is installed on the system."""
         try:
-            result = subprocess.run(
+            result = run_command(
                 ["which", "tailscale"],
-                capture_output=True,
-                text=True,
-                timeout=5
+                timeout_s=5,
+                log_label="tailscale_check",
             )
-            return result.returncode == 0
-        except (subprocess.TimeoutExpired, subprocess.SubprocessError, FileNotFoundError):
+            return result.ok
+        except Exception:
             return False
 
     def _get_ssl_status():
@@ -288,8 +285,7 @@ def start_web_settings_server(data_handler, host="0.0.0.0", port=443):
 
     def _get_display_name():
         """Get the display name (title_text) from config for page titles."""
-        config = config_store.load()
-        return config.get("title_text", "Nicole's Train Tracker!")
+        return config_store.get_str("title_text", "Nicole's Train Tracker!")
 
     def check_for_updates():
         """
@@ -299,8 +295,7 @@ def start_web_settings_server(data_handler, host="0.0.0.0", port=443):
         Uses the configured git_branch setting to determine which branch to check.
         """
         try:
-            config = config_store.load()
-            configured_branch = config.get("git_branch", "main")
+            configured_branch = config_store.get_str("git_branch", "main")
             local_head, remote_head = update_service.get_heads(timeout=5, branch=configured_branch)
             if not local_head or not remote_head:
                 return False
@@ -385,13 +380,12 @@ def start_web_settings_server(data_handler, host="0.0.0.0", port=443):
 
     @app.get("/update")
     def get_update():
-        config = config_store.load()
         current_branch = update_service.get_current_branch(timeout=5) or "unknown"
-        configured_branch = config.get("git_branch", "main")
+        configured_branch = config_store.get_str("git_branch", "main")
         return render_template(
             "update.html",
             display_name=_get_display_name(),
-            update_check_interval=config.get("update_check_interval_seconds", 60),
+            update_check_interval=config_store.get_int("update_check_interval_seconds", 60),
             last_saved=_get_config_last_saved(),
             current_branch=current_branch,
             configured_branch=configured_branch
@@ -399,7 +393,6 @@ def start_web_settings_server(data_handler, host="0.0.0.0", port=443):
 
     @app.get("/api-key")
     def get_api_key():
-        config = config_store.load()
         # Check SSH key status for initial page render
         home = os.path.expanduser("~")
         ssh_private = os.path.join(home, ".ssh", "id_ed25519")
@@ -419,7 +412,7 @@ def start_web_settings_server(data_handler, host="0.0.0.0", port=443):
         ssl_status = _get_ssl_status()
         return render_template(
             "api_key.html",
-            api_key=config.get("api_key", ""),
+            api_key=config_store.get_str("api_key", ""),
             last_saved=_get_config_last_saved(),
             ssh_key_exists=ssh_key_exists,
             ssh_public_key=ssh_public_key,
@@ -431,7 +424,7 @@ def start_web_settings_server(data_handler, host="0.0.0.0", port=443):
     @app.post("/api-key")
     def post_api_key():
         api_key = request.form.get("api_key", "")
-        config_store.save("api_key", api_key)
+        config_store.set_value("api_key", api_key)
         return redirect(url_for("index"))
 
     def _get_ssh_key_paths():
@@ -484,14 +477,14 @@ def start_web_settings_server(data_handler, host="0.0.0.0", port=443):
                 os.makedirs(ssh_dir, mode=0o700)
             
             # Generate SSH key with no passphrase
-            result = subprocess.run(
+            result = run_command(
                 ["ssh-keygen", "-t", "ed25519", "-C", email, "-N", "", "-f", private_key],
-                capture_output=True,
-                text=True
+                timeout_s=15,
+                log_label="ssh_keygen",
             )
             
-            if result.returncode != 0:
-                error_msg = result.stderr.strip() or result.stdout.strip() or "Unknown error"
+            if not result.ok:
+                error_msg = result.stderr.strip() or result.stdout.strip() or result.error or "Unknown error"
                 return jsonify({"success": False, "error": error_msg}), 500
             
             # Read and return the public key
@@ -537,14 +530,14 @@ def start_web_settings_server(data_handler, host="0.0.0.0", port=443):
                 os.remove(public_key)
             
             # Generate new SSH key with no passphrase
-            result = subprocess.run(
+            result = run_command(
                 ["ssh-keygen", "-t", "ed25519", "-C", email, "-N", "", "-f", private_key],
-                capture_output=True,
-                text=True
+                timeout_s=15,
+                log_label="ssh_keygen_regen",
             )
             
-            if result.returncode != 0:
-                error_msg = result.stderr.strip() or result.stdout.strip() or "Unknown error"
+            if not result.ok:
+                error_msg = result.stderr.strip() or result.stdout.strip() or result.error or "Unknown error"
                 return jsonify({"success": False, "error": error_msg}), 500
             
             # Read and return the new public key
@@ -569,14 +562,13 @@ def start_web_settings_server(data_handler, host="0.0.0.0", port=443):
         """Get git remote origin URL and determine if it's HTTPS or SSH."""
         cwd = os.path.dirname(os.path.abspath(__file__))
         try:
-            result = subprocess.run(
+            result = run_command(
                 ["sudo", "-u", "max", "git", "remote", "-v"],
                 cwd=cwd,
-                capture_output=True,
-                text=True,
-                timeout=10
+                timeout_s=10,
+                log_label="git_remote_list",
             )
-            if result.returncode == 0 and result.stdout:
+            if result.ok and result.stdout:
                 # Parse first line (origin fetch URL)
                 for line in result.stdout.splitlines():
                     if "origin" in line and "(fetch)" in line:
@@ -614,17 +606,17 @@ def start_web_settings_server(data_handler, host="0.0.0.0", port=443):
         
         cwd = os.path.dirname(os.path.abspath(__file__))
         try:
-            result = subprocess.run(
+            result = run_command(
                 ["sudo", "-u", "max", "git", "remote", "set-url", "origin", ssh_url],
                 cwd=cwd,
-                capture_output=True,
-                text=True,
-                timeout=10
+                timeout_s=10,
+                log_label="git_remote_set",
             )
-            if result.returncode == 0:
+            if result.ok:
                 return {"converted": True, "type": "ssh", "new_url": ssh_url}
             else:
-                return {"converted": False, "type": "https", "error": result.stderr.strip()}
+                error_text = result.stderr.strip() or result.error or "Failed to update git remote"
+                return {"converted": False, "type": "https", "error": error_text}
         except Exception as e:
             return {"converted": False, "type": "https", "error": str(e)}
 
@@ -671,15 +663,14 @@ def start_web_settings_server(data_handler, host="0.0.0.0", port=443):
             key_file = os.path.join(_SSL_CERT_DIR, f"{hostname}.key")
             
             # Generate certificates using tailscale cert
-            result = subprocess.run(
+            result = run_command(
                 ["sudo", "tailscale", "cert", "--cert-file", cert_file, "--key-file", key_file, hostname],
-                capture_output=True,
-                text=True,
-                timeout=60
+                timeout_s=60,
+                log_label="tailscale_cert",
             )
             
-            if result.returncode != 0:
-                error_msg = result.stderr.strip() or result.stdout.strip() or "Unknown error"
+            if not result.ok:
+                error_msg = result.stderr.strip() or result.stdout.strip() or result.error or "Unknown error"
                 return jsonify({"success": False, "error": error_msg}), 500
             
             # Verify files were created and change ownership to current user
@@ -687,10 +678,10 @@ def start_web_settings_server(data_handler, host="0.0.0.0", port=443):
                 # Change ownership of generated files to current user
                 import pwd
                 current_user = pwd.getpwuid(os.getuid()).pw_name
-                subprocess.run(
+                run_command(
                     ["sudo", "chown", current_user, cert_file, key_file],
-                    capture_output=True,
-                    timeout=10
+                    timeout_s=10,
+                    log_label="tailscale_cert_chown",
                 )
                 return jsonify({
                     "success": True,
@@ -701,8 +692,6 @@ def start_web_settings_server(data_handler, host="0.0.0.0", port=443):
             else:
                 return jsonify({"success": False, "error": "Certificate generation succeeded but files not found"}), 500
                 
-        except subprocess.TimeoutExpired:
-            return jsonify({"success": False, "error": "Certificate generation timed out"}), 500
         except Exception as e:
             return jsonify({"success": False, "error": str(e)}), 500
 
@@ -715,8 +704,8 @@ def start_web_settings_server(data_handler, host="0.0.0.0", port=443):
                 try:
                     _git_debug_log("api_update_run: Starting 'git pull'")
                     process = update_service.popen_pull(
-                        stdout=subprocess.PIPE,
-                        stderr=subprocess.STDOUT,
+                        stdout=PIPE,
+                        stderr=STDOUT,
                         text=True,
                         bufsize=1,
                     )
@@ -773,7 +762,8 @@ def start_web_settings_server(data_handler, host="0.0.0.0", port=443):
         except (TypeError, ValueError):
             return jsonify({"success": False, "error": "Invalid interval value"}), 400
         
-        config_store.save("update_check_interval_seconds", interval)
+        config_store.set_value("update_check_interval_seconds", interval)
+        background_jobs.mark_settings_changed()
         return jsonify({"success": True, "interval": interval})
 
     @app.get("/api/check-for-updates")
@@ -791,7 +781,13 @@ def start_web_settings_server(data_handler, host="0.0.0.0", port=443):
                     fetch_result = update_service.fetch(timeout=30)
                     _git_debug_log(f"api_check_for_updates: git fetch completed with returncode={fetch_result.returncode}")
                     
-                    if fetch_result.returncode != 0:
+                    if fetch_result.timed_out:
+                        _git_debug_log("api_check_for_updates: git fetch timed out")
+                        return jsonify({
+                            "updates_available": False,
+                            "error": "Git command timed out"
+                        })
+                    if not fetch_result.ok:
                         _git_debug_log(f"api_check_for_updates: git fetch failed: {fetch_result.stderr}")
                         return jsonify({
                             "updates_available": False,
@@ -822,12 +818,6 @@ def start_web_settings_server(data_handler, host="0.0.0.0", port=443):
                         "remote_commit": remote_head[:8]
                     })
                     
-                except subprocess.TimeoutExpired:
-                    _git_debug_log("api_check_for_updates: Git command timed out")
-                    return jsonify({
-                        "updates_available": False,
-                        "error": "Git command timed out"
-                    })
                 except Exception as e:
                     _git_debug_log(f"api_check_for_updates: Exception: {e}")
                     return jsonify({
@@ -881,7 +871,7 @@ def start_web_settings_server(data_handler, host="0.0.0.0", port=443):
                 
                 if result["success"]:
                     # Save the branch to config
-                    config_store.save("git_branch", branch)
+                    config_store.set_value("git_branch", branch)
                     _git_debug_log(f"api_switch_branch: Successfully switched to branch '{branch}'")
                     return jsonify({
                         "success": True,
@@ -946,19 +936,19 @@ def start_web_settings_server(data_handler, host="0.0.0.0", port=443):
 
     @app.get("/api/reboot-config")
     def api_get_reboot_config():
-        config = config_store.load()
         return jsonify({
-            "reboot_enabled": config.get("reboot_enabled", False),
-            "reboot_time": config.get("reboot_time", "12:00 AM")
+            "reboot_enabled": config_store.get_bool("reboot_enabled", False),
+            "reboot_time": config_store.get_str("reboot_time", "12:00 AM")
         })
 
     @app.post("/api/reboot-config")
     def api_post_reboot_config():
         data = request.get_json()
+        updates = {}
         
         # Update reboot_enabled
         if "reboot_enabled" in data:
-            config_store.save("reboot_enabled", bool(data["reboot_enabled"]))
+            updates["reboot_enabled"] = bool(data["reboot_enabled"])
         
         # Update reboot_time from three components
         if "reboot_hour" in data and "reboot_minute" in data and "reboot_ampm" in data:
@@ -966,7 +956,10 @@ def start_web_settings_server(data_handler, host="0.0.0.0", port=443):
             minute = data["reboot_minute"]
             ampm = data["reboot_ampm"]
             time_str = f"{hour}:{minute} {ampm}"
-            config_store.save("reboot_time", time_str)
+            updates["reboot_time"] = time_str
+
+        if updates:
+            config_store.set_values(updates)
         
         return jsonify({"status": "saved"})
 
@@ -977,13 +970,14 @@ def start_web_settings_server(data_handler, host="0.0.0.0", port=443):
         def as_bool(name):
             return form.get(name) in ("true", "True", "1", "on", "yes")
 
+        updates = {}
         # Update simple flags
-        config_store.save("show_countdown", as_bool("show_countdown"))
-        config_store.save("show_clock", as_bool("show_clock"))
-        config_store.save("filter_by_direction", as_bool("filter_by_direction"))
-        config_store.save("filter_by_destination_direction", as_bool("filter_by_destination_direction"))
-        config_store.save("reboot_enabled", as_bool("reboot_enabled"))
-        config_store.save("screen_sleep_enabled", as_bool("screen_sleep_enabled"))
+        updates["show_countdown"] = as_bool("show_countdown")
+        updates["show_clock"] = as_bool("show_clock")
+        updates["filter_by_direction"] = as_bool("filter_by_direction")
+        updates["filter_by_destination_direction"] = as_bool("filter_by_destination_direction")
+        updates["reboot_enabled"] = as_bool("reboot_enabled")
+        updates["screen_sleep_enabled"] = as_bool("screen_sleep_enabled")
 
         # Update numeric values
         minutes = form.get("screen_sleep_minutes")
@@ -992,7 +986,7 @@ def start_web_settings_server(data_handler, host="0.0.0.0", port=443):
         except ValueError:
             minutes_val = None
         if minutes_val is not None:
-            config_store.save("screen_sleep_minutes", minutes_val)
+            updates["screen_sleep_minutes"] = minutes_val
 
         # Update refresh rate
         refresh_rate = form.get("refresh_rate_seconds")
@@ -1001,40 +995,38 @@ def start_web_settings_server(data_handler, host="0.0.0.0", port=443):
         except ValueError:
             refresh_rate_val = None
         if refresh_rate_val is not None:
-            # Validate range (5-120 seconds)
-            if 5 <= refresh_rate_val <= 120:
-                config_store.save("refresh_rate_seconds", refresh_rate_val)
+            updates["refresh_rate_seconds"] = refresh_rate_val
 
         # Update selections
         selected_line = form.get("selected_line")
         if selected_line is not None:
-            config_store.save("selected_line", selected_line)
+            updates["selected_line"] = selected_line
 
         selected_station = form.get("selected_station")
         if selected_station is not None:
-            config_store.save("selected_station", selected_station)
+            updates["selected_station"] = selected_station
 
         selected_destination = form.get("selected_destination")
         if selected_destination is not None:
-            config_store.save("selected_destination", selected_destination)
+            updates["selected_destination"] = selected_destination
 
         # Update title text
         title_text = form.get("title_text")
         if title_text is not None:
-            config_store.save("title_text", title_text)
+            updates["title_text"] = title_text
 
         # Handle timezone setting (system-only, not saved to config)
         timezone = form.get("timezone")
         if timezone:
             # Apply timezone system-wide via timedatectl
             try:
-                result = subprocess.run(
+                result = run_command(
                     ["sudo", "timedatectl", "set-timezone", timezone],
-                    capture_output=True,
-                    timeout=10
+                    timeout_s=10,
+                    log_label="timezone_set",
                 )
                 # Refresh Python's timezone cache after setting system timezone
-                if result.returncode == 0:
+                if result.ok:
                     time.tzset()
             except Exception:
                 pass
@@ -1045,7 +1037,10 @@ def start_web_settings_server(data_handler, host="0.0.0.0", port=443):
         reboot_ampm = form.get("reboot_ampm")
         if reboot_hour and reboot_minute and reboot_ampm:
             time_str = f"{reboot_hour}:{reboot_minute} {reboot_ampm}"
-            config_store.save("reboot_time", time_str)
+            updates["reboot_time"] = time_str
+
+        if updates:
+            config_store.set_values(updates)
 
         # Trigger settings changed flag for main display to refresh
         background_jobs.mark_settings_changed()
@@ -1072,13 +1067,12 @@ def start_web_settings_server(data_handler, host="0.0.0.0", port=443):
         """
         try:
             # Get font family names and their file paths
-            result = subprocess.run(
+            result = run_command(
                 ["fc-list", "--format=%{family}|%{file}\n"],
-                capture_output=True,
-                text=True,
-                timeout=10
+                timeout_s=10,
+                log_label="font_list",
             )
-            if result.returncode == 0:
+            if result.ok:
                 # Parse font names and paths, deduplicate by family name
                 fonts = {}
                 for line in result.stdout.strip().splitlines():
@@ -1106,13 +1100,12 @@ def start_web_settings_server(data_handler, host="0.0.0.0", port=443):
     def _get_font_path(font_name):
         """Get the file path for a specific font by name."""
         try:
-            result = subprocess.run(
+            result = run_command(
                 ["fc-list", f":family={font_name}", "--format=%{file}\n"],
-                capture_output=True,
-                text=True,
-                timeout=5
+                timeout_s=5,
+                log_label="font_path_lookup",
             )
-            if result.returncode == 0:
+            if result.ok:
                 for line in result.stdout.strip().splitlines():
                     path = line.strip()
                     if path and os.path.exists(path):
@@ -1147,8 +1140,7 @@ def start_web_settings_server(data_handler, host="0.0.0.0", port=443):
 
     @app.get("/change-font")
     def get_change_font():
-        config = config_store.load()
-        current_font = config.get("font_family", "Quicksand")
+        current_font = config_store.get_str("font_family", "Quicksand")
         default_font = config_store.default_config.get("font_family", "Quicksand")
         installed_fonts = _get_installed_fonts()
         return render_template(
@@ -1168,7 +1160,7 @@ def start_web_settings_server(data_handler, host="0.0.0.0", port=443):
         if not font_family:
             return jsonify({"success": False, "error": "Font family is required"}), 400
         
-        config_store.save("font_family", font_family)
+        config_store.set_value("font_family", font_family)
         
         # Trigger settings changed flag for main display
         background_jobs.mark_settings_changed()
@@ -1179,7 +1171,7 @@ def start_web_settings_server(data_handler, host="0.0.0.0", port=443):
     def api_revert_font():
         """Revert font to default."""
         default_font = config_store.default_config.get("font_family", "Quicksand")
-        config_store.save("font_family", default_font)
+        config_store.set_value("font_family", default_font)
         
         # Trigger settings changed flag for main display
         background_jobs.mark_settings_changed()
@@ -1261,10 +1253,10 @@ def start_web_settings_server(data_handler, host="0.0.0.0", port=443):
         
         # Refresh font cache
         try:
-            subprocess.run(
+            run_command(
                 ["fc-cache", "-f"],
-                capture_output=True,
-                timeout=30
+                timeout_s=30,
+                log_label="font_cache_refresh",
             )
         except Exception:
             # Font is installed but cache refresh failed - not critical
@@ -1273,13 +1265,12 @@ def start_web_settings_server(data_handler, host="0.0.0.0", port=443):
         # Get font family name using fc-query
         font_name = None
         try:
-            result = subprocess.run(
+            result = run_command(
                 ["fc-query", "--format=%{family}", font_path],
-                capture_output=True,
-                text=True,
-                timeout=10
+                timeout_s=10,
+                log_label="font_query",
             )
-            if result.returncode == 0 and result.stdout.strip():
+            if result.ok and result.stdout.strip():
                 # fc-query may return comma-separated names, take first
                 font_name = result.stdout.strip().split(",")[0].strip()
         except Exception:
@@ -1318,10 +1309,12 @@ def start_web_settings_server(data_handler, host="0.0.0.0", port=443):
             main_display_script = os.path.join(script_dir, "main_display.py")
             
             # Launch new instance of main_display.py
-            subprocess.Popen(
+            start_process(
                 ["python3", main_display_script, "--fullscreen"],
                 cwd=script_dir,
-                start_new_session=True
+                start_new_session=True,
+                log_label="restart_app",
+                timeout_s=None,
             )
             
             # Schedule the current process to exit after response is sent
