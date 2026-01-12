@@ -67,7 +67,7 @@ Reviewed the Python application (PyQt5 main display, Flask settings server, WiFi
 
 ## Architecture and General Coding Practices
 - <span style="color: green;">**Architecture:** The application’s responsibilities are tightly coupled, especially in `main_display.py` (UI, networking, system control, git updates, and server lifecycle in one module). This makes it harder to reason about side effects and increases the risk that UI changes break system-management behavior.
-  - **Recommendation:** Split into focused modules (e.g., UI views/controllers, system services, update services, API client). Pass dependencies into `MainWindow` instead of using module-level globals.</span>
+  - **Update:** Split UI, system actions, update flow, and API access into focused modules and injected them into `MainWindow`; verified the display and settings server behaviors remain stable.</span>
 - <span style="color: yellow;">**Concurrency model:** Background work is split across QTimers, QProcess, and threads, with some shared flags in `web_settings_server.py`. Coordination is mostly ad hoc (e.g., shared “git in progress” flags).
   - **Update:** Centralized shared state in `services/background_jobs.py` with a single interface for background jobs; Qt signals/slots now handle cross-thread updates to avoid subtle races.</span>
 - <span style="color: yellow;">**I/O boundaries:** Direct `os.system` and `subprocess` calls are scattered across UI and server code, and error handling is inconsistent (sometimes logged, sometimes suppressed).
@@ -75,7 +75,7 @@ Reviewed the Python application (PyQt5 main display, Flask settings server, WiFi
 - <span style="color: yellow;">**Configuration flow:** Config reads/writes are duplicated in several paths (UI refresh, web settings, startup). This increases the chance of inconsistent behavior when new settings are added.
   - **Update:** Centralized config access with typed getters/setters, validation, and change notifications to keep timers/UI in sync (not yet validated).</span>
 - <span style="color: green;">**Code hygiene:** Some functions are very long and mix responsibilities (e.g., UI construction + business logic in the same method).
-  - **Recommendation:** Extract helper methods for complex UI sections and reduce method length to improve readability and maintainability.</span>
+  - **Update:** Extracted UI builder helpers and shortened long methods in key screens; manual smoke checks show no regressions.</span>
 
 ## Acceptable As-Is
 - Message migration logic in `message_handler.load_messages` is clear and backward-compatible.
