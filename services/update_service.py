@@ -354,6 +354,14 @@ class UpdateServiceRunner:
 
     def get_remote_branches(self, timeout=10):
         """Get list of remote branches from git."""
+        fetch_result = run_git_command(
+            ["fetch", "--prune"],
+            cwd=self.working_dir,
+            git_user=self.git_user,
+            timeout=timeout,
+        )
+        if fetch_result.returncode != 0:
+            return []
         result = run_git_command(
             ["branch", "-r"],
             cwd=self.working_dir,
