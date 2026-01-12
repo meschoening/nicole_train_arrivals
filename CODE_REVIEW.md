@@ -50,11 +50,10 @@ Reviewed the Python application (PyQt5 main display, Flask settings server, WiFi
 - **Why it matters:** A stalled network call can freeze the UI, blocking input and timers.
 - **Recommendation:** Add conservative timeouts (e.g., 3–5 seconds) and move API fetches to a worker thread (Qt `QRunnable`/`QThreadPool`) or async worker that updates the UI on completion.
 
-### [Low] Update check interval changes do not propagate to running app
-- **Description:** The update check timer interval is read once on startup and never updated when `update_check_interval_seconds` changes (`main_display.py:700-704` vs. `main_display.py:1654-1718`).
-- **Why it matters:** The web UI indicates the interval was saved, but the running display ignores it until restart.
-- **Recommendation:** Update `update_check_timer` inside `sync_settings_from_config` or when receiving the settings-changed trigger.
-- <span style="color: yellow;">**Update:** Implemented config change notifications and applied update check interval changes at runtime; not yet validated.</span>
+### <span style="color: green;">[Low] Update check interval changes do not propagate to running app</span>
+- <span style="color: green;">**Description:** The update check timer interval is read once on startup and never updated when `update_check_interval_seconds` changes (`main_display.py:700-704` vs. `main_display.py:1654-1718`).
+- <span style="color: green;">**Why it matters:** The web UI indicates the interval was saved, but the running display ignores it until restart.</span>
+- <span style="color: green;">**Update:** Config change notifications now refresh the update check timer interval at runtime.</span>
 
 ### [Low] Hard-coded username in git operations
 - **Description:** Git operations are run as the fixed user `max` (`web_settings_server.py:634`, `web_settings_server.py:679`, `web_settings_server.py:811`).
@@ -68,11 +67,11 @@ Reviewed the Python application (PyQt5 main display, Flask settings server, WiFi
 ## Architecture and General Coding Practices
 - <span style="color: green;">**Architecture:** The application’s responsibilities are tightly coupled, especially in `main_display.py` (UI, networking, system control, git updates, and server lifecycle in one module). This makes it harder to reason about side effects and increases the risk that UI changes break system-management behavior.
   - **Update:** Split UI, system actions, update flow, and API access into focused modules and injected them into `MainWindow`; verified the display and settings server behaviors remain stable.</span>
-- <span style="color: yellow;">**Concurrency model:** Background work is split across QTimers, QProcess, and threads, with some shared flags in `web_settings_server.py`. Coordination is mostly ad hoc (e.g., shared “git in progress” flags).
+- <span style="color: green;">**Concurrency model:** Background work is split across QTimers, QProcess, and threads, with some shared flags in `web_settings_server.py`. Coordination is mostly ad hoc (e.g., shared “git in progress” flags).
   - **Update:** Centralized shared state in `services/background_jobs.py` with a single interface for background jobs; Qt signals/slots now handle cross-thread updates to avoid subtle races.</span>
-- <span style="color: yellow;">**I/O boundaries:** Direct `os.system` and `subprocess` calls are scattered across UI and server code, and error handling is inconsistent (sometimes logged, sometimes suppressed).
+- <span style="color: green;">**I/O boundaries:** Direct `os.system` and `subprocess` calls are scattered across UI and server code, and error handling is inconsistent (sometimes logged, sometimes suppressed).
   - **Update:** Added `services/system_actions.py` and routed system commands through `run_command`/`start_process` with consistent logging, explicit timeouts, and structured error reporting across UI, server, and WiFi provisioning code.</span>
-- <span style="color: yellow;">**Configuration flow:** Config reads/writes are duplicated in several paths (UI refresh, web settings, startup). This increases the chance of inconsistent behavior when new settings are added.
+- <span style="color: green;">**Configuration flow:** Config reads/writes are duplicated in several paths (UI refresh, web settings, startup). This increases the chance of inconsistent behavior when new settings are added.
   - **Update:** Centralized config access with typed getters/setters, validation, and change notifications to keep timers/UI in sync (not yet validated).</span>
 - <span style="color: green;">**Code hygiene:** Some functions are very long and mix responsibilities (e.g., UI construction + business logic in the same method).
   - **Update:** Extracted UI builder helpers and shortened long methods in key screens; manual smoke checks show no regressions.</span>
