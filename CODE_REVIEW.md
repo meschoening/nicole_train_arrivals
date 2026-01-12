@@ -16,19 +16,10 @@ Reviewed the Python application (PyQt5 main display, Flask settings server, WiFi
 - **Why it matters:** Anyone on the network (including in AP/captive mode) can trigger system updates, reboots, or key generation. This is a high-impact security exposure.
 - **Recommendation:** Add an auth layer (shared secret/token, HTTP basic auth, or Tailscale-only access), CSRF protection for POSTs, and consider binding the server to localhost by default with explicit opt-in for remote access.
 
-### [High] Jinja loop for `@font-face` is malformed
-- **Description:** The `change_font` template includes a broken Jinja loop (`templates/change_font.html:9-22`). The `{% for %}` and `{% endfor %}` tags are separated and will render as literal text; `{{ font.name }}` becomes undefined.
-- **Why it matters:** The dynamic `@font-face` declarations do not render, so font previews and loading are unreliable or broken.
-- **Recommendation:** Fix the template tags to proper Jinja syntax:
-  ```jinja
-  {% for font in fonts %}
-  @font-face {
-    font-family: '{{ font.name }}';
-    src: url('/api/font-file/{{ font.name | urlencode }}') format('truetype');
-    font-display: swap;
-  }
-  {% endfor %}
-  ```
+### <span style="color: yellow;">[High] Jinja loop for `@font-face` is malformed</span>
+- <span style="color: yellow;">**Description:** The `change_font` template includes a broken Jinja loop (`templates/change_font.html:9-22`). The `{% for %}` and `{% endfor %}` tags are separated and will render as literal text; `{{ font.name }}` becomes undefined.</span>
+- <span style="color: yellow;">**Why it matters:** The dynamic `@font-face` declarations do not render, so font previews and loading are unreliable or broken.</span>
+- <span style="color: yellow;">**Update:** Fixed `templates/change_font.html` to use a proper Jinja loop so dynamic `@font-face` rules render for each font.</span>
 
 ### [Medium] Captive portal server never stops
 - **Description:** `start_portal_server` spins up a Flask server thread; `stop_portal_server` only flips a flag and does not actually stop the server (`wifi_setup.py:884-899`).
