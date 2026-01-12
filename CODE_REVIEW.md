@@ -26,10 +26,10 @@ Reviewed the Python application (PyQt5 main display, Flask settings server, WiFi
 - <span style="color: yellow;">**Why it matters:** After “Close Setup Network,” the portal continues listening on port 80. Re-entering broadcast mode will likely fail to bind the port, and the portal may remain accessible on the LAN.</span>
 - <span style="color: yellow;">**Update:** The captive portal now runs as a dedicated background process launched from `wifi_setup.py`, and `stop_portal_server` terminates it with a timeout/kill fallback; repeated starts are guarded.</span>
 
-### [Medium] SSID rendering allows JS injection in captive portal
-- **Description:** The WiFi portal builds inline `onclick` handlers with SSIDs embedded in JS strings (`templates/wifi_setup.html:279-299`). `escapeHtml` is HTML-safe but not JS-string-safe; HTML entities are decoded before the JS executes.
-- **Why it matters:** A malicious SSID containing quotes can break out of the string and inject script into the captive portal UI (XSS).
-- **Recommendation:** Avoid inline JS. Build DOM nodes and attach listeners with `addEventListener`, storing SSIDs in `data-*` attributes or closures; use `textContent` for display.
+### <span style="color: yellow;">[Medium] SSID rendering allows JS injection in captive portal</span>
+- <span style="color: yellow;">**Description:** The WiFi portal builds inline `onclick` handlers with SSIDs embedded in JS strings (`templates/wifi_setup.html:279-299`). `escapeHtml` is HTML-safe but not JS-string-safe; HTML entities are decoded before the JS executes.</span>
+- <span style="color: yellow;">**Why it matters:** A malicious SSID containing quotes can break out of the string and inject script into the captive portal UI (XSS).</span>
+- <span style="color: yellow;">**Update:** Rebuilt the captive portal network list and saved network actions with DOM nodes, `addEventListener` handlers, and `textContent` rendering to avoid JS-string interpolation.</span>
 
 ### <span style="color: yellow;">[Medium] Config/message writes are non-atomic and not synchronized</span>
 - <span style="color: yellow;">**Description:** `ConfigStore.set_values` and `save_messages` performed read-modify-write without file locks or atomic writes (`services/config_store.py`, `services/message_store.py`).</span>

@@ -270,55 +270,83 @@
             btn.textContent = 'Scan for Networks';
         }
 
+        function buildNetworkItem(network) {
+            const item = document.createElement('li');
+            item.className = 'network-item';
+            item.addEventListener('click', () => selectNetwork(network.ssid));
+
+            const details = document.createElement('div');
+
+            const name = document.createElement('div');
+            name.className = 'network-name';
+            name.textContent = network.ssid || '';
+
+            const security = document.createElement('div');
+            security.className = 'network-security';
+            security.textContent = network.security || 'Open';
+
+            details.appendChild(name);
+            details.appendChild(security);
+
+            const signal = document.createElement('div');
+            signal.className = 'network-signal';
+            signal.textContent = `${network.signal}%`;
+
+            item.appendChild(details);
+            item.appendChild(signal);
+            return item;
+        }
+
         // Render the network list with expand/collapse
         function renderNetworkList(networks) {
             const list = document.getElementById('networkList');
             const maxVisible = 5;
             const hasMore = networks.length > maxVisible;
 
-            let html = networks.slice(0, maxVisible).map(n => `
-              <li class="network-item" onclick="selectNetwork('${escapeHtml(n.ssid)}')">
-                <div>
-                  <div class="network-name">${escapeHtml(n.ssid)}</div>
-                  <div class="network-security">${escapeHtml(n.security) || 'Open'}</div>
-                </div>
-                <div class="network-signal">${n.signal}%</div>
-              </li>
-            `).join('');
+            list.innerHTML = '';
+            const fragment = document.createDocumentFragment();
+
+            networks.forEach((network, index) => {
+                const item = buildNetworkItem(network);
+                if (hasMore && index >= maxVisible) {
+                    item.dataset.hidden = 'true';
+                    item.hidden = true;
+                }
+                fragment.appendChild(item);
+            });
 
             if (hasMore) {
-                // Hidden networks
-                html += `<div id="hiddenNetworks" style="display: none;">`;
-                html += networks.slice(maxVisible).map(n => `
-                  <li class="network-item" onclick="selectNetwork('${escapeHtml(n.ssid)}')">
-                    <div>
-                      <div class="network-name">${escapeHtml(n.ssid)}</div>
-                      <div class="network-security">${escapeHtml(n.security) || 'Open'}</div>
-                    </div>
-                    <div class="network-signal">${n.signal}%</div>
-                  </li>
-                `).join('');
-                html += `</div>`;
-                html += `<li class="network-item" id="showMoreBtn" onclick="toggleNetworkList()" style="justify-content: center; cursor: pointer; color: #2196F3;">
-                    Show ${networks.length - maxVisible} more networks
-                </li>`;
+                const showMoreItem = document.createElement('li');
+                showMoreItem.className = 'network-item';
+                showMoreItem.id = 'showMoreBtn';
+                showMoreItem.style.justifyContent = 'center';
+                showMoreItem.style.cursor = 'pointer';
+                showMoreItem.style.color = '#2196F3';
+                showMoreItem.textContent = `Show ${networks.length - maxVisible} more networks`;
+                showMoreItem.dataset.originalText = showMoreItem.textContent;
+                showMoreItem.addEventListener('click', toggleNetworkList);
+                fragment.appendChild(showMoreItem);
             }
 
-            list.innerHTML = html;
+            list.appendChild(fragment);
         }
 
         // Toggle showing all networks
         function toggleNetworkList() {
-            const hidden = document.getElementById('hiddenNetworks');
+            const list = document.getElementById('networkList');
+            const hiddenItems = list.querySelectorAll('li[data-hidden="true"]');
             const btn = document.getElementById('showMoreBtn');
 
-            if (hidden.style.display === 'none') {
-                hidden.style.display = 'block';
-                btn.innerHTML = 'Show less';
-            } else {
-                hidden.style.display = 'none';
-                btn.innerHTML = btn.dataset.originalText || 'Show more networks';
+            if (!btn || hiddenItems.length === 0) {
+                return;
             }
+
+            const shouldShow = hiddenItems[0].hidden;
+            hiddenItems.forEach((item) => {
+                item.hidden = !shouldShow;
+            });
+
+            btn.textContent = shouldShow ? 'Show less' : (btn.dataset.originalText || 'Show more networks');
         }
 
         // Select a network from the list
@@ -381,12 +409,29 @@
                 const data = await resp.json();
 
                 if (data.success && data.networks.length > 0) {
-                    list.innerHTML = data.networks.map(n => `
-              <li class="network-item">
-                <div class="network-name">${escapeHtml(n.name)}</div>
-                <button class="btn btn-danger" onclick="deleteNetwork('${escapeHtml(n.name)}')" style="padding: 6px 12px; font-size: 14px;">Delete</button>
-              </li>
-            `).join('');
+                    list.innerHTML = '';
+                    const fragment = document.createDocumentFragment();
+                    data.networks.forEach((network) => {
+                        const item = document.createElement('li');
+                        item.className = 'network-item';
+
+                        const name = document.createElement('div');
+                        name.className = 'network-name';
+                        name.textContent = network.name || '';
+
+                        const deleteBtn = document.createElement('button');
+                        deleteBtn.className = 'btn btn-danger';
+                        deleteBtn.type = 'button';
+                        deleteBtn.textContent = 'Delete';
+                        deleteBtn.style.padding = '6px 12px';
+                        deleteBtn.style.fontSize = '14px';
+                        deleteBtn.addEventListener('click', () => deleteNetwork(network.name));
+
+                        item.appendChild(name);
+                        item.appendChild(deleteBtn);
+                        fragment.appendChild(item);
+                    });
+                    list.appendChild(fragment);
                 } else if (data.success) {
                     list.innerHTML = '<li class="network-item">No saved networks</li>';
                 } else {
@@ -418,13 +463,6 @@
             } catch (e) {
                 showStatus('Error deleting network: ' + e.message, 'error');
             }
-        }
-
-        // Escape HTML to prevent XSS
-        function escapeHtml(text) {
-            const div = document.createElement('div');
-            div.textContent = text;
-            return div.innerHTML;
         }
 
         // Load saved networks on page load
