@@ -16,7 +16,7 @@ from PyQt5.QtCore import Qt, QTimer, QProcess
 import os
 import sys
 import argparse
-import threading
+import subprocess
 from services.config_store import ConfigStore
 from services.system_actions import run_command, start_process
 
@@ -39,8 +39,7 @@ class WiFiSetupWindow(QMainWindow):
         
         # AP state tracking
         self.is_broadcasting = False
-        self.portal_server_thread = None
-        self.portal_server_running = False
+        self.portal_server_process = None
         
         # Manual connection state tracking
         self.is_connecting = False
@@ -909,21 +908,36 @@ class WiFiSetupWindow(QMainWindow):
             self.connection_result_label.show()
     
     def start_portal_server(self):
-        """Start the Flask captive portal server in a background thread."""
-        from wifi_portal_server import start_wifi_portal_server
-        self.portal_server_running = True
-        self.portal_server_thread = threading.Thread(
-            target=start_wifi_portal_server,
-            daemon=True
+        """Start the Flask captive portal server as a background process."""
+        if self.portal_server_process and self.portal_server_process.poll() is None:
+            self.connection_console.appendPlainText("Captive portal server already running.")
+            return
+
+        script_dir = os.path.dirname(os.path.abspath(__file__))
+        portal_script = os.path.join(script_dir, "wifi_portal_server.py")
+        self.portal_server_process = start_process(
+            [sys.executable, portal_script],
+            cwd=script_dir,
+            log_label="start_wifi_portal_server",
         )
-        self.portal_server_thread.start()
-    
+
     def stop_portal_server(self):
         """Stop the Flask captive portal server."""
-        # Flask doesn't have a clean shutdown mechanism when run like this.
-        # The thread is daemon=True, so it will die when the app exits.
-        # For in-process stopping, we'd need a more complex solution.
-        self.portal_server_running = False
+        process = self.portal_server_process
+        if not process:
+            return
+
+        if process.poll() is not None:
+            self.portal_server_process = None
+            return
+
+        process.terminate()
+        try:
+            process.wait(timeout=5)
+        except subprocess.TimeoutExpired:
+            process.kill()
+            process.wait(timeout=5)
+        self.portal_server_process = None
     
     def return_to_main_display(self):
         """Return to the main display application."""

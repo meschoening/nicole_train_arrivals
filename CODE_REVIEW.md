@@ -21,10 +21,10 @@ Reviewed the Python application (PyQt5 main display, Flask settings server, WiFi
 - <span style="color: yellow;">**Why it matters:** The dynamic `@font-face` declarations do not render, so font previews and loading are unreliable or broken.</span>
 - <span style="color: yellow;">**Update:** Fixed `templates/change_font.html` to use a proper Jinja loop so dynamic `@font-face` rules render for each font.</span>
 
-### [Medium] Captive portal server never stops
-- **Description:** `start_portal_server` spins up a Flask server thread; `stop_portal_server` only flips a flag and does not actually stop the server (`wifi_setup.py:884-899`).
-- **Why it matters:** After “Close Setup Network,” the portal continues listening on port 80. Re-entering broadcast mode will likely fail to bind the port, and the portal may remain accessible on the LAN.
-- **Recommendation:** Use a stoppable server (`werkzeug.serving.make_server`) or a dedicated process you can terminate. Also guard against multiple starts by checking `portal_server_running` before spawning a new thread.
+### <span style="color: yellow;">[Medium] Captive portal server never stops</span>
+- <span style="color: yellow;">**Description:** `start_portal_server` spins up a Flask server thread; `stop_portal_server` only flips a flag and does not actually stop the server (`wifi_setup.py:884-899`).</span>
+- <span style="color: yellow;">**Why it matters:** After “Close Setup Network,” the portal continues listening on port 80. Re-entering broadcast mode will likely fail to bind the port, and the portal may remain accessible on the LAN.</span>
+- <span style="color: yellow;">**Update:** The captive portal now runs as a dedicated background process launched from `wifi_setup.py`, and `stop_portal_server` terminates it with a timeout/kill fallback; repeated starts are guarded.</span>
 
 ### [Medium] SSID rendering allows JS injection in captive portal
 - **Description:** The WiFi portal builds inline `onclick` handlers with SSIDs embedded in JS strings (`templates/wifi_setup.html:279-299`). `escapeHtml` is HTML-safe but not JS-string-safe; HTML entities are decoded before the JS executes.
