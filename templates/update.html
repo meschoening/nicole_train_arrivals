@@ -348,6 +348,7 @@
     const successLabelEl = document.getElementById('successLabel');
 
     let evtSource = null;
+    const homeUrl = '{{ url_for("index") }}';
 
     function clearConsole() { consoleEl.textContent = ''; }
     function appendLine(line) { consoleEl.textContent += (line.endsWith('\n') ? line : line + '\n'); consoleEl.scrollTop = consoleEl.scrollHeight; }
@@ -356,6 +357,49 @@
     function showReboot(show) { rebootBtn.style.display = show ? 'inline-block' : 'none'; }
     function showSuccessLabel(message) { successLabelEl.textContent = 'Installed Update: ' + message; successLabelEl.style.display = 'block'; }
     function hideSuccessLabel() { successLabelEl.style.display = 'none'; }
+
+    function startRebootOverlay() {
+      const overlay = document.getElementById('rebootOverlay');
+      const errorEl = document.getElementById('rebootError');
+      overlay.classList.add('visible');
+      errorEl.textContent = '';
+      errorEl.style.display = 'none';
+
+      const pollInterval = 2000; // 2 seconds
+      const maxWaitTime = 120000; // 120 seconds
+      const startTime = Date.now();
+
+      async function checkServerAvailable() {
+        const elapsed = Date.now() - startTime;
+
+        if (elapsed > maxWaitTime) {
+          errorEl.textContent = 'Timeout: Server did not come back online within 2 minutes.';
+          errorEl.style.display = 'block';
+          return;
+        }
+
+        try {
+          const response = await fetch(homeUrl, {
+            method: 'HEAD',
+            cache: 'no-store'
+          });
+
+          if (response.ok) {
+            // Server is back! Redirect to home page
+            window.location.href = homeUrl;
+            return;
+          }
+        } catch (e) {
+          // Server not ready yet, continue polling
+        }
+
+        // Schedule next check
+        setTimeout(checkServerAvailable, pollInterval);
+      }
+
+      // Wait a bit before starting to poll (give server time to shut down)
+      setTimeout(checkServerAvailable, 3000);
+    }
 
     function closeEventSource() {
       if (evtSource) { evtSource.close(); evtSource = null; }
@@ -413,46 +457,7 @@
         // Expected - connection may drop immediately
       }
 
-      // Show the overlay and start polling
-      const overlay = document.getElementById('rebootOverlay');
-      const errorEl = document.getElementById('rebootError');
-      overlay.classList.add('visible');
-
-      const homeUrl = '{{ url_for("index") }}';
-      const pollInterval = 2000; // 2 seconds
-      const maxWaitTime = 120000; // 120 seconds
-      const startTime = Date.now();
-
-      async function checkServerAvailable() {
-        const elapsed = Date.now() - startTime;
-
-        if (elapsed > maxWaitTime) {
-          errorEl.textContent = 'Timeout: Server did not come back online within 2 minutes.';
-          errorEl.style.display = 'block';
-          return;
-        }
-
-        try {
-          const response = await fetch(homeUrl, {
-            method: 'HEAD',
-            cache: 'no-store'
-          });
-
-          if (response.ok) {
-            // Server is back! Redirect to home page
-            window.location.href = homeUrl;
-            return;
-          }
-        } catch (e) {
-          // Server not ready yet, continue polling
-        }
-
-        // Schedule next check
-        setTimeout(checkServerAvailable, pollInterval);
-      }
-
-      // Wait a bit before starting to poll (give server time to shut down)
-      setTimeout(checkServerAvailable, 3000);
+      startRebootOverlay();
     });
 
     // Interval save handler
@@ -618,9 +623,20 @@
         if (data.success) {
           currentBranch = pendingBranch;
           currentBranchDisplay.textContent = currentBranch;
-          branchStatusEl.textContent = 'Successfully switched to branch: ' + currentBranch;
-          branchStatusEl.style.color = '#2a7a2a';
           updateSwitchButton();
+          branchSelect.disabled = true;
+          switchBranchBtn.disabled = true;
+          branchStatusEl.textContent = 'Branch switched. Restarting application...';
+          branchStatusEl.style.color = '#d49200';
+          branchConfirmDialog.classList.remove('visible');
+          pendingBranch = null;
+          startRebootOverlay();
+          try {
+            await fetch('/api/restart-app', { method: 'POST' });
+          } catch (e) {
+            // Expected - connection may drop during restart
+          }
+          return;
         } else {
           branchStatusEl.textContent = 'Error: ' + (data.error || 'Unknown error');
           branchStatusEl.style.color = '#cc3333';
