@@ -6,8 +6,8 @@ Runs on port 80 when the device is broadcasting as an access point.
 """
 
 from flask import Flask, request, jsonify, render_template, redirect
-import subprocess
 import json
+from services.system_actions import run_command
 
 
 def start_wifi_portal_server(host="0.0.0.0", port=80):
@@ -26,10 +26,10 @@ def start_wifi_portal_server(host="0.0.0.0", port=80):
         try:
             # Use nmcli to scan for networks
             # First, trigger a rescan
-            subprocess.run(
+            run_command(
                 ["sudo", "nmcli", "device", "wifi", "rescan"],
-                capture_output=True,
-                timeout=10
+                timeout_s=10,
+                log_label="portal_wifi_rescan",
             )
             
             # Wait a moment for scan to complete
@@ -37,17 +37,16 @@ def start_wifi_portal_server(host="0.0.0.0", port=80):
             time.sleep(2)
             
             # Get the list of available networks
-            result = subprocess.run(
+            result = run_command(
                 ["nmcli", "-t", "-f", "SSID,SIGNAL,SECURITY", "device", "wifi", "list"],
-                capture_output=True,
-                text=True,
-                timeout=10
+                timeout_s=10,
+                log_label="portal_wifi_list",
             )
             
             networks = []
             seen_ssids = set()
             
-            if result.returncode == 0:
+            if result.ok:
                 for line in result.stdout.strip().split('\n'):
                     if not line.strip():
                         continue
@@ -75,16 +74,15 @@ def start_wifi_portal_server(host="0.0.0.0", port=80):
     def api_saved():
         """List saved WiFi network configurations."""
         try:
-            result = subprocess.run(
+            result = run_command(
                 ["nmcli", "-t", "-f", "NAME,TYPE", "connection", "show"],
-                capture_output=True,
-                text=True,
-                timeout=10
+                timeout_s=10,
+                log_label="portal_saved_networks",
             )
             
             saved_networks = []
             
-            if result.returncode == 0:
+            if result.ok:
                 for line in result.stdout.strip().split('\n'):
                     if not line.strip():
                         continue
@@ -123,14 +121,13 @@ def start_wifi_portal_server(host="0.0.0.0", port=80):
                     "wifi-sec.psk", password
                 ])
             
-            result = subprocess.run(
+            result = run_command(
                 cmd,
-                capture_output=True,
-                text=True,
-                timeout=15
+                timeout_s=15,
+                log_label="portal_connect",
             )
             
-            if result.returncode == 0:
+            if result.ok:
                 # Wait for NetworkManager to fully persist the connection
                 # before returning success. This prevents race conditions
                 # where the frontend requests saved networks before it's visible.
@@ -142,13 +139,12 @@ def start_wifi_portal_server(host="0.0.0.0", port=80):
                 
                 while waited < max_wait:
                     try:
-                        check_result = subprocess.run(
+                        check_result = run_command(
                             ["nmcli", "-t", "-f", "NAME,TYPE", "connection", "show"],
-                            capture_output=True,
-                            text=True,
-                            timeout=2
+                            timeout_s=2,
+                            log_label="portal_connect_poll",
                         )
-                        if check_result.returncode == 0:
+                        if check_result.ok:
                             for line in check_result.stdout.strip().split('\n'):
                                 parts = line.split(':')
                                 if len(parts) >= 2 and parts[0] == ssid and parts[1] == "802-11-wireless":
@@ -167,7 +163,7 @@ def start_wifi_portal_server(host="0.0.0.0", port=80):
                     "message": f"Network '{ssid}' saved. Stop broadcasting to connect."
                 })
             else:
-                error_msg = result.stderr.strip() or result.stdout.strip() or "Failed to save network"
+                error_msg = result.stderr.strip() or result.stdout.strip() or result.error or "Failed to save network"
                 return jsonify({"success": False, "error": error_msg}), 500
                 
         except Exception as e:
@@ -183,17 +179,16 @@ def start_wifi_portal_server(host="0.0.0.0", port=80):
             if not name:
                 return jsonify({"success": False, "error": "Connection name is required"}), 400
             
-            result = subprocess.run(
+            result = run_command(
                 ["sudo", "nmcli", "connection", "delete", name],
-                capture_output=True,
-                text=True,
-                timeout=10
+                timeout_s=10,
+                log_label="portal_delete_network",
             )
             
-            if result.returncode == 0:
+            if result.ok:
                 return jsonify({"success": True, "message": f"Network '{name}' deleted."})
             else:
-                error_msg = result.stderr.strip() or result.stdout.strip() or "Failed to delete network"
+                error_msg = result.stderr.strip() or result.stdout.strip() or result.error or "Failed to delete network"
                 return jsonify({"success": False, "error": error_msg}), 500
                 
         except Exception as e:

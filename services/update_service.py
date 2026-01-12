@@ -1,13 +1,13 @@
 """Git update workflow used by the UI."""
 
 import os
-import subprocess
 import time
 
 from PyQt5.QtCore import QObject, QProcess, pyqtSignal
 from PyQt5.QtWidgets import QApplication
 
 from services.config_store import load_config
+from services.system_actions import run_command, start_process
 
 
 _GIT_DEBUG = True
@@ -47,19 +47,20 @@ def build_git_command(args, git_user=None):
 
 
 def run_git_command(args, cwd, git_user=None, timeout=5):
-    return subprocess.run(
+    return run_command(
         build_git_command(args, git_user=git_user),
         cwd=cwd,
-        capture_output=True,
-        text=True,
-        timeout=timeout,
+        timeout_s=timeout,
+        log_label="git_command",
     )
 
 
 def popen_git_command(args, cwd, git_user=None, **kwargs):
-    return subprocess.Popen(
+    return start_process(
         build_git_command(args, git_user=git_user),
         cwd=cwd,
+        log_label="git_process",
+        timeout_s=None,
         **kwargs,
     )
 
@@ -181,14 +182,24 @@ class UpdateService(QObject):
         self.log("run_git_pull: Starting...")
         self.wait_for_fetch_if_running()
 
-        self.log("run_git_pull: Setting flag to True")
-        self.settings_server.set_git_operation_in_progress(True)
+        if not self.settings_server.try_start_git_operation(caller="update_service_run_pull"):
+            self.log("run_git_pull: Skipping - git operation already in progress")
+            self.pull_output.emit("Another update is already in progress.\n")
+            self.pull_finished.emit({
+                "exit_code": -1,
+                "has_error": True,
+                "has_updates": False,
+                "commit_message": None,
+                "reason": "busy",
+            })
+            return
 
         self.git_output = ""
         self.git_process = QProcess()
         self.git_process.setWorkingDirectory(self.working_dir)
         self.git_process.readyReadStandardOutput.connect(self.on_git_output_ready)
         self.git_process.readyReadStandardError.connect(self.on_git_output_ready)
+        self.git_process.errorOccurred.connect(self.on_git_error)
         self.git_process.finished.connect(self.on_git_finished)
 
         self.log("run_git_pull: Starting 'git pull' via QProcess")
@@ -207,15 +218,15 @@ class UpdateService(QObject):
             self.log("check_for_git_updates: Skipping - local git_fetch_process still running")
             return
 
-        if self.settings_server.is_git_operation_in_progress():
-            self.log("check_for_git_updates: Skipping - web server git operation in progress")
+        if not self.settings_server.try_start_git_operation(caller="update_service_check_for_updates"):
+            self.log("check_for_git_updates: Skipping - git operation already in progress")
             return
 
         self.log("check_for_git_updates: Starting background git fetch")
-        self.settings_server.set_git_operation_in_progress(True)
 
         self.git_fetch_process = QProcess()
         self.git_fetch_process.setWorkingDirectory(self.working_dir)
+        self.git_fetch_process.errorOccurred.connect(self.on_git_fetch_error)
         self.git_fetch_process.finished.connect(self.on_git_fetch_finished)
 
         self.log("check_for_git_updates: Starting 'git fetch' via QProcess")
@@ -239,8 +250,8 @@ class UpdateService(QObject):
         self.log(f"on_git_finished: exit_code={exit_code}, exit_status={exit_status}")
         preview = self.git_output[:500] if self.git_output else "(empty)"
         self.log(f"on_git_finished: git_output={preview}")
-        self.log("on_git_finished: Clearing flag to False")
-        self.settings_server.set_git_operation_in_progress(False)
+        self.log("on_git_finished: Releasing git operation")
+        self.settings_server.finish_git_operation(caller="update_service_run_pull")
 
         self.pull_output.emit(f"\nProcess finished with exit code: {exit_code}")
 
@@ -268,8 +279,8 @@ class UpdateService(QObject):
 
     def on_git_fetch_finished(self, exit_code, exit_status):
         self.log(f"on_git_fetch_finished: exit_code={exit_code}, exit_status={exit_status}")
-        self.log("on_git_fetch_finished: Clearing flag to False")
-        self.settings_server.set_git_operation_in_progress(False)
+        self.log("on_git_fetch_finished: Releasing git operation")
+        self.settings_server.finish_git_operation(caller="update_service_check_for_updates")
 
         if exit_code != 0:
             self.log(f"on_git_fetch_finished: Fetch failed with exit_code={exit_code}")
@@ -291,6 +302,23 @@ class UpdateService(QObject):
                 self.update_available_changed.emit(False)
         except Exception:
             pass
+
+    def on_git_error(self, error):
+        self.log(f"on_git_error: error={error}")
+        if error == QProcess.FailedToStart:
+            self.settings_server.finish_git_operation(caller="update_service_run_pull")
+            self.pull_output.emit("Git pull failed to start.\n")
+            self.pull_finished.emit({
+                "exit_code": -1,
+                "has_error": True,
+                "has_updates": False,
+                "commit_message": None,
+            })
+
+    def on_git_fetch_error(self, error):
+        self.log(f"on_git_fetch_error: error={error}")
+        if error == QProcess.FailedToStart:
+            self.settings_server.finish_git_operation(caller="update_service_check_for_updates")
 
 
 class UpdateServiceRunner:
@@ -326,6 +354,14 @@ class UpdateServiceRunner:
 
     def get_remote_branches(self, timeout=10):
         """Get list of remote branches from git."""
+        fetch_result = run_git_command(
+            ["fetch", "--prune"],
+            cwd=self.working_dir,
+            git_user=self.git_user,
+            timeout=timeout,
+        )
+        if fetch_result.returncode != 0:
+            return []
         result = run_git_command(
             ["branch", "-r"],
             cwd=self.working_dir,
