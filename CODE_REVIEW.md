@@ -40,10 +40,10 @@ Reviewed the Python application (PyQt5 main display, Flask settings server, WiFi
 - **Why it matters:** A malicious SSID containing quotes can break out of the string and inject script into the captive portal UI (XSS).
 - **Recommendation:** Avoid inline JS. Build DOM nodes and attach listeners with `addEventListener`, storing SSIDs in `data-*` attributes or closures; use `textContent` for display.
 
-### [Medium] Config/message writes are non-atomic and not synchronized
-- **Description:** `config_handler.save_config` and `message_handler.save_messages` perform read-modify-write without file locks or atomic writes (`config_handler.py:40-52`, `message_handler.py:76-84`).
-- **Why it matters:** The UI and web server can write concurrently, leading to lost updates or a partially written JSON file.
-- **Recommendation:** Use file locking (e.g., `fcntl.flock`) and write atomically (write to a temp file then `os.replace`). Consider consolidating writes into a single process/service if possible.
+### <span style="color: yellow;">[Medium] Config/message writes are non-atomic and not synchronized</span>
+- <span style="color: yellow;">**Description:** `ConfigStore.set_values` and `save_messages` performed read-modify-write without file locks or atomic writes (`services/config_store.py`, `services/message_store.py`).</span>
+- <span style="color: yellow;">**Why it matters:** The UI and web server can write concurrently, leading to lost updates or a partially written JSON file.</span>
+- <span style="color: yellow;">**Update:** Config and message writes now take an exclusive lock and write atomically (temp file + `os.replace`) via `services/file_store.py`.</span>
 
 ### [Medium] Network calls have no timeout and run on the UI thread
 - **Description:** Metro API requests omit timeouts (`MetroAPI.py:38`, `MetroAPI.py:66`, `MetroAPI.py:91`), and the UI refresh path calls them directly on the Qt thread (`main_display.py:1544-1568`).

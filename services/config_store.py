@@ -3,6 +3,8 @@ import os
 import re
 from dataclasses import dataclass
 
+from services.file_store import atomic_write_json, file_lock
+
 # Use absolute path based on repository root
 CONFIG_FILE = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "config.json"))
 
@@ -204,25 +206,26 @@ class ConfigStore:
         return updated_config.get(key)
 
     def set_values(self, updates):
-        raw_config = _read_config_raw()
-        updated_config = dict(raw_config)
-        changed_keys = set()
+        lock_path = f"{CONFIG_FILE}.lock"
+        with file_lock(lock_path):
+            raw_config = _read_config_raw()
+            updated_config = dict(raw_config)
+            changed_keys = set()
 
-        for key, value in updates.items():
-            field = CONFIG_SCHEMA.get(key)
-            if field is None:
-                continue
-            current = updated_config.get(key, field.default)
-            candidate, valid = field.coerce_for_update(value)
-            if not valid:
-                continue
-            if candidate != current:
-                updated_config[key] = candidate
-                changed_keys.add(key)
+            for key, value in updates.items():
+                field = CONFIG_SCHEMA.get(key)
+                if field is None:
+                    continue
+                current = updated_config.get(key, field.default)
+                candidate, valid = field.coerce_for_update(value)
+                if not valid:
+                    continue
+                if candidate != current:
+                    updated_config[key] = candidate
+                    changed_keys.add(key)
 
-        if changed_keys:
-            with open(CONFIG_FILE, "w") as f:
-                json.dump(updated_config, f, indent=2)
+            if changed_keys:
+                atomic_write_json(CONFIG_FILE, updated_config)
 
         normalized = _normalize_config(updated_config)
         self._last_notified_config = normalized

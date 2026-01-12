@@ -1,6 +1,8 @@
 import json
 import os
 
+from services.file_store import atomic_write_json, file_lock
+
 MESSAGES_FILE = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "messages.json"))
 
 DEFAULT_MESSAGES = {
@@ -58,8 +60,9 @@ def load_messages():
 
 def save_messages(data):
     """Save message configuration to JSON file."""
-    with open(MESSAGES_FILE, "w") as f:
-        json.dump(data, f, indent=2)
+    lock_path = f"{MESSAGES_FILE}.lock"
+    with file_lock(lock_path):
+        atomic_write_json(MESSAGES_FILE, data)
 
 
 class MessageStore:
