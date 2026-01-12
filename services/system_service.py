@@ -1,9 +1,13 @@
 """System-level operations used by the UI."""
 
 import json
-import os
+import logging
 import socket
-import subprocess
+
+from services.system_actions import run_command
+
+
+logger = logging.getLogger(__name__)
 
 
 class SystemService:
@@ -16,50 +20,31 @@ class SystemService:
             bool: True if connected to a WiFi network, False otherwise.
         """
         try:
-            print("[WiFi Check] Running: nmcli -t -f WIFI general")
-            result = subprocess.run(
+            result = run_command(
                 ["nmcli", "-t", "-f", "WIFI", "general"],
-                capture_output=True,
-                text=True,
-                timeout=5,
+                timeout_s=5,
+                log_label="wifi_check_enabled",
             )
-            print(f"[WiFi Check] Return code: {result.returncode}")
-            print(f"[WiFi Check] stdout: {result.stdout.strip()}")
-            print(f"[WiFi Check] stderr: {result.stderr.strip()}")
-
-            if result.returncode != 0:
-                print("[WiFi Check] Command failed, returning False")
+            if not result.ok:
                 return False
 
             # Check if WiFi is enabled
             if "enabled" not in result.stdout.lower():
-                print("[WiFi Check] WiFi not enabled in output, returning False")
                 return False
 
-            print("[WiFi Check] WiFi is enabled, checking connection status...")
-            print("[WiFi Check] Running: nmcli -t -f TYPE,STATE device")
-
             # Check actual connection status
-            conn_result = subprocess.run(
+            conn_result = run_command(
                 ["nmcli", "-t", "-f", "TYPE,STATE", "device"],
-                capture_output=True,
-                text=True,
-                timeout=5,
+                timeout_s=5,
+                log_label="wifi_check_connection",
             )
-            print(f"[WiFi Check] Return code: {conn_result.returncode}")
-            print(f"[WiFi Check] stdout: {conn_result.stdout.strip()}")
-            print(f"[WiFi Check] stderr: {conn_result.stderr.strip()}")
-
-            if conn_result.returncode == 0:
+            if conn_result.ok:
                 for line in conn_result.stdout.strip().split("\n"):
-                    print(f"[WiFi Check] Checking line: {line}")
                     if line.startswith("wifi:") and ":connected" in line.lower():
-                        print("[WiFi Check] Found connected WiFi! Returning True")
                         return True
-            print("[WiFi Check] No connected WiFi found, returning False")
             return False
-        except Exception as e:
-            print(f"[WiFi Check] Exception: {e}")
+        except Exception:
+            logger.exception("WiFi check failed")
             return False
 
     def get_device_ip(self):
@@ -76,39 +61,48 @@ class SystemService:
     def get_tailscale_address(self):
         """Get the Tailscale address of the device."""
         try:
-            result = subprocess.run(
+            result = run_command(
                 ["tailscale", "status", "--json"],
-                capture_output=True,
-                text=True,
-                timeout=5,
+                timeout_s=5,
+                log_label="tailscale_status",
             )
-            if result.returncode == 0 and result.stdout:
+            if result.ok and result.stdout:
                 status_data = json.loads(result.stdout)
                 dns_name = status_data.get("Self", {}).get("DNSName", "")
                 if dns_name:
                     return dns_name.rstrip(".")
             return "Not available"
-        except (
-            subprocess.TimeoutExpired,
-            subprocess.SubprocessError,
-            json.JSONDecodeError,
-            KeyError,
-            FileNotFoundError,
-        ):
+        except (json.JSONDecodeError, KeyError, FileNotFoundError):
             return "Not available"
 
     def shutdown(self):
         """Perform a system shutdown."""
-        os.system("sudo shutdown now")
+        run_command(
+            ["sudo", "shutdown", "now"],
+            timeout_s=10,
+            log_label="shutdown",
+        )
 
     def reboot(self):
         """Perform a system reboot."""
-        os.system("sudo shutdown -r now")
+        run_command(
+            ["sudo", "shutdown", "-r", "now"],
+            timeout_s=10,
+            log_label="reboot",
+        )
 
     def apply_screen_sleep_settings(self, enabled, minutes):
         """Apply screen sleep settings using xset."""
         if enabled:
             timeout_seconds = minutes * 60
-            os.system(f"xset s {timeout_seconds}")
+            run_command(
+                ["xset", "s", str(timeout_seconds)],
+                timeout_s=5,
+                log_label="screen_sleep_enable",
+            )
         else:
-            os.system("xset s off")
+            run_command(
+                ["xset", "s", "off"],
+                timeout_s=5,
+                log_label="screen_sleep_disable",
+            )
