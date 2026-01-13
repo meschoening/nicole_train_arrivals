@@ -9,6 +9,7 @@
       let serverOffsetMs = 0;
       let rebootEnabled = false;
       let overlayActive = false;
+      const rebootToggleEl = document.getElementById('rebootEnabled');
 
       function formatCountdown(totalSeconds) {
         const clamped = Math.max(0, totalSeconds);
@@ -118,6 +119,19 @@
         syncRebootWarning();
         setInterval(updateRebootWarning, 1000);
         setInterval(syncRebootWarning, 60000);
+      }
+
+      if (rebootToggleEl) {
+        rebootToggleEl.addEventListener('change', () => {
+          if (!rebootToggleEl.checked) {
+            rebootEnabled = false;
+            rebootTargetEpochMs = null;
+            updateRebootWarning();
+            return;
+          }
+
+          syncRebootWarning();
+        });
       }
 
       window.startRebootOverlay = startRebootOverlay;
