@@ -2433,7 +2433,7 @@ class MainWindow(QMainWindow):
         self.reboot_warning_container.setStyleSheet("background-color: transparent;")
 
         warning_layout = QHBoxLayout()
-        warning_layout.setContentsMargins(0, 5, 0, 5)
+        warning_layout.setContentsMargins(0, 0, 0, 0)
         warning_layout.setSpacing(10)
 
         self.reboot_warning_label = QLabel("Rebooting in 60 seconds")
