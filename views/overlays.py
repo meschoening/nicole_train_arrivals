@@ -23,7 +23,7 @@ class RebootWarningOverlay(QWidget):
 
         self.setStyleSheet("background-color: rgba(0, 0, 0, 180);")
 
-        main_layout.addStretch()
+
         container_holder = QHBoxLayout()
         container_holder.addStretch()
         container_holder.addWidget(self.build_center_container(font_family))
