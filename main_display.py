@@ -892,6 +892,9 @@ class MainWindow(QMainWindow):
         """Build a stable key for a prediction to track it across refreshes."""
         location_code = self.normalize_prediction_value(prediction.get('LocationCode'))
         line = self.normalize_prediction_value(prediction.get('Line'))
+        arrival_time = self.normalize_prediction_value(
+            self.calculate_actual_time(prediction.get('Min'))
+        )
         destination_code = self.normalize_prediction_value(prediction.get('DestinationCode'))
         destination_name = self.normalize_prediction_value(prediction.get('DestinationName'))
         destination_short = self.normalize_prediction_value(prediction.get('Destination'))
@@ -899,7 +902,10 @@ class MainWindow(QMainWindow):
         car = self.normalize_prediction_value(prediction.get('Car'))
 
         destination_key = destination_code or destination_name or destination_short
-        key = (location_code, line, destination_key, group, car)
+        if arrival_time:
+            key = (location_code, line, arrival_time, group, car)
+        else:
+            key = (location_code, line, destination_key, group, car)
         if not any(key):
             return None
         return key
