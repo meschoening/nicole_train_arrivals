@@ -1625,6 +1625,7 @@ class MainWindow(QMainWindow):
         
         if not reboot_enabled:
             # Reset the flag when reboot is disabled
+            self.cancel_reboot()
             self.reboot_scheduled_for_today = False
             return
         
@@ -1680,6 +1681,10 @@ class MainWindow(QMainWindow):
     
     def update_reboot_countdown(self):
         """Update the reboot countdown each second"""
+        if not self.config_store.get_bool('reboot_enabled', False):
+            self.cancel_reboot()
+            return
+
         self.reboot_countdown_seconds -= 1
         
         if self.reboot_countdown_seconds <= 0:
