@@ -2431,10 +2431,16 @@ class MainWindow(QMainWindow):
     def build_reboot_warning_banner(self):
         self.reboot_warning_container = QWidget()
         self.reboot_warning_container.setStyleSheet("background-color: transparent;")
+        self.reboot_warning_container.setFixedHeight(50)
 
-        warning_layout = QHBoxLayout()
+        warning_layout = QVBoxLayout()
         warning_layout.setContentsMargins(0, 0, 0, 0)
-        warning_layout.setSpacing(10)
+        warning_layout.setSpacing(0)
+
+        # Horizontal layout for label and button
+        content_layout = QHBoxLayout()
+        content_layout.setContentsMargins(0, 0, 0, 0)
+        content_layout.setSpacing(10)
 
         self.reboot_warning_label = QLabel("Rebooting in 60 seconds")
         self.reboot_warning_label.setStyleSheet(
@@ -2450,8 +2456,8 @@ class MainWindow(QMainWindow):
         )
         self.reboot_warning_label.setAlignment(Qt.AlignCenter)
         self.reboot_warning_label.setWordWrap(False)
-        warning_layout.addStretch()
-        warning_layout.addWidget(self.reboot_warning_label, alignment=Qt.AlignVCenter)
+        content_layout.addStretch()
+        content_layout.addWidget(self.reboot_warning_label, alignment=Qt.AlignVCenter)
 
         self.reboot_cancel_button = QPushButton("Cancel")
         self.reboot_cancel_button.setStyleSheet(
@@ -2476,7 +2482,12 @@ class MainWindow(QMainWindow):
         """
         )
         self.reboot_cancel_button.clicked.connect(self.cancel_reboot)
-        warning_layout.addWidget(self.reboot_cancel_button, alignment=Qt.AlignVCenter)
+        content_layout.addWidget(self.reboot_cancel_button, alignment=Qt.AlignVCenter)
+        content_layout.addStretch()
+
+        # Add vertical stretches to center the content
+        warning_layout.addStretch()
+        warning_layout.addLayout(content_layout)
         warning_layout.addStretch()
 
         self.reboot_warning_container.setLayout(warning_layout)
