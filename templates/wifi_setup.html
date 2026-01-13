@@ -183,11 +183,14 @@
         .actions {
             margin-top: 16px;
         }
+
+        {% include "_reboot_ui_styles.html" %}
     </style>
 </head>
 
 <body>
     <div class="container">
+        {% include "_reboot_warning_bar.html" %}
         <h2>WiFi Configuration</h2>
 
         <div id="statusMessage" class="status-message status-info" style="display:none;"></div>
@@ -471,6 +474,8 @@
             scanNetworks();
         });
     </script>
+    {% include "_reboot_overlay.html" %}
+    {% include "_reboot_ui_script.html" %}
 </body>
 
 </html>

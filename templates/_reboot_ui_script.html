@@ -1,0 +1,125 @@
+  <script>
+    (function () {
+      const warningEl = document.getElementById('rebootWarning');
+      const countdownEl = document.getElementById('rebootCountdown');
+      const overlayEl = document.getElementById('rebootOverlay');
+      const errorEl = document.getElementById('rebootError');
+
+      let rebootTargetEpochMs = null;
+      let serverOffsetMs = 0;
+      let rebootEnabled = false;
+      let overlayActive = false;
+
+      function formatCountdown(totalSeconds) {
+        const clamped = Math.max(0, totalSeconds);
+        const minutes = Math.floor(clamped / 60);
+        const seconds = clamped % 60;
+        return `${minutes}:${seconds.toString().padStart(2, '0')}`;
+      }
+
+      function startRebootOverlay() {
+        if (!overlayEl || overlayActive) {
+          return;
+        }
+
+        overlayActive = true;
+        overlayEl.classList.add('visible');
+        if (errorEl) {
+          errorEl.textContent = '';
+          errorEl.style.display = 'none';
+        }
+
+        const pollInterval = 2000; // 2 seconds
+        const maxWaitTime = 120000; // 120 seconds
+        const startTime = Date.now();
+        const reloadUrl = window.location.href;
+
+        async function checkServerAvailable() {
+          const elapsed = Date.now() - startTime;
+
+          if (elapsed > maxWaitTime) {
+            if (errorEl) {
+              errorEl.textContent = 'Timeout: Server did not come back online within 2 minutes.';
+              errorEl.style.display = 'block';
+            }
+            return;
+          }
+
+          try {
+            const response = await fetch(reloadUrl, {
+              method: 'HEAD',
+              cache: 'no-store'
+            });
+
+            if (response.ok) {
+              window.location.reload();
+              return;
+            }
+          } catch (e) {
+            // Server not ready yet, continue polling
+          }
+
+          setTimeout(checkServerAvailable, pollInterval);
+        }
+
+        setTimeout(checkServerAvailable, 3000);
+      }
+
+      function updateRebootWarning() {
+        if (!warningEl || !countdownEl) {
+          return;
+        }
+
+        if (!rebootEnabled || rebootTargetEpochMs === null) {
+          warningEl.style.display = 'none';
+          return;
+        }
+
+        const nowMs = Date.now() + serverOffsetMs;
+        const secondsRemaining = Math.ceil((rebootTargetEpochMs - nowMs) / 1000);
+        if (secondsRemaining <= 0) {
+          warningEl.style.display = 'none';
+          startRebootOverlay();
+          return;
+        }
+
+        if (secondsRemaining > 300) {
+          warningEl.style.display = 'none';
+          return;
+        }
+
+        warningEl.style.display = 'block';
+        countdownEl.textContent = formatCountdown(secondsRemaining);
+      }
+
+      async function syncRebootWarning() {
+        try {
+          const response = await fetch('/api/reboot-warning');
+          if (!response.ok) {
+            return;
+          }
+          const data = await response.json();
+          rebootEnabled = Boolean(data.reboot_enabled);
+          if (typeof data.server_now_epoch === 'number') {
+            serverOffsetMs = data.server_now_epoch * 1000 - Date.now();
+          }
+          if (typeof data.target_epoch === 'number') {
+            rebootTargetEpochMs = data.target_epoch * 1000;
+          } else {
+            rebootTargetEpochMs = null;
+          }
+          updateRebootWarning();
+        } catch (err) {
+          return;
+        }
+      }
+
+      if (warningEl && countdownEl) {
+        syncRebootWarning();
+        setInterval(updateRebootWarning, 1000);
+        setInterval(syncRebootWarning, 60000);
+      }
+
+      window.startRebootOverlay = startRebootOverlay;
+    })();
+  </script>

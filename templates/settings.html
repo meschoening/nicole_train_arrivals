@@ -59,11 +59,14 @@
     a.btn:hover {
       background: #e6e6e6;
     }
+
+    {% include "_reboot_ui_styles.html" %}
   </style>
 </head>
 
 <body>
   <div class="container">
+    {% include "_reboot_warning_bar.html" %}
     <div class="row">
       <a href="{{ url_for('index') }}" class="btn">← Back</a>
     </div>
@@ -267,6 +270,8 @@
       });
     }
   </script>
+  {% include "_reboot_overlay.html" %}
+  {% include "_reboot_ui_script.html" %}
 </body>
 
 </html>

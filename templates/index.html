@@ -45,11 +45,14 @@
     .btn:hover {
       background: #e6e6e6;
     }
+
+    {% include "_reboot_ui_styles.html" %}
   </style>
 </head>
 
 <body>
   <div class="container">
+    {% include "_reboot_warning_bar.html" %}
     <h2>Nicole's Train Tracker: Remote Control Dashboard</h2>
     <div style="color:#666;margin:8px 0 16px;">Device IP: {{ device_ip }}</div>
     <div style="color:#666;margin:8px 0 16px;">Tailscale Address: {{ tailscale_address }}</div>
@@ -60,10 +63,6 @@
       <strong>Warning:</strong> SSL certificates not found. Running without HTTPS encryption.
     </div>
     {% endif %}
-    <div id="rebootWarning"
-      style="background:#f6d469;border:1px solid #c89b2c;color:#5a4300;padding:10px 14px;border-radius:6px;margin-bottom:16px;display:none;">
-      <strong>Scheduled Reboot Soon:</strong> Automatic reboot in <span id="rebootCountdown">5:00</span>.
-    </div>
     {% if update_available %}
     <a href="{{ url_for('get_update') }}" style="text-decoration: none;">
       <div
@@ -81,63 +80,8 @@
       <a href="{{ url_for('get_system_management') }}" class="btn">Power Management</a>
     </div>
   </div>
-  <script>
-    const rebootWarningEl = document.getElementById('rebootWarning');
-    const rebootCountdownEl = document.getElementById('rebootCountdown');
-    let rebootTargetEpochMs = null;
-    let serverOffsetMs = 0;
-    let rebootEnabled = false;
-
-    function formatCountdown(totalSeconds) {
-      const clamped = Math.max(0, totalSeconds);
-      const minutes = Math.floor(clamped / 60);
-      const seconds = clamped % 60;
-      return `${minutes}:${seconds.toString().padStart(2, '0')}`;
-    }
-
-    function updateRebootWarning() {
-      if (!rebootEnabled || rebootTargetEpochMs === null) {
-        rebootWarningEl.style.display = 'none';
-        return;
-      }
-
-      const nowMs = Date.now() + serverOffsetMs;
-      const secondsRemaining = Math.ceil((rebootTargetEpochMs - nowMs) / 1000);
-      if (secondsRemaining > 300) {
-        rebootWarningEl.style.display = 'none';
-        return;
-      }
-
-      rebootWarningEl.style.display = 'block';
-      rebootCountdownEl.textContent = formatCountdown(secondsRemaining);
-    }
-
-    async function syncRebootWarning() {
-      try {
-        const response = await fetch('/api/reboot-warning');
-        if (!response.ok) {
-          return;
-        }
-        const data = await response.json();
-        rebootEnabled = Boolean(data.reboot_enabled);
-        if (typeof data.server_now_epoch === 'number') {
-          serverOffsetMs = data.server_now_epoch * 1000 - Date.now();
-        }
-        if (typeof data.target_epoch === 'number') {
-          rebootTargetEpochMs = data.target_epoch * 1000;
-        } else {
-          rebootTargetEpochMs = null;
-        }
-        updateRebootWarning();
-      } catch (err) {
-        return;
-      }
-    }
-
-    syncRebootWarning();
-    setInterval(updateRebootWarning, 1000);
-    setInterval(syncRebootWarning, 60000);
-  </script>
+  {% include "_reboot_overlay.html" %}
+  {% include "_reboot_ui_script.html" %}
 </body>
 
 </html>
