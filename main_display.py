@@ -2480,13 +2480,16 @@ class MainWindow(QMainWindow):
         self.reboot_cancel_button.clicked.connect(self.cancel_reboot)
         content_layout.addWidget(self.reboot_cancel_button)
 
+        # Wrap the horizontal content to allow alignment on the parent layout
+        content_widget = QWidget()
+        content_widget.setLayout(content_layout)
+
         # Vertical layout to center content within fixed height
         warning_layout = QVBoxLayout()
         warning_layout.setContentsMargins(0, 0, 0, 0)
         warning_layout.setSpacing(0)
-        warning_layout.addStretch(1)
-        warning_layout.addLayout(content_layout)
-        warning_layout.addStretch(1)
+        warning_layout.setAlignment(Qt.AlignCenter)
+        warning_layout.addWidget(content_widget, alignment=Qt.AlignCenter)
 
         self.reboot_warning_container.setLayout(warning_layout)
         self.reboot_warning_container.hide()
