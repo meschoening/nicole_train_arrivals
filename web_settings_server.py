@@ -8,7 +8,7 @@ from services.system_service import SystemService
 from services.update_service import UpdateServiceRunner, has_git_error, has_updates
 from services.system_actions import run_command, start_process
 import os
-from datetime import datetime
+from datetime import datetime, timedelta
 import sys
 import time
 import json
@@ -242,6 +242,33 @@ def start_web_settings_server(data_handler, host="0.0.0.0", port=443):
             return "Not available"
         except Exception:
             return "Not available"
+
+    def _get_reboot_warning_status():
+        config = config_store.load()
+        reboot_enabled = config.get("reboot_enabled", False)
+        reboot_time_str = config.get("reboot_time", "12:00 AM")
+        now = datetime.now()
+        target_epoch = None
+        seconds_until_reboot = None
+
+        if reboot_enabled:
+            try:
+                reboot_time = datetime.strptime(reboot_time_str, "%I:%M %p").time()
+                target_dt = datetime.combine(now.date(), reboot_time)
+                if target_dt <= now:
+                    target_dt += timedelta(days=1)
+                target_epoch = int(target_dt.timestamp())
+                seconds_until_reboot = int((target_dt - now).total_seconds())
+            except ValueError:
+                pass
+
+        return {
+            "reboot_enabled": reboot_enabled,
+            "reboot_time": reboot_time_str,
+            "target_epoch": target_epoch,
+            "seconds_until_reboot": seconds_until_reboot,
+            "server_now_epoch": int(now.timestamp()),
+        }
 
     def _check_tailscale_installed():
         """Check if tailscale is installed on the system."""
@@ -940,6 +967,10 @@ def start_web_settings_server(data_handler, host="0.0.0.0", port=443):
             "reboot_enabled": config_store.get_bool("reboot_enabled", False),
             "reboot_time": config_store.get_str("reboot_time", "12:00 AM")
         })
+
+    @app.get("/api/reboot-warning")
+    def api_reboot_warning():
+        return jsonify(_get_reboot_warning_status())
 
     @app.post("/api/reboot-config")
     def api_post_reboot_config():
