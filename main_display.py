@@ -2281,7 +2281,7 @@ class MainWindow(QMainWindow):
 
         self.update_notification_label = QLabel("Update Available")
         self.update_notification_label.setStyleSheet(
-            """
+            f"""
             font-family: {self.font_family};
             font-size: 14px;
             font-weight: bold;
