@@ -12,13 +12,17 @@ class MetroAPI:
     A class to interact with Metro transit data.
     """
     
-    def __init__(self, api_key):
+    def __init__(self, api_key, timeout_seconds=5):
         """
         Initialize the MetroAPI object.
         """
         self.api_key = api_key
+        self.timeout_seconds = timeout_seconds
         self.base_url = "https://api.wmata.com/Rail.svc/json"
         self.predictions_url = "https://api.wmata.com/StationPrediction.svc/json"
+
+    def set_timeout_seconds(self, timeout_seconds):
+        self.timeout_seconds = timeout_seconds
     
     def get_lines(self):
         """
@@ -35,7 +39,7 @@ class MetroAPI:
             headers = {
                 "api_key": self.api_key
             }
-            response = requests.get(url, headers=headers)
+            response = requests.get(url, headers=headers, timeout=self.timeout_seconds)
             response.raise_for_status()  # Raise an exception for bad status codes
             data = response.json()
             return pd.DataFrame(data['Lines'])
@@ -63,7 +67,7 @@ class MetroAPI:
             params = {
                 "LineCode": LineCode
             }
-            response = requests.get(url, headers=headers, params=params)
+            response = requests.get(url, headers=headers, params=params, timeout=self.timeout_seconds)
             response.raise_for_status()  # Raise an exception for bad status codes
             data = response.json()
             return pd.DataFrame(data['Stations'])
@@ -88,10 +92,9 @@ class MetroAPI:
             headers = {
                 "api_key": self.api_key
             }
-            response = requests.get(url, headers=headers)
+            response = requests.get(url, headers=headers, timeout=self.timeout_seconds)
             response.raise_for_status()  # Raise an exception for bad status codes
             data = response.json()
             return pd.DataFrame(data['Trains'])
         except Exception as e:
             raise MetroAPIError(f"Failed to fetch arrivals: {str(e)}")
-

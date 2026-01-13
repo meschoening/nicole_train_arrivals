@@ -36,10 +36,10 @@ Reviewed the Python application (PyQt5 main display, Flask settings server, WiFi
 - <span style="color: yellow;">**Why it matters:** The UI and web server can write concurrently, leading to lost updates or a partially written JSON file.</span>
 - <span style="color: yellow;">**Update:** Config and message writes now take an exclusive lock and write atomically (temp file + `os.replace`) via `services/file_store.py`.</span>
 
-### [Medium] Network calls have no timeout and run on the UI thread
-- **Description:** Metro API requests omit timeouts (`MetroAPI.py:38`, `MetroAPI.py:66`, `MetroAPI.py:91`), and the UI refresh path calls them directly on the Qt thread (`main_display.py:1544-1568`).
-- **Why it matters:** A stalled network call can freeze the UI, blocking input and timers.
-- **Recommendation:** Add conservative timeouts (e.g., 3–5 seconds) and move API fetches to a worker thread (Qt `QRunnable`/`QThreadPool`) or async worker that updates the UI on completion.
+### <span style="color: yellow;">[Medium] Network calls have no timeout and run on the UI thread</span>
+- <span style="color: yellow;">**Description:** Metro API requests omit timeouts (`MetroAPI.py:38`, `MetroAPI.py:66`, `MetroAPI.py:91`), and the UI refresh path calls them directly on the Qt thread (`main_display.py:1544-1568`).</span>
+- <span style="color: yellow;">**Why it matters:** A stalled network call can freeze the UI, blocking input and timers.</span>
+- <span style="color: yellow;">**Update:** Added Metro API request timeouts, moved arrivals refreshes to a `QThreadPool` worker, and exposed a configurable timeout on the display settings page.</span>
 
 ### <span style="color: green;">[Low] Update check interval changes do not propagate to running app</span>
 - <span style="color: green;">**Description:** The update check timer interval is read once on startup and never updated when `update_check_interval_seconds` changes (`main_display.py:700-704` vs. `main_display.py:1654-1718`).

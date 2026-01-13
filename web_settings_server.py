@@ -997,6 +997,15 @@ def start_web_settings_server(data_handler, host="0.0.0.0", port=443):
         if refresh_rate_val is not None:
             updates["refresh_rate_seconds"] = refresh_rate_val
 
+        # Update API timeout
+        api_timeout = form.get("api_timeout_seconds")
+        try:
+            api_timeout_val = int(api_timeout) if api_timeout is not None else None
+        except ValueError:
+            api_timeout_val = None
+        if api_timeout_val is not None:
+            updates["api_timeout_seconds"] = api_timeout_val
+
         # Update selections
         selected_line = form.get("selected_line")
         if selected_line is not None:

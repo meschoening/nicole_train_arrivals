@@ -108,6 +108,12 @@ CONFIG_SCHEMA = {
         validator=lambda value: 5 <= value <= 120,
         normalizer=_clamp(5, 120),
     ),
+    "api_timeout_seconds": ConfigField(
+        5,
+        _coerce_int,
+        validator=lambda value: 1 <= value <= 15,
+        normalizer=_clamp(1, 15),
+    ),
     "title_text": ConfigField("Nicole's Train Tracker!", _coerce_str),
     "update_check_interval_seconds": ConfigField(
         60,

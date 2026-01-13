@@ -1,5 +1,5 @@
 from PyQt5.QtWidgets import QApplication, QMainWindow, QVBoxLayout, QHBoxLayout, QGridLayout, QLabel, QWidget, QPushButton, QStackedWidget, QComboBox, QCheckBox, QSizePolicy, QSlider, QLineEdit, QGraphicsOpacityEffect
-from PyQt5.QtCore import QSize, Qt, QTimer, QEvent, QPropertyAnimation, QEasingCurve
+from PyQt5.QtCore import QSize, Qt, QTimer, QEvent, QPropertyAnimation, QEasingCurve, QObject, pyqtSignal, QRunnable, QThreadPool
 from PyQt5.QtGui import QFontDatabase, QColor, QPalette, QPixmap, QPainter, QIcon
 from MetroAPI import MetroAPI, MetroAPIError
 from data_handler import DataHandler
@@ -17,6 +17,31 @@ import random
 import time
 import argparse
 from datetime import datetime, timedelta
+
+class PredictionsFetchSignals(QObject):
+    success = pyqtSignal(str, int)
+    error = pyqtSignal(str, int, str)
+    finished = pyqtSignal(int)
+
+
+class PredictionsFetchWorker(QRunnable):
+    def __init__(self, data_handler, station_id, request_id):
+        super().__init__()
+        self.data_handler = data_handler
+        self.station_id = station_id
+        self.request_id = request_id
+        self.signals = PredictionsFetchSignals()
+
+    def run(self):
+        try:
+            self.data_handler.fetch_predictions(self.station_id)
+            self.signals.success.emit(self.station_id, self.request_id)
+        except MetroAPIError as exc:
+            self.signals.error.emit(self.station_id, self.request_id, str(exc))
+        except Exception as exc:
+            self.signals.error.emit(self.station_id, self.request_id, f"Failed to fetch arrivals: {exc}")
+        finally:
+            self.signals.finished.emit(self.request_id)
 
 class MainWindow(QMainWindow):
     # Metro line color mapping
@@ -95,6 +120,13 @@ class MainWindow(QMainWindow):
         
         # Error state tracking for refresh countdown (must be initialized before first data load)
         self.refresh_error_message = None
+        self.api_thread_pool = QThreadPool()
+        self.refresh_in_progress = False
+        self.active_station_id = None
+        self.pending_station_id = None
+        self.pending_refresh_source = None
+        self.refresh_request_id = 0
+        self.refresh_request_context = {}
         
         # Track which arrival rows are showing actual time (persists across refreshes)
         self.rows_showing_actual_time = set()
@@ -204,40 +236,102 @@ class MainWindow(QMainWindow):
     
     def perform_initial_load(self):
         """Perform initial API data load after window is shown"""
-        try:
-            # Switch subtitle when we actually begin the API call
-            self.startup_status_label.setText("Connecting to Metro API...")
-            self.startup_status_label.setStyleSheet(f"font-family: {self.font_family}; font-size: 24px; color: #666;")
+        # Switch subtitle when we actually begin the API call
+        self.startup_status_label.setText("Connecting to Metro API...")
+        self.startup_status_label.setStyleSheet(f"font-family: {self.font_family}; font-size: 24px; color: #666;")
 
-            api_key = self.config_store.get_str('api_key')
-            if not api_key:
-                # Stay on startup page and prompt user to add API key
-                message = "API Key Missing. Add it by visiting nicoletrains.local"
-                self.startup_status_label.setText(message)
-                self.startup_status_label.setStyleSheet(f"font-family: {self.font_family}; font-size: 24px; color: #cc0000;")
-                # Start checking for API key to be added
-                self.waiting_for_api_key = True
-                self.api_key_check_timer.start(2000)  # Check every 2 seconds
-                return
-
-            # Stop API key check timer if it was running
-            self.waiting_for_api_key = False
-            self.api_key_check_timer.stop()
-
-            self.update_arrivals_display()
-            # Success - switch to home page and start timers
-            print("Switching to main schedule page at time:", datetime.now().strftime("%H:%M:%S"))
-            self.stack.setCurrentIndex(1)  # Home page
-            self.refresh_timer.start(self.refresh_rate_seconds * 1000)
-            self.countdown_timer.start(1000)
-        except MetroAPIError as e:
-            # Store error for reference
-            self.refresh_error_message = str(e)
-            # Update startup screen to show error
-            self.startup_status_label.setText(str(e))
+        api_key = self.config_store.get_str('api_key')
+        if not api_key:
+            # Stay on startup page and prompt user to add API key
+            message = "API Key Missing. Add it by visiting nicoletrains.local"
+            self.startup_status_label.setText(message)
             self.startup_status_label.setStyleSheet(f"font-family: {self.font_family}; font-size: 24px; color: #cc0000;")
-            # Show the action buttons
+            # Start checking for API key to be added
+            self.waiting_for_api_key = True
+            self.api_key_check_timer.start(2000)  # Check every 2 seconds
+            return
+
+        # Stop API key check timer if it was running
+        self.waiting_for_api_key = False
+        self.api_key_check_timer.stop()
+
+        station_id = self.config_store.get_str('selected_station')
+        if not station_id:
+            self.update_arrivals_display()
+            self.enter_home_page()
+            return
+
+        self.startup_status_label.setText("Loading arrivals...")
+        self.queue_predictions_refresh(station_id, source="startup")
+
+    def enter_home_page(self):
+        """Switch to the home page and start refresh timers."""
+        print("Switching to main schedule page at time:", datetime.now().strftime("%H:%M:%S"))
+        self.stack.setCurrentIndex(1)  # Home page
+        self.refresh_timer.start(self.refresh_rate_seconds * 1000)
+        self.countdown_timer.start(1000)
+
+    def queue_predictions_refresh(self, station_id, source):
+        if not station_id:
+            self.refresh_error_message = None
+            self.update_arrivals_display()
+            if source == "startup":
+                self.enter_home_page()
+            return
+
+        if self.refresh_in_progress:
+            if station_id != self.active_station_id:
+                self.pending_station_id = station_id
+                self.pending_refresh_source = source
+            return
+
+        self.refresh_in_progress = True
+        self.pending_station_id = None
+        self.pending_refresh_source = None
+        self.refresh_request_id += 1
+        request_id = self.refresh_request_id
+        self.refresh_request_context[request_id] = source
+        self.active_station_id = station_id
+
+        worker = PredictionsFetchWorker(self.data_handler, station_id, request_id)
+        worker.signals.success.connect(self.on_predictions_fetch_success)
+        worker.signals.error.connect(self.on_predictions_fetch_error)
+        worker.signals.finished.connect(self.on_predictions_fetch_finished)
+        self.api_thread_pool.start(worker)
+
+    def on_predictions_fetch_success(self, station_id, request_id):
+        source = self.refresh_request_context.get(request_id)
+        current_station_id = self.config_store.get_str('selected_station')
+        if station_id != current_station_id and source != "startup":
+            return
+        self.refresh_error_message = None
+        self.update_arrivals_display()
+        if source == "startup":
+            self.enter_home_page()
+
+    def on_predictions_fetch_error(self, station_id, request_id, message):
+        source = self.refresh_request_context.get(request_id)
+        current_station_id = self.config_store.get_str('selected_station')
+        if station_id != current_station_id and source != "startup":
+            return
+        self.refresh_error_message = message
+        if source == "startup":
+            self.startup_status_label.setText(message)
+            self.startup_status_label.setStyleSheet(f"font-family: {self.font_family}; font-size: 24px; color: #cc0000;")
             self.startup_buttons_container.show()
+            return
+        self.update_arrivals_display()
+
+    def on_predictions_fetch_finished(self, request_id):
+        self.refresh_in_progress = False
+        self.active_station_id = None
+        self.refresh_request_context.pop(request_id, None)
+        if self.pending_station_id:
+            pending_station_id = self.pending_station_id
+            pending_source = self.pending_refresh_source or "refresh"
+            self.pending_station_id = None
+            self.pending_refresh_source = None
+            self.queue_predictions_refresh(pending_station_id, pending_source)
     
     def check_for_api_key(self):
         """Check if API key has been added via web interface and retry initial load"""
@@ -797,25 +891,15 @@ class MainWindow(QMainWindow):
             self.rows_showing_actual_time.clear()
             return
         
-        # Get predictions for the selected station
-        try:
-            predictions_data = self.data_handler.get_cached_predictions(station_id)
-        except MetroAPIError as e:
-            # Store error for display in countdown
-            self.refresh_error_message = str(e)
-            # Show empty rows when error occurs
-            for row in self.arrival_rows:
-                row.circle_label.setStyleSheet("background-color: #cccccc; border-radius: 10px;")
-                row.destination_label.setText("—")
-                row.time_label.setText("—")
-            self.rows_showing_actual_time.clear()
-            return
+        # Get cached predictions for the selected station
+        predictions_data = self.data_handler.get_predictions_cache(station_id)
         
         if predictions_data is None or predictions_data.empty:
             # No data available, show empty rows
+            empty_text = "—" if self.refresh_error_message else "No arrivals"
             for row in self.arrival_rows:
                 row.circle_label.setStyleSheet("background-color: #cccccc; border-radius: 10px;")
-                row.destination_label.setText("No arrivals")
+                row.destination_label.setText(empty_text)
                 row.time_label.setText("—")
             self.rows_showing_actual_time.clear()
             return
@@ -951,17 +1035,10 @@ class MainWindow(QMainWindow):
         station_id = config.get('selected_station')
         
         if station_id:
-            try:
-                # Fetch fresh predictions from API
-                self.data_handler.fetch_predictions(station_id)
-                # Clear error message on success
-                self.refresh_error_message = None
-            except MetroAPIError as e:
-                # Store error message for display
-                self.refresh_error_message = str(e)
-        
-        # Update the display
-        self.update_arrivals_display()
+            self.queue_predictions_refresh(station_id, source="refresh")
+        else:
+            self.refresh_error_message = None
+            self.update_arrivals_display()
         
         # Reset countdown to configured refresh rate
         self.seconds_until_refresh = self.refresh_rate_seconds
@@ -1094,6 +1171,11 @@ class MainWindow(QMainWindow):
                     self.refresh_timer.stop()
                     self.refresh_timer.start(refresh_rate_seconds * 1000)  # Convert seconds to milliseconds
             self.seconds_until_refresh = refresh_rate_seconds
+        # API timeout
+        if should_update('api_timeout_seconds'):
+            timeout_seconds = config.get('api_timeout_seconds', 5)
+            if hasattr(self.data_handler, 'metro_api'):
+                self.data_handler.metro_api.set_timeout_seconds(timeout_seconds)
         # Background update check interval
         if should_update('update_check_interval_seconds') and hasattr(self, 'update_check_timer'):
             update_interval = config.get('update_check_interval_seconds', 60)
@@ -1714,11 +1796,8 @@ class MainWindow(QMainWindow):
         self.config_store.refresh_if_changed()
         
         # Refresh the arrivals display immediately
-        try:
-            self.refresh_error_message = None  # Clear any previous error
-            self.refresh_arrivals()
-        except MetroAPIError as e:
-            self.refresh_error_message = str(e)
+        self.refresh_error_message = None  # Clear any previous error
+        self.refresh_arrivals()
     
     def schedule_next_message(self):
         """Calculate and schedule the next automatic message display"""
@@ -2946,7 +3025,8 @@ def main():
     working_dir = os.path.dirname(os.path.abspath(__file__))
     update_service = UpdateService(settings_server, working_dir=working_dir)
 
-    metro_api = MetroAPI(config_store.get_str('api_key', ''))
+    api_timeout_seconds = config_store.get_int('api_timeout_seconds', 5)
+    metro_api = MetroAPI(config_store.get_str('api_key', ''), timeout_seconds=api_timeout_seconds)
     data_handler = DataHandler(metro_api)
 
     try:
