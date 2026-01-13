@@ -9,7 +9,6 @@ from services.settings_server_client import SettingsServerClient
 from services.system_service import SystemService
 from services.update_service import UpdateService
 from views.filters import TouchscreenComboViewFilter
-from views.overlays import RebootWarningOverlay
 from views.popouts import IPPopout, UpdatePopout, ShutdownPopout
 import os
 from services.system_actions import start_process
@@ -164,7 +163,6 @@ class MainWindow(QMainWindow):
         
         self.reboot_countdown_timer = None
         self.reboot_countdown_seconds = 0
-        self.reboot_warning_overlay = None
         self.reboot_scheduled_for_today = False  # Track if we already triggered reboot today
         
         # API key detection for retry after web interface adds key
@@ -1669,16 +1667,9 @@ class MainWindow(QMainWindow):
     def start_reboot_countdown(self):
         """Start the 60-second reboot countdown"""
         self.reboot_countdown_seconds = 60
-        
-        # Create and show overlay
-        if self.reboot_warning_overlay is None:
-            self.reboot_warning_overlay = RebootWarningOverlay(self.config_store, self)
-            self.reboot_warning_overlay.cancel_button.clicked.connect(self.cancel_reboot)
-        
-        # Set overlay to cover the entire window
-        self.reboot_warning_overlay.setGeometry(self.geometry())
-        self.reboot_warning_overlay.show()
-        self.reboot_warning_overlay.raise_()
+
+        self.update_reboot_warning_label(self.reboot_countdown_seconds)
+        self.show_reboot_warning()
         
         # Start countdown timer
         if self.reboot_countdown_timer is None:
@@ -1694,24 +1685,32 @@ class MainWindow(QMainWindow):
         if self.reboot_countdown_seconds <= 0:
             # Time's up, perform reboot
             self.reboot_countdown_timer.stop()
-            if self.reboot_warning_overlay:
-                self.reboot_warning_overlay.hide()
+            self.hide_reboot_warning()
             self.perform_system_reboot()
         else:
-            # Update the overlay display
-            if self.reboot_warning_overlay:
-                self.reboot_warning_overlay.update_countdown(self.reboot_countdown_seconds)
+            self.update_reboot_warning_label(self.reboot_countdown_seconds)
     
     def cancel_reboot(self):
         """Cancel the scheduled reboot"""
         if self.reboot_countdown_timer:
             self.reboot_countdown_timer.stop()
-        
-        if self.reboot_warning_overlay:
-            self.reboot_warning_overlay.hide()
+
+        self.hide_reboot_warning()
         
         self.reboot_countdown_seconds = 0
         # Don't reset reboot_scheduled_for_today so it won't trigger again today
+
+    def show_reboot_warning(self):
+        if hasattr(self, "reboot_warning_container"):
+            self.reboot_warning_container.show()
+
+    def hide_reboot_warning(self):
+        if hasattr(self, "reboot_warning_container"):
+            self.reboot_warning_container.hide()
+
+    def update_reboot_warning_label(self, seconds):
+        if hasattr(self, "reboot_warning_label"):
+            self.reboot_warning_label.setText(f"Rebooting in {seconds} seconds")
     
     def perform_system_reboot(self):
         """Perform system reboot"""
@@ -2410,6 +2409,8 @@ class MainWindow(QMainWindow):
         content_layout.setContentsMargins(20, 20, 20, 20)
         content_layout.setSpacing(0)
 
+        content_layout.addWidget(self.build_reboot_warning_banner())
+
         self.arrival_rows = []
         for i in range(5):
             row = self.create_arrival_row(i)
@@ -2421,6 +2422,61 @@ class MainWindow(QMainWindow):
         content_widget = QWidget()
         content_widget.setLayout(content_layout)
         return content_widget
+
+    def build_reboot_warning_banner(self):
+        self.reboot_warning_container = QWidget()
+        self.reboot_warning_container.setStyleSheet("background-color: transparent;")
+
+        warning_layout = QHBoxLayout()
+        warning_layout.setContentsMargins(0, 0, 0, 10)
+        warning_layout.setSpacing(10)
+
+        self.reboot_warning_label = QLabel("Rebooting in 60 seconds")
+        self.reboot_warning_label.setStyleSheet(
+            f"""
+            font-family: {self.font_family};
+            font-size: 14px;
+            font-weight: bold;
+            color: #721c24;
+            background-color: #f8d7da;
+            padding: 4px 8px;
+            border-radius: 4px;
+        """
+        )
+        self.reboot_warning_label.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
+        self.reboot_warning_label.setWordWrap(False)
+        warning_layout.addWidget(self.reboot_warning_label)
+
+        self.reboot_cancel_button = QPushButton("Cancel")
+        self.reboot_cancel_button.setStyleSheet(
+            f"""
+            QPushButton {{
+                font-family: {self.font_family};
+                font-size: 12px;
+                font-weight: bold;
+                padding: 3px 8px;
+                background-color: #ffffff;
+                color: #721c24;
+                border: 1px solid #f5c6cb;
+                border-radius: 4px;
+            }}
+            QPushButton:hover {{
+                background-color: #f8d7da;
+            }}
+            QPushButton:pressed {{
+                background-color: #f5c6cb;
+                padding-bottom: 2px;
+            }}
+        """
+        )
+        self.reboot_cancel_button.clicked.connect(self.cancel_reboot)
+        warning_layout.addWidget(self.reboot_cancel_button)
+
+        warning_layout.addStretch()
+
+        self.reboot_warning_container.setLayout(warning_layout)
+        self.reboot_warning_container.hide()
+        return self.reboot_warning_container
     
     def create_home_page(self):
         """Create the home page"""
