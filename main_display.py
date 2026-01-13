@@ -128,8 +128,8 @@ class MainWindow(QMainWindow):
         self.refresh_request_id = 0
         self.refresh_request_context = {}
         
-        # Track which arrival rows are showing actual time (persists across refreshes)
-        self.rows_showing_actual_time = set()
+        # Track which trains are showing actual time (persists across refreshes)
+        self.trains_showing_actual_time = set()
         
         # Initialize settings with config values
         self.initialize_settings_from_config()
@@ -814,6 +814,7 @@ class MainWindow(QMainWindow):
         row.time_label = time_label
         row.row_index = index
         row.base_color = bg_color  # Store base color for press effect
+        row.prediction_key = None
         
         # Make row clickable with press effect
         row.mousePressEvent = lambda event: self.on_arrival_row_pressed(index)
@@ -833,19 +834,19 @@ class MainWindow(QMainWindow):
         row = self.arrival_rows[index]
         
         # Don't toggle if the row is empty (showing "—")
-        if row.time_label.text() == "—":
+        if row.time_label.text() == "—" or not row.prediction_key:
             # Restore base color but don't toggle anything
             base_color = "#ffffff" if index % 2 == 0 else "#f5f5f5"
             row.setStyleSheet(f"background-color: {base_color};")
             return
         
         # Toggle the time display state
-        if index in self.rows_showing_actual_time:
+        if row.prediction_key in self.trains_showing_actual_time:
             # Row is currently showing actual time, toggle it off
-            self.rows_showing_actual_time.remove(index)
+            self.trains_showing_actual_time.remove(row.prediction_key)
         else:
             # Row is not showing actual time, toggle it on
-            self.rows_showing_actual_time.add(index)
+            self.trains_showing_actual_time.add(row.prediction_key)
         
         # Restore base color
         base_color = "#ffffff" if index % 2 == 0 else "#f5f5f5"
@@ -875,6 +876,33 @@ class MainWindow(QMainWindow):
         
         # Format as 12-hour time with AM/PM, remove leading zero
         return arrival_time.strftime("%I:%M %p").lstrip('0')
+
+    def normalize_prediction_value(self, value):
+        """Normalize prediction values for stable key creation."""
+        if value is None:
+            return ''
+        try:
+            if value != value:
+                return ''
+        except Exception:
+            return ''
+        return str(value)
+
+    def build_prediction_key(self, prediction):
+        """Build a stable key for a prediction to track it across refreshes."""
+        location_code = self.normalize_prediction_value(prediction.get('LocationCode'))
+        line = self.normalize_prediction_value(prediction.get('Line'))
+        destination_code = self.normalize_prediction_value(prediction.get('DestinationCode'))
+        destination_name = self.normalize_prediction_value(prediction.get('DestinationName'))
+        destination_short = self.normalize_prediction_value(prediction.get('Destination'))
+        group = self.normalize_prediction_value(prediction.get('Group'))
+        car = self.normalize_prediction_value(prediction.get('Car'))
+
+        destination_key = destination_code or destination_name or destination_short
+        key = (location_code, line, destination_key, group, car)
+        if not any(key):
+            return None
+        return key
     
     def update_arrivals_display(self):
         """Update the arrivals display with latest prediction data"""
@@ -888,7 +916,7 @@ class MainWindow(QMainWindow):
                 row.circle_label.setStyleSheet("background-color: #cccccc; border-radius: 10px;")
                 row.destination_label.setText("—")
                 row.time_label.setText("—")
-            self.rows_showing_actual_time.clear()
+            self.trains_showing_actual_time.clear()
             return
         
         # Get cached predictions for the selected station
@@ -901,7 +929,7 @@ class MainWindow(QMainWindow):
                 row.circle_label.setStyleSheet("background-color: #cccccc; border-radius: 10px;")
                 row.destination_label.setText(empty_text)
                 row.time_label.setText("—")
-            self.rows_showing_actual_time.clear()
+            self.trains_showing_actual_time.clear()
             return
         
         # Apply filtering if enabled (use config flag to reflect remote changes)
@@ -918,7 +946,7 @@ class MainWindow(QMainWindow):
                         row.circle_label.setStyleSheet("background-color: #cccccc; border-radius: 10px;")
                         row.destination_label.setText("No arrivals")
                         row.time_label.setText("—")
-                    self.rows_showing_actual_time.clear()
+                    self.trains_showing_actual_time.clear()
                     return
         
         # Apply direction-based filtering if enabled
@@ -963,7 +991,7 @@ class MainWindow(QMainWindow):
                         row.circle_label.setStyleSheet("background-color: #cccccc; border-radius: 10px;")
                         row.destination_label.setText("No arrivals")
                         row.time_label.setText("—")
-                    self.rows_showing_actual_time.clear()
+                    self.trains_showing_actual_time.clear()
                     return
         
         # Sort predictions by arrival time (Min field)
@@ -986,9 +1014,14 @@ class MainWindow(QMainWindow):
         )
         
         # Update each arrival row
+        visible_prediction_keys = set()
         for i, row in enumerate(self.arrival_rows):
             if i < len(sorted_predictions):
                 prediction = sorted_predictions[i]
+                prediction_key = self.build_prediction_key(prediction)
+                row.prediction_key = prediction_key
+                if prediction_key:
+                    visible_prediction_keys.add(prediction_key)
                 
                 # Update row background to base color
                 base_color = "#ffffff" if i % 2 == 0 else "#f5f5f5"
@@ -1010,7 +1043,7 @@ class MainWindow(QMainWindow):
                 elif isinstance(min_val, (int, float)) or (isinstance(min_val, str) and min_val.isdigit()):
                     time_text = f"{min_val} min"
                     # Add actual time if this row is clicked
-                    if i in self.rows_showing_actual_time:
+                    if prediction_key in self.trains_showing_actual_time:
                         actual_time = self.calculate_actual_time(min_val)
                         if actual_time:
                             time_text = f"{actual_time} • {min_val} min"
@@ -1024,8 +1057,10 @@ class MainWindow(QMainWindow):
                 row.circle_label.setStyleSheet("background-color: #cccccc; border-radius: 10px;")
                 row.destination_label.setText("—")
                 row.time_label.setText("—")
-                # Clear arrival time toggle for empty rows
-                self.rows_showing_actual_time.discard(i)
+                row.prediction_key = None
+
+        # Remove toggles for trains no longer visible
+        self.trains_showing_actual_time.intersection_update(visible_prediction_keys)
     
     def refresh_arrivals(self):
         """Refresh arrivals data from API and update display"""
