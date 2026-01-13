@@ -2433,10 +2433,6 @@ class MainWindow(QMainWindow):
         self.reboot_warning_container.setStyleSheet("background-color: transparent;")
         self.reboot_warning_container.setFixedHeight(50)
 
-        warning_layout = QVBoxLayout()
-        warning_layout.setContentsMargins(0, 0, 0, 0)
-        warning_layout.setSpacing(0)
-
         # Horizontal layout for label and button
         content_layout = QHBoxLayout()
         content_layout.setContentsMargins(0, 0, 0, 0)
@@ -2457,7 +2453,7 @@ class MainWindow(QMainWindow):
         self.reboot_warning_label.setAlignment(Qt.AlignCenter)
         self.reboot_warning_label.setWordWrap(False)
         content_layout.addStretch()
-        content_layout.addWidget(self.reboot_warning_label, alignment=Qt.AlignVCenter)
+        content_layout.addWidget(self.reboot_warning_label)
 
         self.reboot_cancel_button = QPushButton("Cancel")
         self.reboot_cancel_button.setStyleSheet(
@@ -2482,13 +2478,18 @@ class MainWindow(QMainWindow):
         """
         )
         self.reboot_cancel_button.clicked.connect(self.cancel_reboot)
-        content_layout.addWidget(self.reboot_cancel_button, alignment=Qt.AlignVCenter)
+        content_layout.addWidget(self.reboot_cancel_button)
         content_layout.addStretch()
 
-        # Add vertical stretches to center the content
-        warning_layout.addStretch()
-        warning_layout.addLayout(content_layout)
-        warning_layout.addStretch()
+        # Wrap in a widget to enable vertical centering
+        content_widget = QWidget()
+        content_widget.setLayout(content_layout)
+
+        # Main layout with vertical centering
+        warning_layout = QVBoxLayout()
+        warning_layout.setContentsMargins(0, 0, 0, 0)
+        warning_layout.setSpacing(0)
+        warning_layout.addWidget(content_widget, alignment=Qt.AlignVCenter)
 
         self.reboot_warning_container.setLayout(warning_layout)
         self.reboot_warning_container.hide()
