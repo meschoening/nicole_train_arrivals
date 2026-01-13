@@ -2484,9 +2484,9 @@ class MainWindow(QMainWindow):
         warning_layout = QVBoxLayout()
         warning_layout.setContentsMargins(0, 0, 0, 0)
         warning_layout.setSpacing(0)
-        warning_layout.addStretch()
+        warning_layout.addStretch(1)
         warning_layout.addLayout(content_layout)
-        warning_layout.addStretch()
+        warning_layout.addStretch(1)
 
         self.reboot_warning_container.setLayout(warning_layout)
         self.reboot_warning_container.hide()
