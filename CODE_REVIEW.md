@@ -6,10 +6,10 @@ Reviewed the Python application (PyQt5 main display, Flask settings server, WiFi
 
 ## Findings
 
-### [High] Scheduled reboot crashes due to `datetime.timedelta`
-- **Description:** `check_reboot_schedule` calls `datetime.timedelta(...)` even though `datetime` is the class imported from `datetime` and does not expose `timedelta` (`main_display.py:2359`).
-- **Why it matters:** When auto-reboot is enabled, this raises `AttributeError`, breaking the reboot scheduler and potentially spamming the UI/logs or halting the timer loop.
-- **Recommendation:** Replace with the imported `timedelta` (`warning_datetime - timedelta(seconds=60)`), and add a small test or manual verification for the scheduled reboot path.
+### <span style="color: yellow;">[High] Scheduled reboot crashes due to `datetime.timedelta`</span>
+- <span style="color: yellow;">**Description:** `check_reboot_schedule` calls `datetime.timedelta(...)` even though `datetime` is the class imported from `datetime` and does not expose `timedelta` (`main_display.py:2359`).</span>
+- <span style="color: yellow;">**Why it matters:** When auto-reboot is enabled, this raises `AttributeError`, breaking the reboot scheduler and potentially spamming the UI/logs or halting the timer loop.</span>
+- <span style="color: yellow;">**Update:** Switched to the imported `timedelta` when computing the warning time to avoid the `AttributeError`; scheduled reboot warnings should now trigger reliably.</span>
 
 ### [High] Admin web endpoints are unauthenticated
 - **Description:** The web server exposes sensitive actions (update, reboot, shutdown, SSH key generation, SSL cert generation, timezone changes) without authentication or CSRF protection (`web_settings_server.py:525`, `web_settings_server.py:704`, `web_settings_server.py:797`, `web_settings_server.py:982`, `web_settings_server.py:1001`, `web_settings_server.py:1014`).

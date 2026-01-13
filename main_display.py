@@ -1643,7 +1643,7 @@ class MainWindow(QMainWindow):
             # Calculate the time when warning should appear (60 seconds before reboot)
             warning_datetime = datetime.combine(now.date(), reboot_time)
             warning_datetime = warning_datetime.replace(second=0, microsecond=0)
-            warning_time = (warning_datetime - datetime.timedelta(seconds=60)).time()
+            warning_time = (warning_datetime - timedelta(seconds=60)).time()
             
             # Create time objects for comparison (ignore seconds)
             current_minute = current_time.replace(second=0, microsecond=0)
