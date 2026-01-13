@@ -128,7 +128,7 @@ class MainWindow(QMainWindow):
         self.refresh_request_context = {}
         
         # Track which trains are showing actual time (persists across refreshes)
-        self.trains_showing_actual_time = set()
+        self.trains_showing_actual_time = []
         
         # Initialize settings with config values
         self.initialize_settings_from_config()
@@ -812,7 +812,8 @@ class MainWindow(QMainWindow):
         row.time_label = time_label
         row.row_index = index
         row.base_color = bg_color  # Store base color for press effect
-        row.prediction_key = None
+        row.prediction_signature = None
+        row.prediction_arrival_minutes = None
         
         # Make row clickable with press effect
         row.mousePressEvent = lambda event: self.on_arrival_row_pressed(index)
@@ -832,19 +833,25 @@ class MainWindow(QMainWindow):
         row = self.arrival_rows[index]
         
         # Don't toggle if the row is empty (showing "—")
-        if row.time_label.text() == "—" or not row.prediction_key:
+        if row.time_label.text() == "—" or not row.prediction_signature or row.prediction_arrival_minutes is None:
             # Restore base color but don't toggle anything
             base_color = "#ffffff" if index % 2 == 0 else "#f5f5f5"
             row.setStyleSheet(f"background-color: {base_color};")
             return
         
         # Toggle the time display state
-        if row.prediction_key in self.trains_showing_actual_time:
+        matching_index = self.find_matching_toggle_index(
+            row.prediction_signature,
+            row.prediction_arrival_minutes
+        )
+        if matching_index is not None:
             # Row is currently showing actual time, toggle it off
-            self.trains_showing_actual_time.remove(row.prediction_key)
+            del self.trains_showing_actual_time[matching_index]
         else:
             # Row is not showing actual time, toggle it on
-            self.trains_showing_actual_time.add(row.prediction_key)
+            self.trains_showing_actual_time.append(
+                (row.prediction_signature, row.prediction_arrival_minutes)
+            )
         
         # Restore base color
         base_color = "#ffffff" if index % 2 == 0 else "#f5f5f5"
@@ -855,6 +862,15 @@ class MainWindow(QMainWindow):
     
     def calculate_actual_time(self, min_value):
         """Calculate the actual arrival time given minutes until arrival"""
+        arrival_time = self.calculate_actual_datetime(min_value)
+        if not arrival_time:
+            return None
+
+        # Format as 12-hour time with AM/PM, remove leading zero
+        return arrival_time.strftime("%I:%M %p").lstrip('0')
+
+    def calculate_actual_datetime(self, min_value):
+        """Calculate the actual arrival datetime given minutes until arrival."""
         # Handle special cases that shouldn't show actual time
         if min_value in ['ARR', 'BRD', '—']:
             return None
@@ -870,10 +886,21 @@ class MainWindow(QMainWindow):
         
         # Calculate actual arrival time
         now = datetime.now()
-        arrival_time = now + timedelta(minutes=minutes)
-        
-        # Format as 12-hour time with AM/PM, remove leading zero
-        return arrival_time.strftime("%I:%M %p").lstrip('0')
+        return now + timedelta(minutes=minutes)
+
+    def arrival_time_to_minutes(self, arrival_time):
+        """Convert an arrival datetime to minutes since midnight."""
+        if not arrival_time:
+            return None
+        return (arrival_time.hour * 60) + arrival_time.minute
+
+    def arrival_minutes_within_tolerance(self, minutes_a, minutes_b, tolerance=1):
+        """Return True if two minute-of-day values are within tolerance."""
+        if minutes_a is None or minutes_b is None:
+            return False
+        diff = abs(minutes_a - minutes_b)
+        diff = min(diff, 1440 - diff)
+        return diff <= tolerance
 
     def normalize_prediction_value(self, value):
         """Normalize prediction values for stable key creation."""
@@ -886,27 +913,30 @@ class MainWindow(QMainWindow):
             return ''
         return str(value)
 
-    def build_prediction_key(self, prediction):
-        """Build a stable key for a prediction to track it across refreshes."""
+    def build_prediction_signature(self, prediction):
+        """Build a stable signature for a prediction to track it across refreshes."""
         location_code = self.normalize_prediction_value(prediction.get('LocationCode'))
         line = self.normalize_prediction_value(prediction.get('Line'))
-        arrival_time = self.normalize_prediction_value(
-            self.calculate_actual_time(prediction.get('Min'))
-        )
-        destination_code = self.normalize_prediction_value(prediction.get('DestinationCode'))
-        destination_name = self.normalize_prediction_value(prediction.get('DestinationName'))
-        destination_short = self.normalize_prediction_value(prediction.get('Destination'))
         group = self.normalize_prediction_value(prediction.get('Group'))
         car = self.normalize_prediction_value(prediction.get('Car'))
 
-        destination_key = destination_code or destination_name or destination_short
-        if arrival_time:
-            key = (location_code, line, arrival_time, group, car)
-        else:
-            key = (location_code, line, destination_key, group, car)
-        if not any(key):
+        signature = (location_code, line, group, car)
+        if not any(signature):
             return None
-        return key
+        return signature
+
+    def find_matching_toggle_index(self, signature, arrival_minutes):
+        """Find the index of a matching toggle using arrival-time tolerance."""
+        for idx, (toggle_signature, toggle_minutes) in enumerate(self.trains_showing_actual_time):
+            if signature != toggle_signature:
+                continue
+            if self.arrival_minutes_within_tolerance(arrival_minutes, toggle_minutes):
+                return idx
+        return None
+
+    def is_toggle_active(self, signature, arrival_minutes):
+        """Return True if a toggle matches the signature and arrival time."""
+        return self.find_matching_toggle_index(signature, arrival_minutes) is not None
     
     def update_arrivals_display(self):
         """Update the arrivals display with latest prediction data"""
@@ -1018,14 +1048,17 @@ class MainWindow(QMainWindow):
         )
         
         # Update each arrival row
-        visible_prediction_keys = set()
+        visible_predictions = []
         for i, row in enumerate(self.arrival_rows):
             if i < len(sorted_predictions):
                 prediction = sorted_predictions[i]
-                prediction_key = self.build_prediction_key(prediction)
-                row.prediction_key = prediction_key
-                if prediction_key:
-                    visible_prediction_keys.add(prediction_key)
+                prediction_signature = self.build_prediction_signature(prediction)
+                actual_datetime = self.calculate_actual_datetime(prediction.get('Min'))
+                arrival_minutes = self.arrival_time_to_minutes(actual_datetime)
+                row.prediction_signature = prediction_signature
+                row.prediction_arrival_minutes = arrival_minutes
+                if prediction_signature and arrival_minutes is not None:
+                    visible_predictions.append((prediction_signature, arrival_minutes))
                 
                 # Update row background to base color
                 base_color = "#ffffff" if i % 2 == 0 else "#f5f5f5"
@@ -1047,7 +1080,10 @@ class MainWindow(QMainWindow):
                 elif isinstance(min_val, (int, float)) or (isinstance(min_val, str) and min_val.isdigit()):
                     time_text = f"{min_val} min"
                     # Add actual time if this row is clicked
-                    if prediction_key in self.trains_showing_actual_time:
+                    if prediction_signature and self.is_toggle_active(
+                        prediction_signature,
+                        arrival_minutes
+                    ):
                         actual_time = self.calculate_actual_time(min_val)
                         if actual_time:
                             time_text = f"{actual_time} • {min_val} min"
@@ -1061,10 +1097,19 @@ class MainWindow(QMainWindow):
                 row.circle_label.setStyleSheet("background-color: #cccccc; border-radius: 10px;")
                 row.destination_label.setText("—")
                 row.time_label.setText("—")
-                row.prediction_key = None
+                row.prediction_signature = None
+                row.prediction_arrival_minutes = None
 
         # Remove toggles for trains no longer visible
-        self.trains_showing_actual_time.intersection_update(visible_prediction_keys)
+        self.trains_showing_actual_time = [
+            (toggle_signature, toggle_minutes)
+            for toggle_signature, toggle_minutes in self.trains_showing_actual_time
+            if any(
+                toggle_signature == visible_signature
+                and self.arrival_minutes_within_tolerance(toggle_minutes, visible_minutes)
+                for visible_signature, visible_minutes in visible_predictions
+            )
+        ]
     
     def refresh_arrivals(self):
         """Refresh arrivals data from API and update display"""
