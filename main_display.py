@@ -2443,9 +2443,10 @@ class MainWindow(QMainWindow):
             border-radius: 4px;
         """
         )
-        self.reboot_warning_label.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
+        self.reboot_warning_label.setAlignment(Qt.AlignCenter)
         self.reboot_warning_label.setWordWrap(False)
-        warning_layout.addWidget(self.reboot_warning_label)
+        warning_layout.addStretch()
+        warning_layout.addWidget(self.reboot_warning_label, alignment=Qt.AlignVCenter)
 
         self.reboot_cancel_button = QPushButton("Cancel")
         self.reboot_cancel_button.setStyleSheet(
@@ -2470,8 +2471,7 @@ class MainWindow(QMainWindow):
         """
         )
         self.reboot_cancel_button.clicked.connect(self.cancel_reboot)
-        warning_layout.addWidget(self.reboot_cancel_button)
-
+        warning_layout.addWidget(self.reboot_cancel_button, alignment=Qt.AlignVCenter)
         warning_layout.addStretch()
 
         self.reboot_warning_container.setLayout(warning_layout)
