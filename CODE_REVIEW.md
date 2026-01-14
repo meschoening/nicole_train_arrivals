@@ -46,10 +46,10 @@ Reviewed the Python application (PyQt5 main display, Flask settings server, WiFi
 - <span style="color: green;">**Why it matters:** The web UI indicates the interval was saved, but the running display ignores it until restart.</span>
 - <span style="color: green;">**Update:** Config change notifications now refresh the update check timer interval at runtime.</span>
 
-### [Low] Hard-coded username in git operations
-- **Description:** Git operations are run as the fixed user `max` (`web_settings_server.py:634`, `web_settings_server.py:679`, `web_settings_server.py:811`).
-- **Why it matters:** This breaks portability and will fail on systems without that user or where file ownership differs.
-- **Recommendation:** Use the current user (from `os.getuid()`/`pwd.getpwuid`) or make the git user configurable in the config file.
+### <span style="color: yellow;">[Low] Hard-coded username in git operations</span>
+- <span style="color: yellow;">**Description:** Git operations are run as the fixed user `max` (`web_settings_server.py:634`, `web_settings_server.py:679`, `web_settings_server.py:811`).</span>
+- <span style="color: yellow;">**Why it matters:** This breaks portability and will fail on systems without that user or where file ownership differs.</span>
+- <span style="color: yellow;">**Update:** Git operations now resolve the current OS user via `os.getuid()`/`pwd.getpwuid` and use that user instead of a hard-coded name.</span>
 
 ## Testing Gaps
 - No automated tests for config/message migrations, scheduled reboot logic, or update flows. A small test suite with mocked subprocesses and API responses would catch regressions in these critical paths.

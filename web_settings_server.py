@@ -5,7 +5,7 @@ from services.background_jobs import background_jobs
 from services.config_store import ConfigStore
 from services.message_store import MessageStore
 from services.system_service import SystemService
-from services.update_service import UpdateServiceRunner, has_git_error, has_updates
+from services.update_service import UpdateServiceRunner, build_git_command, has_git_error, has_updates
 from services.system_actions import run_command, start_process
 import os
 from datetime import datetime, timedelta
@@ -78,6 +78,17 @@ def _check_ssl_certs():
     """Check if SSL certificate files exist."""
     cert_path, key_path = _get_ssl_cert_paths()
     return cert_path is not None and key_path is not None
+
+
+def get_current_user():
+    """Resolve the current OS username for sudo/git operations."""
+    try:
+        import pwd
+
+        return pwd.getpwuid(os.getuid()).pw_name
+    except Exception:
+        user = os.environ.get("USER") or os.environ.get("USERNAME")
+        return user if user else None
 
 
 def get_pending_message_trigger():
@@ -195,7 +206,7 @@ def start_web_settings_server(data_handler, host="0.0.0.0", port=443):
     config_store = ConfigStore()
     message_store = MessageStore()
     system_service = SystemService()
-    git_user = "max"
+    git_user = get_current_user()
     update_service = UpdateServiceRunner(
         working_dir=os.path.dirname(os.path.abspath(__file__)),
         git_user=git_user,
@@ -591,7 +602,7 @@ def start_web_settings_server(data_handler, host="0.0.0.0", port=443):
         cwd = os.path.dirname(os.path.abspath(__file__))
         try:
             result = run_command(
-                ["sudo", "-u", "max", "git", "remote", "-v"],
+                build_git_command(["remote", "-v"], git_user=git_user),
                 cwd=cwd,
                 timeout_s=10,
                 log_label="git_remote_list",
@@ -635,7 +646,7 @@ def start_web_settings_server(data_handler, host="0.0.0.0", port=443):
         cwd = os.path.dirname(os.path.abspath(__file__))
         try:
             result = run_command(
-                ["sudo", "-u", "max", "git", "remote", "set-url", "origin", ssh_url],
+                build_git_command(["remote", "set-url", "origin", ssh_url], git_user=git_user),
                 cwd=cwd,
                 timeout_s=10,
                 log_label="git_remote_set",
