@@ -1753,10 +1753,15 @@ class MainWindow(QMainWindow):
     def show_reboot_warning(self):
         if hasattr(self, "reboot_warning_container"):
             self.reboot_warning_container.show()
+        if hasattr(self, "home_arrivals_layout") and hasattr(self, "home_arrivals_margins"):
+            left, _, right, bottom = self.home_arrivals_margins
+            self.home_arrivals_layout.setContentsMargins(left, 0, right, bottom)
 
     def hide_reboot_warning(self):
         if hasattr(self, "reboot_warning_container"):
             self.reboot_warning_container.hide()
+        if hasattr(self, "home_arrivals_layout") and hasattr(self, "home_arrivals_margins"):
+            self.home_arrivals_layout.setContentsMargins(*self.home_arrivals_margins)
 
     def update_reboot_warning_label(self, seconds):
         if hasattr(self, "reboot_warning_label"):
@@ -2456,8 +2461,10 @@ class MainWindow(QMainWindow):
 
     def build_home_arrivals_content(self):
         content_layout = QVBoxLayout()
-        content_layout.setContentsMargins(20, 20, 20, 20)
+        self.home_arrivals_margins = (20, 20, 20, 20)
+        content_layout.setContentsMargins(*self.home_arrivals_margins)
         content_layout.setSpacing(0)
+        self.home_arrivals_layout = content_layout
 
         content_layout.addWidget(self.build_reboot_warning_banner())
 
