@@ -415,7 +415,8 @@ def start_web_settings_server(data_handler, host="0.0.0.0", port=443):
             update_check_interval=config_store.get_int("update_check_interval_seconds", 60),
             last_saved=_get_config_last_saved(),
             current_branch=current_branch,
-            configured_branch=configured_branch
+            configured_branch=configured_branch,
+            update_available=check_for_updates()
         )
 
     @app.get("/api-key")
