@@ -24,7 +24,7 @@
 
 ## Commit & Pull Request Guidelines
 - Recent history uses short, sentence-case messages without prefixes (e.g., “Update README”, “Clean for delivery”). Follow that style and keep messages concise.
-- PRs should include a short summary, test notes, and screenshots for UI changes (Qt or web). Link related issues if applicable.
+- PRs should include a short summary and screenshots for UI changes (Qt or web); omit testing sections unless explicitly requested. Link related issues if applicable.
 - When addressing any item from `CODE_REVIEW.md`, update that section to yellow and replace its recommendation with an update note, matching the existing format.
 
 ## Security & Configuration Tips
