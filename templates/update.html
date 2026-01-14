@@ -1,590 +1,423 @@
-<!doctype html>
-<html>
+{% extends "_layout.html" %}
+{% set page_title = "Software Update" %}
+{% set page_subtitle = "Check, switch branches, and apply updates safely." %}
+{% set active_page = "update" %}
 
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="csrf-token" content="{{ csrf_token }}">
-  <title>Software Update - {{ display_name }}</title>
-  <style>
-    body {
-      font-family: sans-serif;
-      margin: 0;
-      padding: 0;
-    }
+{% block head_extra %}
+<style>
+  #console {
+    background: #0b0f14;
+    color: #e2e8f0;
+    padding: 12px;
+    border-radius: var(--radius-sm);
+    min-height: 220px;
+    white-space: pre-wrap;
+    overflow: auto;
+    font-family: var(--font-mono);
+    font-size: 12px;
+  }
 
-    .container {
-      max-width: 720px;
-      margin: 0 auto;
-      padding: 24px;
-    }
+  #successLabel {
+    display: none;
+    padding: 12px 16px;
+    border-radius: var(--radius-sm);
+    font-weight: 600;
+    margin-top: 8px;
+    border: 1px solid rgba(31, 122, 93, 0.4);
+    background: rgba(31, 122, 93, 0.12);
+    color: var(--success);
+  }
 
-    .row {
-      margin-bottom: 12px;
-    }
+  #branchConfirmDialog {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(15, 23, 42, 0.6);
+    z-index: 9998;
+    justify-content: center;
+    align-items: center;
+  }
 
-    button {
-      padding: 8px 14px;
-      font-weight: bold;
-    }
+  #branchConfirmDialog.visible {
+    display: flex;
+  }
 
-    a.btn {
-      text-decoration: none;
-      display: inline-block;
-      padding: 8px 14px;
-      border-radius: 6px;
-      background: #f0f0f0;
-      color: #000;
-      font-weight: 700;
-      border: 1px solid #ddd;
-    }
+  .confirm-dialog-content {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    padding: 20px;
+    max-width: 460px;
+  }
 
-    a.btn:hover {
-      background: #e6e6e6;
-    }
+  .confirm-dialog-content h3 {
+    margin-top: 0;
+    color: var(--warning);
+  }
 
-    #console {
-      background: #111;
-      color: #ddd;
-      padding: 12px;
-      border-radius: 6px;
-      min-height: 220px;
-      white-space: pre-wrap;
-      overflow: auto;
-    }
+  .confirm-dialog-buttons {
+    display: flex;
+    justify-content: flex-end;
+    gap: 12px;
+    margin-top: 16px;
+  }
+</style>
+{% endblock %}
 
-    #status {
-      margin-top: 8px;
-      color: #666;
-    }
+{% block content %}
+<div class="content-grid">
+  {% if update_available %}
+  <div class="notice success">
+    Update available. A new software update is ready to install.
+  </div>
+  {% endif %}
 
-    #rebootBtn {
-      display: none;
-    }
-
-    #successLabel {
-      display: none;
-      background: #e8f5e9;
-      color: #2a7a2a;
-      padding: 10px 12px;
-      border-radius: 6px;
-      font-weight: bold;
-      margin-top: 8px;
-    }
-
-
-    /* Branch Selection Styles */
-    .branch-section {
-      margin-bottom: 24px;
-    }
-
-    .branch-info {
-      display: flex;
-      align-items: center;
-      gap: 12px;
-      margin-bottom: 12px;
-    }
-
-    .branch-label {
-      font-weight: bold;
-      color: #333;
-    }
-
-    .branch-name {
-      font-family: monospace;
-      background: #f5f5f5;
-      padding: 4px 8px;
-      border-radius: 4px;
-      border: 1px solid #ddd;
-    }
-
-    #branchSelect {
-      padding: 6px 10px;
-      font-size: 14px;
-      min-width: 180px;
-    }
-
-    #switchBranchBtn {
-      margin-left: 8px;
-    }
-
-    #switchBranchBtn:disabled {
-      opacity: 0.5;
-      cursor: not-allowed;
-    }
-
-    #branchStatus {
-      margin-top: 8px;
-      font-size: 14px;
-    }
-
-    /* Confirmation Dialog */
-    #branchConfirmDialog {
-      display: none;
-      position: fixed;
-      top: 0;
-      left: 0;
-      width: 100%;
-      height: 100%;
-      background: rgba(0, 0, 0, 0.6);
-      z-index: 9998;
-      justify-content: center;
-      align-items: center;
-    }
-
-    #branchConfirmDialog.visible {
-      display: flex;
-    }
-
-    .confirm-dialog-content {
-      background: #fff;
-      padding: 24px;
-      border-radius: 8px;
-      max-width: 450px;
-      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
-    }
-
-    .confirm-dialog-content h3 {
-      margin-top: 0;
-      color: #d49200;
-    }
-
-    .confirm-dialog-content p {
-      color: #555;
-      line-height: 1.5;
-    }
-
-    .confirm-dialog-content .warning {
-      background: #fff3cd;
-      border: 1px solid #ffc107;
-      color: #856404;
-      padding: 10px 12px;
-      border-radius: 6px;
-      margin: 12px 0;
-    }
-
-    .confirm-dialog-buttons {
-      display: flex;
-      justify-content: flex-end;
-      gap: 10px;
-      margin-top: 20px;
-    }
-
-    .confirm-dialog-buttons button {
-      padding: 10px 18px;
-    }
-
-    #confirmSwitchBtn {
-      background: #28a745;
-      color: #fff;
-      border: none;
-      border-radius: 4px;
-      cursor: pointer;
-    }
-
-    #confirmSwitchBtn:hover {
-      background: #218838;
-    }
-
-    #confirmSwitchBtn:disabled {
-      background: #6c757d;
-      cursor: not-allowed;
-    }
-
-    #cancelSwitchBtn {
-      background: #f0f0f0;
-      border: 1px solid #ddd;
-      border-radius: 4px;
-      cursor: pointer;
-    }
-
-    #cancelSwitchBtn:hover {
-      background: #e6e6e6;
-    }
-
-    {% include "_reboot_ui_styles.html" %}
-  </style>
-</head>
-
-<body>
-  <div class="container">
-    {% include "_reboot_warning_bar.html" %}
-    <div class="row">
-      <a href="{{ url_for('index') }}" class="btn">← Back</a>
+  <div class="card">
+    <div class="card-title">Background update checks</div>
+    <div class="field">
+      <div class="field-label">
+        <strong>Check interval</strong>
+        <span class="field-hint">How often to check for updates (5-3600 seconds).</span>
+      </div>
+      <div class="field-control">
+        <input class="input mono" type="number" id="checkInterval" min="5" max="3600" step="1"
+          value="{{ update_check_interval }}">
+        <button type="button" class="button" id="saveIntervalBtn">Save interval</button>
+      </div>
     </div>
-    <h2>Software Update</h2>
-    {% if update_available %}
-    <a href="{{ url_for('get_update') }}" style="text-decoration: none;">
-      <div
-        style="background:#d4edda;border:1px solid #28a745;color:#155724;padding:10px 14px;border-radius:6px;margin-bottom:16px;cursor:pointer;">
-        <strong>Update Available:</strong> A new software update is ready to install. See below to update.
+    <div class="field">
+      <div class="field-label">
+        <strong>Status</strong>
+        <span class="field-hint">Updated on {{ last_saved }}</span>
       </div>
-    </a>
-    {% endif %}
-
-    <!-- Background Update Check Interval Section -->
-    <div class="interval-section">
-      <h3>Background Update Check Interval</h3>
-      <div class="row" style="display: flex; align-items: center; gap: 12px;">
-        <label for="checkInterval" style="min-width: auto;">Check every</label>
-        <input type="number" id="checkInterval" min="5" max="3600" step="1" value="{{ update_check_interval }}"
-          style="width: 80px; padding: 6px; font-size: 14px;">
-        <span>seconds</span>
-        <button type="button" id="saveIntervalBtn">Save</button>
+      <div class="field-control">
+        <span id="lastSaved" class="field-hint">Last saved: {{ last_saved }}</span>
+        <span id="intervalStatus" class="field-hint"></span>
       </div>
-      <div class="row" style="color:#666; margin-top: 8px;">
-        <span id="lastSaved">Last saved: {{ last_saved }}</span>
-      </div>
-      <div id="intervalStatus" class="row" style="color: #666; font-size: 14px;"></div>
     </div>
+  </div>
 
-    <hr style="margin: 24px 0; border: none; border-top: 1px solid #ddd;">
-
-    <!-- Branch Selection Section -->
-    <div class="branch-section">
-      <h3>Update Branch</h3>
-      <div class="branch-info">
-        <span class="branch-label">Current branch:</span>
-        <span class="branch-name" id="currentBranchDisplay">{{ current_branch }}</span>
+  <div class="card">
+    <div class="card-title">Update branch</div>
+    <div class="field">
+      <div class="field-label">
+        <strong>Current branch</strong>
       </div>
-      <div class="row" style="display: flex; align-items: center; gap: 12px;">
-        <label for="branchSelect">Switch to:</label>
+      <div class="field-control">
+        <span class="mono" id="currentBranchDisplay">{{ current_branch }}</span>
+      </div>
+    </div>
+    <div class="field">
+      <div class="field-label">
+        <strong>Switch to</strong>
+      </div>
+      <div class="field-control">
         <select id="branchSelect">
           <option value="">Loading branches...</option>
         </select>
-        <button type="button" id="switchBranchBtn" disabled>Switch Branch</button>
+        <button type="button" class="button" id="switchBranchBtn" disabled>Switch branch</button>
       </div>
-      <div id="branchStatus" class="row" style="color: #666;"></div>
     </div>
-
-    <hr style="margin: 24px 0; border: none; border-top: 1px solid #ddd;">
-
-    <!-- Run Update Section -->
-    <h3>Run Update</h3>
-    <div class="row">
-      <button id="runUpdate">Run Update</button>
-      <button id="rebootBtn">Reboot System</button>
-    </div>
-    <div id="status" class="row"></div>
-    <pre id="console" class="row"></pre>
-    <div id="successLabel" class="row"></div>
+    <div id="branchStatus" class="field-hint"></div>
   </div>
 
-  <!-- Branch Switch Confirmation Dialog -->
-  <div id="branchConfirmDialog">
-    <div class="confirm-dialog-content">
-      <h3>Confirm Branch Switch</h3>
-      <p>You are about to switch from <strong id="confirmFromBranch">{{ current_branch }}</strong> to <strong id="confirmToBranch"></strong>.</p>
-      <div class="warning">
-        <strong>Warning:</strong> This will checkout a different branch. Any uncommitted local changes may be overwritten or lost.
+  <div class="card">
+    <div class="card-title">Run update</div>
+    <div class="field">
+      <div class="field-label">
+        <strong>Updater</strong>
+        <span class="field-hint">Runs git pull and installs changes.</span>
       </div>
-      <p>Are you sure you want to continue?</p>
-      <div class="confirm-dialog-buttons">
-        <button type="button" id="cancelSwitchBtn">Cancel</button>
-        <button type="button" id="confirmSwitchBtn">Confirm Switch</button>
+      <div class="field-control">
+        <button id="runUpdate" class="button button-primary" type="button">Run update</button>
+        <button id="rebootBtn" class="button" type="button" style="display: none;">Reboot system</button>
       </div>
     </div>
+    <div id="status" class="field-hint"></div>
+    <pre id="console"></pre>
+    <div id="successLabel"></div>
   </div>
+</div>
 
-  {% include "_reboot_overlay.html" %}
+<div id="branchConfirmDialog">
+  <div class="confirm-dialog-content">
+    <h3>Confirm branch switch</h3>
+    <p>
+      You are about to switch from <strong id="confirmFromBranch">{{ current_branch }}</strong> to
+      <strong id="confirmToBranch"></strong>.
+    </p>
+    <div class="notice warning">
+      Switching branches may overwrite local changes.
+    </div>
+    <p>Continue with the switch?</p>
+    <div class="confirm-dialog-buttons">
+      <button type="button" class="button" id="cancelSwitchBtn">Cancel</button>
+      <button type="button" class="button button-primary" id="confirmSwitchBtn">Confirm switch</button>
+    </div>
+  </div>
+</div>
+{% endblock %}
 
-  <script>
-    const csrfToken = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
-    const runBtn = document.getElementById('runUpdate');
-    const rebootBtn = document.getElementById('rebootBtn');
-    const consoleEl = document.getElementById('console');
-    const statusEl = document.getElementById('status');
-    const successLabelEl = document.getElementById('successLabel');
+{% block scripts %}
+<script>
+  const csrfToken = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
+  const runBtn = document.getElementById('runUpdate');
+  const rebootBtn = document.getElementById('rebootBtn');
+  const consoleEl = document.getElementById('console');
+  const statusEl = document.getElementById('status');
+  const successLabelEl = document.getElementById('successLabel');
 
-    let evtSource = null;
-    const savedUpdateState = {{ update_state | tojson }};
+  let evtSource = null;
+  const savedUpdateState = {{ update_state | tojson }};
 
-    function clearConsole() { consoleEl.textContent = ''; }
-    function appendLine(line) { consoleEl.textContent += (line.endsWith('\n') ? line : line + '\n'); consoleEl.scrollTop = consoleEl.scrollHeight; }
-    function setStatus(text, color = '#666') { statusEl.textContent = text; statusEl.style.color = color; }
-    function disableRun(disabled) { runBtn.disabled = disabled; }
-    function showReboot(show) { rebootBtn.style.display = show ? 'inline-block' : 'none'; }
-    function showSuccessLabel(message) { successLabelEl.textContent = 'Installed Update: ' + message; successLabelEl.style.display = 'block'; }
-    function hideSuccessLabel() { successLabelEl.style.display = 'none'; }
+  function clearConsole() { consoleEl.textContent = ''; }
+  function appendLine(line) {
+    consoleEl.textContent += (line.endsWith('\n') ? line : line + '\n');
+    consoleEl.scrollTop = consoleEl.scrollHeight;
+  }
+  function setStatus(text, color = 'var(--text-muted)') { statusEl.textContent = text; statusEl.style.color = color; }
+  function disableRun(disabled) { runBtn.disabled = disabled; }
+  function showReboot(show) { rebootBtn.style.display = show ? 'inline-flex' : 'none'; }
+  function showSuccessLabel(message) { successLabelEl.textContent = 'Installed Update: ' + message; successLabelEl.style.display = 'block'; }
+  function hideSuccessLabel() { successLabelEl.style.display = 'none'; }
 
-    function applySavedUpdateState(state) {
-      if (!state || !state.reboot_required) {
-        return;
-      }
-      if (state.console_output) {
-        consoleEl.textContent = state.console_output;
-        consoleEl.scrollTop = consoleEl.scrollHeight;
-      }
-      setStatus('Update completed. Reboot required.', '#d49200');
-      showReboot(true);
-      if (state.commit_message) {
-        showSuccessLabel(state.commit_message);
-      } else {
-        hideSuccessLabel();
-      }
+  function applySavedUpdateState(state) {
+    if (!state || !state.reboot_required) {
+      return;
     }
-
-    function closeEventSource() {
-      if (evtSource) { evtSource.close(); evtSource = null; }
+    if (state.console_output) {
+      consoleEl.textContent = state.console_output;
+      consoleEl.scrollTop = consoleEl.scrollHeight;
     }
-
-    applySavedUpdateState(savedUpdateState);
-
-    runBtn.addEventListener('click', () => {
-      clearConsole();
+    setStatus('Update completed. Reboot required.', 'var(--warning)');
+    showReboot(true);
+    if (state.commit_message) {
+      showSuccessLabel(state.commit_message);
+    } else {
       hideSuccessLabel();
-      showReboot(false);
-      setStatus('Running update...');
-      disableRun(true);
+    }
+  }
+
+  function closeEventSource() {
+    if (evtSource) { evtSource.close(); evtSource = null; }
+  }
+
+  applySavedUpdateState(savedUpdateState);
+
+  runBtn.addEventListener('click', () => {
+    clearConsole();
+    hideSuccessLabel();
+    showReboot(false);
+    setStatus('Running update...');
+    disableRun(true);
+    closeEventSource();
+
+    evtSource = new EventSource('/api/update/run');
+    evtSource.onmessage = (e) => {
+      if (e && typeof e.data === 'string' && e.data.length) {
+        appendLine(e.data);
+      }
+    };
+    evtSource.addEventListener('done', (e) => {
+      disableRun(false);
+      try {
+        const payload = JSON.parse(e.data || '{}');
+        if (payload.has_error) {
+          setStatus('Error updating. See console for details.', 'var(--danger)');
+          showReboot(false);
+        } else if (payload.has_updates) {
+          setStatus('Update completed. Reboot required.', 'var(--warning)');
+          showReboot(true);
+          if (payload.commit_message) {
+            showSuccessLabel(payload.commit_message);
+          }
+        } else {
+          setStatus('Already up to date.', 'var(--success)');
+          showReboot(false);
+        }
+      } catch {
+        setStatus('Update finished.');
+      }
       closeEventSource();
+    });
+    evtSource.onerror = () => {
+      disableRun(false);
+      setStatus('Connection error during update.', 'var(--danger)');
+      closeEventSource();
+    };
+  });
 
-      evtSource = new EventSource('/api/update/run');
-      evtSource.onmessage = (e) => {
-        if (e && typeof e.data === 'string' && e.data.length) {
-          appendLine(e.data);
-        }
-      };
-      evtSource.addEventListener('done', (e) => {
-        disableRun(false);
-        try {
-          const payload = JSON.parse(e.data || '{}');
-          if (payload.has_error) {
-            setStatus('Error updating. See console for details.', '#cc3333');
-            showReboot(false);
-          } else if (payload.has_updates) {
-            setStatus('Update completed. Reboot required.', '#d49200');
-            showReboot(true);
-            if (payload.commit_message) {
-              showSuccessLabel(payload.commit_message);
-            }
-          } else {
-            setStatus('Already up to date.', '#2a7a2a');
-            showReboot(false);
-          }
-        } catch {
-          setStatus('Update finished.');
-        }
-        closeEventSource();
+  rebootBtn.addEventListener('click', async () => {
+    setStatus('Rebooting system...');
+    try {
+      await fetch('/api/reboot', { method: 'POST', headers: { 'X-CSRF-Token': csrfToken } });
+    } catch (e) {
+    }
+    if (window.startRebootOverlay) {
+      window.startRebootOverlay();
+    }
+  });
+
+  const saveIntervalBtn = document.getElementById('saveIntervalBtn');
+  const checkIntervalInput = document.getElementById('checkInterval');
+  const intervalStatusEl = document.getElementById('intervalStatus');
+  const lastSavedEl = document.getElementById('lastSaved');
+
+  function markUnsaved() {
+    if (lastSavedEl) lastSavedEl.style.color = 'var(--danger)';
+  }
+
+  checkIntervalInput.addEventListener('input', markUnsaved);
+  checkIntervalInput.addEventListener('change', markUnsaved);
+
+  saveIntervalBtn.addEventListener('click', async () => {
+    let interval = parseInt(checkIntervalInput.value, 10);
+
+    if (isNaN(interval) || interval < 5) {
+      interval = 5;
+      checkIntervalInput.value = 5;
+    } else if (interval > 3600) {
+      interval = 3600;
+      checkIntervalInput.value = 3600;
+    }
+
+    saveIntervalBtn.disabled = true;
+    saveIntervalBtn.textContent = 'Saving...';
+
+    try {
+      const response = await fetch('/api/update-check-interval', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken },
+        body: JSON.stringify({ interval: interval })
       });
-      evtSource.onerror = () => {
-        disableRun(false);
-        setStatus('Connection error during update.', '#cc3333');
-        closeEventSource();
-      };
-    });
 
-    rebootBtn.addEventListener('click', async () => {
-      setStatus('Rebooting system...');
+      const data = await response.json();
 
-      try {
-        await fetch('/api/reboot', { method: 'POST', headers: { 'X-CSRF-Token': csrfToken } });
-      } catch (e) {
-        // Expected - connection may drop immediately
-      }
-
-      if (window.startRebootOverlay) {
-        window.startRebootOverlay();
-      }
-    });
-
-    // Interval save handler
-    const saveIntervalBtn = document.getElementById('saveIntervalBtn');
-    const checkIntervalInput = document.getElementById('checkInterval');
-    const intervalStatusEl = document.getElementById('intervalStatus');
-    const lastSavedEl = document.getElementById('lastSaved');
-
-    // Mark as unsaved when interval changes
-    function markUnsaved() {
-      if (lastSavedEl) lastSavedEl.style.color = '#cc6666';
-    }
-
-    checkIntervalInput.addEventListener('input', markUnsaved);
-    checkIntervalInput.addEventListener('change', markUnsaved);
-
-    saveIntervalBtn.addEventListener('click', async () => {
-      let interval = parseInt(checkIntervalInput.value, 10);
-
-      // Validate bounds
-      if (isNaN(interval) || interval < 5) {
-        interval = 5;
-        checkIntervalInput.value = 5;
-      } else if (interval > 3600) {
-        interval = 3600;
-        checkIntervalInput.value = 3600;
-      }
-
-      saveIntervalBtn.disabled = true;
-      saveIntervalBtn.textContent = 'Saving...';
-
-      try {
-        const response = await fetch('/api/update-check-interval', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken },
-          body: JSON.stringify({ interval: interval })
+      if (data.success) {
+        intervalStatusEl.textContent = 'Saved! Update checks every ' + data.interval + ' seconds.';
+        intervalStatusEl.style.color = 'var(--success)';
+        const now = new Date();
+        const timeStr = now.toLocaleString('en-US', {
+          month: '2-digit',
+          day: '2-digit',
+          year: 'numeric',
+          hour: '2-digit',
+          minute: '2-digit',
+          second: '2-digit'
         });
-
-        const data = await response.json();
-
-        if (data.success) {
-          intervalStatusEl.textContent = 'Saved! The display will check for updates every ' + data.interval + ' seconds.';
-          intervalStatusEl.style.color = '#2a7a2a';
-          // Update last saved label
-          const now = new Date();
-          const timeStr = now.toLocaleString('en-US', {
-            month: '2-digit',
-            day: '2-digit',
-            year: 'numeric',
-            hour: '2-digit',
-            minute: '2-digit',
-            second: '2-digit'
-          });
-          lastSavedEl.textContent = 'Last saved: ' + timeStr;
-          lastSavedEl.style.color = '#666';
-        } else {
-          intervalStatusEl.textContent = 'Error: ' + (data.error || 'Unknown error');
-          intervalStatusEl.style.color = '#cc3333';
-        }
-      } catch (e) {
-        intervalStatusEl.textContent = 'Error: ' + e.message;
-        intervalStatusEl.style.color = '#cc3333';
+        lastSavedEl.textContent = 'Last saved: ' + timeStr;
+        lastSavedEl.style.color = 'var(--text-muted)';
+      } else {
+        intervalStatusEl.textContent = 'Error: ' + (data.error || 'Unknown error');
+        intervalStatusEl.style.color = 'var(--danger)';
       }
-
-      saveIntervalBtn.disabled = false;
-      saveIntervalBtn.textContent = 'Save';
-    });
-
-    // Branch selection handlers
-    const branchSelect = document.getElementById('branchSelect');
-    const switchBranchBtn = document.getElementById('switchBranchBtn');
-    const branchStatusEl = document.getElementById('branchStatus');
-    const currentBranchDisplay = document.getElementById('currentBranchDisplay');
-    const branchConfirmDialog = document.getElementById('branchConfirmDialog');
-    const confirmFromBranch = document.getElementById('confirmFromBranch');
-    const confirmToBranch = document.getElementById('confirmToBranch');
-    const confirmSwitchBtn = document.getElementById('confirmSwitchBtn');
-    const cancelSwitchBtn = document.getElementById('cancelSwitchBtn');
-
-    let currentBranch = '{{ current_branch }}';
-    let pendingBranch = null;
-
-    // Load available branches on page load
-    async function loadBranches() {
-      try {
-        const response = await fetch('/api/git-branches');
-        const data = await response.json();
-
-        branchSelect.innerHTML = '';
-
-        if (data.success && data.branches && data.branches.length > 0) {
-          data.branches.forEach(branch => {
-            const option = document.createElement('option');
-            option.value = branch;
-            option.textContent = branch;
-            if (branch === currentBranch) {
-              option.selected = true;
-            }
-            branchSelect.appendChild(option);
-          });
-          updateSwitchButton();
-        } else {
-          branchSelect.innerHTML = '<option value="">No branches found</option>';
-        }
-      } catch (e) {
-        branchSelect.innerHTML = '<option value="">Error loading branches</option>';
-        branchStatusEl.textContent = 'Error loading branches: ' + e.message;
-        branchStatusEl.style.color = '#cc3333';
-      }
+    } catch (e) {
+      intervalStatusEl.textContent = 'Error: ' + e.message;
+      intervalStatusEl.style.color = 'var(--danger)';
     }
 
-    // Update switch button enabled state
-    function updateSwitchButton() {
-      const selectedBranch = branchSelect.value;
-      switchBranchBtn.disabled = !selectedBranch || selectedBranch === currentBranch;
-    }
+    saveIntervalBtn.disabled = false;
+    saveIntervalBtn.textContent = 'Save interval';
+  });
 
-    branchSelect.addEventListener('change', updateSwitchButton);
+  const branchSelect = document.getElementById('branchSelect');
+  const switchBranchBtn = document.getElementById('switchBranchBtn');
+  const branchStatusEl = document.getElementById('branchStatus');
+  const currentBranchDisplay = document.getElementById('currentBranchDisplay');
+  const branchConfirmDialog = document.getElementById('branchConfirmDialog');
+  const confirmFromBranch = document.getElementById('confirmFromBranch');
+  const confirmToBranch = document.getElementById('confirmToBranch');
+  const confirmSwitchBtn = document.getElementById('confirmSwitchBtn');
+  const cancelSwitchBtn = document.getElementById('cancelSwitchBtn');
 
-    // Show confirmation dialog
-    switchBranchBtn.addEventListener('click', () => {
-      const selectedBranch = branchSelect.value;
-      if (!selectedBranch || selectedBranch === currentBranch) return;
+  let currentBranch = '{{ current_branch }}';
+  let pendingBranch = null;
 
-      pendingBranch = selectedBranch;
-      confirmFromBranch.textContent = currentBranch;
-      confirmToBranch.textContent = selectedBranch;
-      branchConfirmDialog.classList.add('visible');
-    });
+  async function loadBranches() {
+    try {
+      const response = await fetch('/api/git-branches');
+      const data = await response.json();
 
-    // Cancel branch switch
-    cancelSwitchBtn.addEventListener('click', () => {
-      pendingBranch = null;
-      branchConfirmDialog.classList.remove('visible');
-    });
+      branchSelect.innerHTML = '';
 
-    // Close dialog when clicking outside
-    branchConfirmDialog.addEventListener('click', (e) => {
-      if (e.target === branchConfirmDialog) {
-        pendingBranch = null;
-        branchConfirmDialog.classList.remove('visible');
-      }
-    });
-
-    // Confirm branch switch
-    confirmSwitchBtn.addEventListener('click', async () => {
-      if (!pendingBranch) return;
-
-      confirmSwitchBtn.disabled = true;
-      confirmSwitchBtn.textContent = 'Switching...';
-      branchStatusEl.textContent = 'Switching branch...';
-      branchStatusEl.style.color = '#666';
-
-      try {
-        const response = await fetch('/api/switch-branch', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken },
-          body: JSON.stringify({ branch: pendingBranch })
+      if (data.success && data.branches && data.branches.length > 0) {
+        data.branches.forEach(branch => {
+          const option = document.createElement('option');
+          option.value = branch;
+          option.textContent = branch;
+          if (branch === currentBranch) {
+            option.selected = true;
+          }
+          branchSelect.appendChild(option);
         });
-
-        const data = await response.json();
-
-        if (data.success) {
-          currentBranch = pendingBranch;
-          currentBranchDisplay.textContent = currentBranch;
-          updateSwitchButton();
-          branchSelect.disabled = true;
-          switchBranchBtn.disabled = true;
-          branchStatusEl.textContent = 'Branch switched. Rebooting system...';
-          branchStatusEl.style.color = '#d49200';
-          branchConfirmDialog.classList.remove('visible');
-          pendingBranch = null;
-          if (window.startRebootOverlay) {
-            window.startRebootOverlay();
-          }
-          try {
-            await fetch('/api/reboot', { method: 'POST', headers: { 'X-CSRF-Token': csrfToken } });
-          } catch (e) {
-            // Expected - connection may drop during restart
-          }
-          return;
-        } else {
-          branchStatusEl.textContent = 'Error: ' + (data.error || 'Unknown error');
-          branchStatusEl.style.color = '#cc3333';
-        }
-      } catch (e) {
-        branchStatusEl.textContent = 'Error: ' + e.message;
-        branchStatusEl.style.color = '#cc3333';
+        updateSwitchButton();
+      } else {
+        branchSelect.innerHTML = '<option value="">No branches found</option>';
       }
+    } catch (e) {
+      branchSelect.innerHTML = '<option value="">Error loading branches</option>';
+      branchStatusEl.textContent = 'Error loading branches: ' + e.message;
+      branchStatusEl.style.color = 'var(--danger)';
+    }
+  }
 
-      pendingBranch = null;
-      branchConfirmDialog.classList.remove('visible');
-      confirmSwitchBtn.disabled = false;
-      confirmSwitchBtn.textContent = 'Confirm Switch';
-    });
+  function updateSwitchButton() {
+    const selectedBranch = branchSelect.value;
+    switchBranchBtn.disabled = !selectedBranch || selectedBranch === currentBranch;
+  }
 
-    // Load branches on page load
-    loadBranches();
-  </script>
-  {% include "_reboot_ui_script.html" %}
-</body>
+  branchSelect.addEventListener('change', updateSwitchButton);
 
-</html>
+  switchBranchBtn.addEventListener('click', () => {
+    const selectedBranch = branchSelect.value;
+    if (!selectedBranch || selectedBranch === currentBranch) return;
+
+    pendingBranch = selectedBranch;
+    confirmFromBranch.textContent = currentBranch;
+    confirmToBranch.textContent = selectedBranch;
+    branchConfirmDialog.classList.add('visible');
+  });
+
+  cancelSwitchBtn.addEventListener('click', () => {
+    pendingBranch = null;
+    branchConfirmDialog.classList.remove('visible');
+  });
+
+  confirmSwitchBtn.addEventListener('click', async () => {
+    if (!pendingBranch) return;
+    confirmSwitchBtn.disabled = true;
+    confirmSwitchBtn.textContent = 'Switching...';
+    branchStatusEl.textContent = 'Switching branches...';
+    branchStatusEl.style.color = 'var(--text-muted)';
+
+    try {
+      const response = await fetch('/api/git-branch', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken },
+        body: JSON.stringify({ branch: pendingBranch })
+      });
+      const data = await response.json();
+      if (data.success) {
+        currentBranch = pendingBranch;
+        currentBranchDisplay.textContent = pendingBranch;
+        branchStatusEl.textContent = 'Branch switched to ' + pendingBranch + '.';
+        branchStatusEl.style.color = 'var(--success)';
+      } else {
+        branchStatusEl.textContent = 'Error: ' + (data.error || 'Failed to switch branch.');
+        branchStatusEl.style.color = 'var(--danger)';
+      }
+    } catch (e) {
+      branchStatusEl.textContent = 'Error: ' + e.message;
+      branchStatusEl.style.color = 'var(--danger)';
+    }
+
+    confirmSwitchBtn.disabled = false;
+    confirmSwitchBtn.textContent = 'Confirm switch';
+    branchConfirmDialog.classList.remove('visible');
+    pendingBranch = null;
+    updateSwitchButton();
+  });
+
+  loadBranches();
+</script>
+{% endblock %}

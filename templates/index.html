@@ -1,93 +1,66 @@
-<!doctype html>
-<html>
+{% extends "_layout.html" %}
+{% set page_title = "Device Home" %}
+{% set page_subtitle = "Remote control dashboard for Nicole's Train Tracker" %}
+{% set active_page = "" %}
 
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="csrf-token" content="{{ csrf_token }}">
-  <title>Device Home - {{ display_name }}</title>
-  <style>
-    body {
-      font-family: sans-serif;
-      margin: 0;
-      padding: 0;
-    }
-
-    .container {
-      max-width: 720px;
-      margin: 0 auto;
-      padding: 24px;
-    }
-
-    h2 {
-      margin: 16px 0 24px;
-    }
-
-    .buttons {
-      display: flex;
-      flex-direction: column;
-      gap: 16px;
-    }
-
-    .buttons a {
-      text-decoration: none;
-    }
-
-    .btn {
-      display: inline-block;
-      padding: 12px 18px;
-      border-radius: 6px;
-      background: #f0f0f0;
-      color: #000;
-      font-weight: 700;
-      border: 1px solid #ddd;
-    }
-
-    .btn:hover {
-      background: #e6e6e6;
-    }
-
-    {% include "_reboot_ui_styles.html" %}
-  </style>
-</head>
-
-<body>
-  <div class="container">
-    {% include "_reboot_warning_bar.html" %}
-    {% if current_user %}
-    <div style="color:#666;margin:8px 0 16px;">Signed in as {{ current_user }} · <a
-        href="{{ url_for('logout') }}">Sign out</a></div>
-    {% endif %}
-    <h2>Nicole's Train Tracker: Remote Control Dashboard</h2>
-    <div style="color:#666;margin:8px 0 16px;">Device IP: {{ device_ip }}</div>
-    <div style="color:#666;margin:8px 0 16px;">Tailscale Address: {{ tailscale_address }}</div>
-    <div style="color:#666;margin:8px 0 16px;">Commit Version: {{ commit_version }}</div>
-    {% if not ssl_enabled %}
-    <div
-      style="background:#fff3cd;border:1px solid #ffc107;color:#856404;padding:10px 14px;border-radius:6px;margin-bottom:16px;">
-      <strong>Warning:</strong> SSL certificates not found. Running without HTTPS encryption.
-    </div>
-    {% endif %}
-    {% if update_available %}
-    <a href="{{ url_for('get_update') }}" style="text-decoration: none;">
-      <div
-        style="background:#d4edda;border:1px solid #28a745;color:#155724;padding:10px 14px;border-radius:6px;margin-bottom:16px;cursor:pointer;">
-        <strong>Update Available:</strong> A new software update is ready to install. Click here to update.
+{% block content %}
+<div class="content-grid">
+  <div class="card">
+    <div class="card-title">Device snapshot</div>
+    <div class="field">
+      <div class="field-label">
+        <strong>Device IP</strong>
+        <span class="field-hint">Current network address</span>
       </div>
-    </a>
-    {% endif %}
-    <div class="buttons">
-      <a href="{{ url_for('get_settings') }}" class="btn">Display Settings</a>
-      <a href="{{ url_for('get_messages') }}" class="btn">Title Messages</a>
-      <a href="{{ url_for('get_change_font') }}" class="btn">Change Font</a>
-      <a href="{{ url_for('get_api_key') }}" class="btn">Authentication Keys</a>
-      <a href="{{ url_for('get_users') }}" class="btn">User Access</a>
-      <a href="{{ url_for('get_update') }}" class="btn">Software Update</a>
-      <a href="{{ url_for('get_system_management') }}" class="btn">Power Management</a>
+      <div class="field-control">
+        <span class="mono">{{ device_ip }}</span>
+      </div>
+    </div>
+    <div class="field">
+      <div class="field-label">
+        <strong>Tailscale address</strong>
+        <span class="field-hint">Remote access endpoint</span>
+      </div>
+      <div class="field-control">
+        <span class="mono">{{ tailscale_address }}</span>
+      </div>
+    </div>
+    <div class="field">
+      <div class="field-label">
+        <strong>Commit version</strong>
+        <span class="field-hint">Latest deployed build</span>
+      </div>
+      <div class="field-control">
+        <span class="mono">{{ commit_version }}</span>
+      </div>
     </div>
   </div>
-  {% include "_reboot_overlay.html" %}
-  {% include "_reboot_ui_script.html" %}
-</body>
 
-</html>
+  <div class="split-grid">
+    <div class="card">
+      <div class="card-title">Security status</div>
+      {% if not ssl_enabled %}
+      <div class="notice warning">
+        <strong>SSL certificates missing.</strong> Running without HTTPS encryption.
+      </div>
+      {% else %}
+      <div class="notice success">HTTPS certificates are active.</div>
+      {% endif %}
+    </div>
+
+    <div class="card">
+      <div class="card-title">Software updates</div>
+      {% if update_available %}
+      <div class="notice success">
+        Update available. Install the latest release when you're ready.
+      </div>
+      <div class="field-control">
+        <a class="button button-primary" href="{{ url_for('get_update') }}">Open updater</a>
+      </div>
+      {% else %}
+      <div class="notice">You're on the latest available version.</div>
+      {% endif %}
+    </div>
+  </div>
+</div>
+{% endblock %}

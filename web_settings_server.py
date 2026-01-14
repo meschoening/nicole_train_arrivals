@@ -338,8 +338,11 @@ def start_web_settings_server(data_handler, host="0.0.0.0", port=443):
 
     @app.context_processor
     def inject_auth_context():
+        current_username = session.get("user")
+        user_preferences = user_store.get_preferences(current_username)
         return {
-            "current_user": session.get("user"),
+            "current_user": current_username,
+            "user_preferences": user_preferences,
             "csrf_token": _ensure_csrf_token(),
             "force_password_change": session.get("must_change_password", False),
         }
@@ -385,6 +388,19 @@ def start_web_settings_server(data_handler, host="0.0.0.0", port=443):
             return "Not available"
         except Exception:
             return "Not available"
+
+    def _validate_avatar_data_url(value):
+        if value is None:
+            return True, ""
+        if not isinstance(value, str):
+            return False, "Avatar must be a string."
+        if value == "":
+            return True, ""
+        if not value.startswith("data:image/"):
+            return False, "Avatar must be an image data URL."
+        if len(value) > 200_000:
+            return False, "Avatar image is too large."
+        return True, ""
 
     def _get_reboot_warning_status():
         config = config_store.load()
@@ -571,6 +587,31 @@ def start_web_settings_server(data_handler, host="0.0.0.0", port=443):
             session.clear()
             return redirect(url_for("login"))
         return _render_users_page(message="User removed.")
+
+    @app.post("/api/user/preferences")
+    def api_user_preferences():
+        data = request.get_json(silent=True) or {}
+        updates = {}
+        theme = data.get("theme")
+        if theme in ("light", "dark"):
+            updates["theme"] = theme
+        sidebar_side = data.get("sidebar_side")
+        if sidebar_side in ("left", "right"):
+            updates["sidebar_side"] = sidebar_side
+        if "avatar_data_url" in data:
+            avatar_data_url = data.get("avatar_data_url")
+            valid, error = _validate_avatar_data_url(avatar_data_url)
+            if not valid:
+                return jsonify({"error": error}), 400
+            updates["avatar_data_url"] = avatar_data_url
+
+        if not updates:
+            return jsonify({"error": "No valid updates provided."}), 400
+
+        success, error, preferences = user_store.update_preferences(session.get("user"), updates)
+        if not success:
+            return jsonify({"error": error}), 400
+        return jsonify({"status": "saved", "preferences": preferences})
 
     @app.get("/messages")
     def get_messages():

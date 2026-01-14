@@ -1,621 +1,585 @@
-<!doctype html>
-<html>
+{% extends "_layout.html" %}
+{% set page_title = "Title Messages" %}
+{% set page_subtitle = "Curate on-screen message rotation and timing." %}
+{% set active_page = "messages" %}
 
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="csrf-token" content="{{ csrf_token }}">
-  <title>Title Message Settings - {{ display_name }}</title>
-  <style>
-    body {
-      font-family: sans-serif;
-      margin: 0;
-      padding: 0;
-    }
+{% block head_extra %}
+<style>
+  .message-list {
+    min-height: 220px;
+    max-height: 360px;
+    overflow-y: auto;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    padding: 8px;
+    background: var(--surface-muted);
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
 
-    .container {
-      max-width: 720px;
-      margin: 0 auto;
-      padding: 24px;
-    }
+  .message-item,
+  .message-edit-row {
+    background: var(--surface);
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-sm);
+    padding: 12px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    cursor: pointer;
+  }
 
-    .row {
-      margin-bottom: 12px;
-    }
+  .message-item.selected {
+    border-color: var(--accent);
+    background: var(--accent-weak);
+    color: var(--accent);
+  }
 
-    label {
-      display: inline-block;
-      min-width: 220px;
-      font-weight: bold;
-    }
+  .message-text {
+    flex: 1;
+    font-size: 13px;
+    color: var(--text);
+  }
 
-    input[type="checkbox"],
-    input[type="radio"] {
-      transform: scale(1.3);
-      margin-right: 8px;
-    }
+  .color-swatch {
+    width: 24px;
+    height: 24px;
+    border-radius: 8px;
+    border: 1px dashed var(--border);
+    flex-shrink: 0;
+  }
 
-    select,
-    input[type="number"] {
-      padding: 6px;
-      font-size: 14px;
-    }
+  .message-actions {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+  }
 
-    button {
-      padding: 8px 14px;
-      font-weight: bold;
-      cursor: pointer;
-    }
+  .message-edit-row {
+    flex-direction: column;
+    align-items: stretch;
+    cursor: default;
+  }
 
-    button:disabled {
-      opacity: 0.6;
-      cursor: not-allowed;
-    }
+  .message-edit-controls {
+    display: flex;
+    gap: 12px;
+    flex-wrap: wrap;
+    align-items: center;
+  }
 
-    .trigger-active {
-      background-color: #ffcccc !important;
-      border: 1px solid #ff9999 !important;
-    }
+  .trigger-active {
+    background: rgba(192, 55, 43, 0.15);
+    border-color: rgba(192, 55, 43, 0.4);
+    color: var(--danger);
+  }
+</style>
+{% endblock %}
 
-    a.btn {
-      text-decoration: none;
-      display: inline-block;
-      padding: 8px 14px;
-      border-radius: 6px;
-      background: #f0f0f0;
-      color: #000;
-      font-weight: 700;
-      border: 1px solid #ddd;
-    }
+{% block content %}
+<form id="messagesForm" class="content-grid">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
 
-    a.btn:hover {
-      background: #e6e6e6;
-    }
-
-    .message-list-container {
-      border: 1px solid #ddd;
-      padding: 12px;
-      border-radius: 6px;
-      background: #fafafa;
-      margin-bottom: 16px;
-    }
-
-    .message-list-container h3 {
-      margin-top: 4px;
-    }
-
-    .message-list {
-      min-height: 150px;
-      max-height: 300px;
-      overflow-y: auto;
-      border: 1px solid #ccc;
-      padding: 8px;
-      background: white;
-      margin-bottom: 12px;
-    }
-
-    .message-item {
-      padding: 6px;
-      margin: 4px 0;
-      cursor: pointer;
-      border-radius: 4px;
-      display: flex;
-      align-items: center;
-      gap: 8px;
-    }
-
-    .message-item:hover {
-      background: #f0f0f0;
-    }
-
-    .message-item.selected {
-      background: #d0e8ff;
-      font-weight: bold;
-    }
-
-    .message-text {
-      flex: 1;
-    }
-
-    .color-swatch {
-      width: 24px;
-      height: 24px;
-      border: 1px solid #ccc;
-      border-radius: 3px;
-      flex-shrink: 0;
-    }
-
-    .color-input {
-      width: 40px;
-      height: 24px;
-      border: 1px solid #ccc;
-      border-radius: 3px;
-      cursor: pointer;
-      flex-shrink: 0;
-    }
-
-    .message-edit-row {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      padding: 8px;
-      background: #f9f9f9;
-      border-radius: 4px;
-      margin: 4px 0;
-    }
-
-    .message-edit-row input[type="text"] {
-      flex: 1;
-      padding: 4px;
-    }
-
-    .btn-group {
-      display: flex;
-      gap: 8px;
-      margin-bottom: 12px;
-    }
-
-    .timing-section {
-      border: 1px solid #ddd;
-      padding: 12px;
-      border-radius: 6px;
-      background: #fafafa;
-      margin: 16px 0;
-    }
-
-    .timing-section h3 {
-      margin-top: 4px;
-    }
-
-    .timing-section .row label:first-child {
-      text-align: left;
-    }
-
-    .timing-section>.row {
-      margin-bottom: 16px;
-    }
-
-    .conditional-settings {
-      margin-left: 0px;
-      margin-top: 8px;
-    }
-
-    .conditional-settings .row label:first-child {
-      text-align: left;
-    }
-
-    hr {
-      margin: 20px 0;
-      border: none;
-      border-top: 1px solid #ddd;
-    }
-
-    {% include "_reboot_ui_styles.html" %}
-  </style>
-</head>
-
-<body>
-  <div class="container">
-    {% include "_reboot_warning_bar.html" %}
-    <div class="row">
-      <a href="{{ url_for('index') }}" class="btn">← Back</a>
+  <div class="split-grid">
+    <div class="card">
+      <div class="card-title">Custom messages</div>
+      <div class="card-subtitle">Click a message to select, or edit to adjust text and color.</div>
+      <div class="message-list" id="messageList"></div>
+      <div class="message-actions">
+        <button type="button" class="button" id="addMessageBtn">Add new message</button>
+        <button type="button" class="button button-danger" id="deleteMessageBtn">Delete selected</button>
+      </div>
     </div>
-    <h2>Title Message Display Settings</h2>
 
-    <form id="messagesForm">
-      <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-      <div class="message-list-container">
-        <h3>Custom Messages</h3>
-        <div class="message-list" id="messageList">
-          <!-- Messages will be populated by JavaScript -->
+    <div class="card">
+      <div class="card-title">Display timing</div>
+      <div class="field">
+        <div class="field-label">
+          <strong>Timing mode</strong>
+          <span class="field-hint">Pick how messages should appear.</span>
         </div>
-        <div class="btn-group">
-          <button type="button" id="addMessageBtn">Add New Message</button>
-          <button type="button" id="deleteMessageBtn">Delete Selected</button>
+        <div class="field-control pill-group">
+          <label class="radio-pill">
+            <input type="radio" name="timing_mode" value="periodic" id="timingPeriodic">
+            <span>Periodic</span>
+          </label>
+          <label class="radio-pill">
+            <input type="radio" name="timing_mode" value="random" id="timingRandom">
+            <span>Random</span>
+          </label>
+          <label class="radio-pill">
+            <input type="radio" name="timing_mode" value="disabled" id="timingDisabled">
+            <span>Disabled</span>
+          </label>
         </div>
       </div>
 
-      <div class="timing-section">
-        <h3>Display Timing</h3>
-
-        <div class="row">
-          <label style="display: block; margin-bottom: 8px;">Timing Mode</label>
-          <div style="display: block;">
-            <label style="min-width: auto; font-weight: normal;">
-              <input type="radio" name="timing_mode" value="periodic" id="timingPeriodic"> Show Periodically
+      <div class="stack" id="periodicSettings">
+        <div class="field">
+          <div class="field-label">
+            <strong>Show every</strong>
+            <span class="field-hint">Minutes between messages.</span>
+          </div>
+          <div class="field-control">
+            <input class="input mono" type="number" id="periodicInterval" name="periodic_interval_minutes" min="1"
+              max="1440" step="1" value="30">
+          </div>
+        </div>
+        <div class="field">
+          <div class="field-label">
+            <strong>Time window</strong>
+            <span class="field-hint">Only show within a daily window.</span>
+          </div>
+          <div class="field-control">
+            <label class="toggle">
+              <input type="checkbox" id="periodicTimeWindow" name="periodic_time_window_enabled">
+              <span class="toggle-ui"></span>
             </label>
-            <label style="min-width: auto; font-weight: normal; margin-left: 16px;">
-              <input type="radio" name="timing_mode" value="random" id="timingRandom"> Show at Random Times
+          </div>
+        </div>
+        <div class="stack" id="periodicTimeWindowSettings" style="display: none;">
+          <div class="field">
+            <div class="field-label">
+              <strong>Window start</strong>
+            </div>
+            <div class="field-control">
+              <input class="input mono" type="text" id="periodicWindowStart" name="periodic_window_start"
+                placeholder="09:00">
+            </div>
+          </div>
+          <div class="field">
+            <div class="field-label">
+              <strong>Window end</strong>
+            </div>
+            <div class="field-control">
+              <input class="input mono" type="text" id="periodicWindowEnd" name="periodic_window_end"
+                placeholder="17:00">
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="stack" id="randomSettings" style="display: none;">
+        <div class="field">
+          <div class="field-label">
+            <strong>Minimum minutes</strong>
+          </div>
+          <div class="field-control">
+            <input class="input mono" type="number" id="randomMin" name="random_min_minutes" min="1" max="1440" step="1"
+              value="15">
+          </div>
+        </div>
+        <div class="field">
+          <div class="field-label">
+            <strong>Maximum minutes</strong>
+          </div>
+          <div class="field-control">
+            <input class="input mono" type="number" id="randomMax" name="random_max_minutes" min="1" max="1440" step="1"
+              value="60">
+          </div>
+        </div>
+        <div class="field">
+          <div class="field-label">
+            <strong>Time window</strong>
+            <span class="field-hint">Only show within a daily window.</span>
+          </div>
+          <div class="field-control">
+            <label class="toggle">
+              <input type="checkbox" id="randomTimeWindow" name="random_time_window_enabled">
+              <span class="toggle-ui"></span>
             </label>
-            <label style="min-width: auto; font-weight: normal; margin-left: 16px;">
-              <input type="radio" name="timing_mode" value="disabled" id="timingDisabled"> Disabled
-            </label>
           </div>
         </div>
-
-        <div class="conditional-settings" id="periodicSettings">
-          <div class="row">
-            <label for="periodicInterval">Show every (minutes)</label>
-            <input type="number" id="periodicInterval" name="periodic_interval_minutes" min="1" max="1440" step="1"
-              value="30">
-          </div>
-          <div class="row">
-            <label for="periodicTimeWindow">Show only during time window</label>
-            <input type="checkbox" id="periodicTimeWindow" name="periodic_time_window_enabled">
-          </div>
-          <div class="conditional-settings" id="periodicTimeWindowSettings" style="display: none; margin-left: 0px;">
-            <div class="row">
-              <label for="periodicWindowStart">Window start time</label>
-              <input type="time" id="periodicWindowStart" name="periodic_window_start" value="09:00">
+        <div class="stack" id="randomTimeWindowSettings" style="display: none;">
+          <div class="field">
+            <div class="field-label">
+              <strong>Window start</strong>
             </div>
-            <div class="row">
-              <label for="periodicWindowEnd">Window end time</label>
-              <input type="time" id="periodicWindowEnd" name="periodic_window_end" value="17:00">
+            <div class="field-control">
+              <input class="input mono" type="text" id="randomWindowStart" name="random_window_start"
+                placeholder="09:00">
+            </div>
+          </div>
+          <div class="field">
+            <div class="field-label">
+              <strong>Window end</strong>
+            </div>
+            <div class="field-control">
+              <input class="input mono" type="text" id="randomWindowEnd" name="random_window_end"
+                placeholder="17:00">
             </div>
           </div>
         </div>
+      </div>
 
-        <div class="conditional-settings" id="randomSettings" style="display: none;">
-          <div class="row">
-            <label for="randomMin">Minimum minutes between</label>
-            <input type="number" id="randomMin" name="random_min_minutes" min="1" max="1440" step="1" value="15">
-          </div>
-          <div class="row">
-            <label for="randomMax">Maximum minutes between</label>
-            <input type="number" id="randomMax" name="random_max_minutes" min="1" max="1440" step="1" value="60">
-          </div>
-          <div class="row">
-            <label for="randomTimeWindow">Show only during time window</label>
-            <input type="checkbox" id="randomTimeWindow" name="random_time_window_enabled">
-          </div>
-          <div class="conditional-settings" id="randomTimeWindowSettings" style="display: none; margin-left: 0px;">
-            <div class="row">
-              <label for="randomWindowStart">Window start time</label>
-              <input type="time" id="randomWindowStart" name="random_window_start" value="09:00">
-            </div>
-            <div class="row">
-              <label for="randomWindowEnd">Window end time</label>
-              <input type="time" id="randomWindowEnd" name="random_window_end" value="17:00">
-            </div>
-          </div>
+      <div class="field">
+        <div class="field-label">
+          <strong>Message duration</strong>
+          <span class="field-hint">Seconds each message stays on screen.</span>
         </div>
-
-        <div class="row">
-          <label for="displayDuration">Message display duration (seconds)</label>
-          <input type="number" id="displayDuration" name="display_duration_seconds" min="1" max="60" step="1" value="5">
+        <div class="field-control">
+          <input class="input mono" type="number" id="displayDuration" name="display_duration_seconds" min="1" max="60"
+            step="1" value="5">
         </div>
       </div>
-
-      <div class="row">
-        <button type="button" id="triggerNowBtn">Trigger Message Now</button>
-        <span style="margin-left: 12px; color: #666; font-size: 14px;">(Shows selected message, or random if none
-          selected)</span>
-      </div>
-
-      <hr>
-
-      <div class="row" style="color:#666;">
-        <span id="lastSaved">Last saved: {{ last_saved }}</span>
-        <span style="margin-left:16px;color:#cc6666;">Changes are saved only when you click Save.</span>
-      </div>
-
-      <div class="row">
-        <button type="submit"
-          style="background: #4CAF50; color: white; border: none; padding: 10px 20px; border-radius: 6px; font-size: 16px;">Save
-          Settings</button>
-      </div>
-    </form>
+    </div>
   </div>
 
-  <script>
-    const csrfToken = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
-    // Helper function to convert hex to RGB
-    function hexToRgb(hex) {
-      // Remove # if present
-      hex = hex.replace('#', '');
-      // Parse hex values
-      const r = parseInt(hex.substring(0, 2), 16);
-      const g = parseInt(hex.substring(2, 4), 16);
-      const b = parseInt(hex.substring(4, 6), 16);
-      return `rgb(${r}, ${g}, ${b})`;
+  <div class="card">
+    <div class="card-title">Live trigger</div>
+    <div class="field">
+      <div class="field-label">
+        <strong>Trigger message now</strong>
+        <span class="field-hint">Shows the selected message, or a random one.</span>
+      </div>
+      <div class="field-control">
+        <button type="button" class="button" id="triggerNowBtn">Trigger message now</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-title">Save changes</div>
+    <div class="field">
+      <div class="field-label">
+        <strong>Status</strong>
+        <span class="field-hint">Changes are only saved when you click save.</span>
+      </div>
+      <div class="field-control">
+        <span id="lastSaved" class="field-hint">Last saved: {{ last_saved }}</span>
+      </div>
+    </div>
+    <div class="field">
+      <div class="field-label">
+        <strong>Apply settings</strong>
+        <span class="field-hint">Send updated messages to the display.</span>
+      </div>
+      <div class="field-control">
+        <button type="submit" class="button button-primary">Save settings</button>
+      </div>
+    </div>
+  </div>
+</form>
+{% endblock %}
+
+{% block scripts %}
+<script>
+  const csrfToken = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
+  function hexToRgb(hex) {
+    if (!hex) return null;
+    hex = hex.trim().replace('#', '');
+    if (hex.length !== 6) return null;
+    const r = parseInt(hex.substring(0, 2), 16);
+    const g = parseInt(hex.substring(2, 4), 16);
+    const b = parseInt(hex.substring(4, 6), 16);
+    if (Number.isNaN(r) || Number.isNaN(g) || Number.isNaN(b)) return null;
+    return `rgb(${r}, ${g}, ${b})`;
+  }
+
+  function rgbToHex(rgb) {
+    if (!rgb || rgb === 'null' || rgb === 'undefined') return '#000000';
+    const match = rgb.match(/rgb\((\d+),\s*(\d+),\s*(\d+)\)/);
+    if (match) {
+      const r = parseInt(match[1]).toString(16).padStart(2, '0');
+      const g = parseInt(match[2]).toString(16).padStart(2, '0');
+      const b = parseInt(match[3]).toString(16).padStart(2, '0');
+      return `#${r}${g}${b}`;
+    }
+    return '#000000';
+  }
+
+  let messagesRaw = JSON.parse({{ messages_json | tojson }});
+  let messages = messagesRaw.map(msg => {
+    if (typeof msg === 'string') {
+      return { text: msg, color: null };
+    }
+    return {
+      text: msg.text || '',
+      color: msg.color || null
+    };
+  });
+  let selectedIndex = -1;
+  let editingIndex = -1;
+
+  function renderMessages() {
+    const listEl = document.getElementById('messageList');
+    listEl.innerHTML = '';
+
+    if (messages.length === 0) {
+      listEl.innerHTML = '<div class="field-hint" style="text-align:center; padding: 12px;">No messages yet. Click "Add new message" to create one.</div>';
+      return;
     }
 
-    // Helper function to convert RGB to hex (for color input)
-    function rgbToHex(rgb) {
-      if (!rgb || rgb === 'null' || rgb === 'undefined') return '#000000';
-      // Handle rgb(r, g, b) format
-      const match = rgb.match(/rgb\((\d+),\s*(\d+),\s*(\d+)\)/);
-      if (match) {
-        const r = parseInt(match[1]).toString(16).padStart(2, '0');
-        const g = parseInt(match[2]).toString(16).padStart(2, '0');
-        const b = parseInt(match[3]).toString(16).padStart(2, '0');
-        return `#${r}${g}${b}`;
-      }
-      return '#000000';
-    }
+    messages.forEach((msg, idx) => {
+      if (editingIndex === idx) {
+        const editRow = document.createElement('div');
+        editRow.className = 'message-edit-row';
 
-    // Helper function to escape HTML entities for safe display
-    function escapeHtml(text) {
-      const div = document.createElement('div');
-      div.textContent = text;
-      return div.innerHTML;
-    }
+        const textInput = document.createElement('input');
+        textInput.type = 'text';
+        textInput.value = msg.text;
+        textInput.placeholder = 'Message text';
+        textInput.className = 'input';
 
-    // Normalize messages to object format
-    // Parse messages_json safely - Flask escapes the string, we parse it as JSON
-    let messagesRaw = JSON.parse({{ messages_json | tojson }});
-    let messages = messagesRaw.map(msg => {
-      if (typeof msg === 'string') {
-        return { text: msg, color: null };
-      }
-      return {
-        text: msg.text || '',
-        color: msg.color || null
-      };
-    });
-    let selectedIndex = -1;
-    let editingIndex = -1;
+        const controls = document.createElement('div');
+        controls.className = 'message-edit-controls';
 
-    function renderMessages() {
-      const listEl = document.getElementById('messageList');
-      listEl.innerHTML = '';
+        const swatch = document.createElement('div');
+        swatch.className = 'color-swatch';
+        swatch.style.backgroundColor = msg.color || 'transparent';
 
-      if (messages.length === 0) {
-        listEl.innerHTML = '<div style="color: #999; padding: 12px; text-align: center;">No messages yet. Click "Add New Message" to create one.</div>';
-        return;
-      }
+        const colorInput = document.createElement('input');
+        colorInput.type = 'text';
+        colorInput.value = msg.color ? rgbToHex(msg.color) : '';
+        colorInput.placeholder = '#000000';
+        colorInput.className = 'input mono';
 
-      messages.forEach((msg, idx) => {
-        if (editingIndex === idx) {
-          // Show edit row
-          const editRow = document.createElement('div');
-          editRow.className = 'message-edit-row';
+        const toggleWrap = document.createElement('label');
+        toggleWrap.className = 'toggle';
+        const useDefaultCheckbox = document.createElement('input');
+        useDefaultCheckbox.type = 'checkbox';
+        useDefaultCheckbox.checked = !msg.color;
+        useDefaultCheckbox.id = 'useDefault_' + idx;
+        const toggleUi = document.createElement('span');
+        toggleUi.className = 'toggle-ui';
+        toggleWrap.appendChild(useDefaultCheckbox);
+        toggleWrap.appendChild(toggleUi);
 
-          const textInput = document.createElement('input');
-          textInput.type = 'text';
-          textInput.value = msg.text;
-          textInput.placeholder = 'Message text';
+        const useDefaultLabel = document.createElement('span');
+        useDefaultLabel.textContent = 'Use default color';
+        useDefaultLabel.className = 'field-hint';
 
-          const colorInput = document.createElement('input');
-          colorInput.type = 'color';
-          colorInput.value = msg.color ? rgbToHex(msg.color) : '#000000';
-          colorInput.className = 'color-input';
+        const syncColorState = () => {
+          const disabled = useDefaultCheckbox.checked;
+          colorInput.disabled = disabled;
+          if (disabled) {
+            swatch.style.backgroundColor = 'transparent';
+          } else {
+            const rgbValue = hexToRgb(colorInput.value);
+            swatch.style.backgroundColor = rgbValue || 'transparent';
+          }
+        };
 
-          const useDefaultCheckbox = document.createElement('input');
-          useDefaultCheckbox.type = 'checkbox';
-          useDefaultCheckbox.checked = !msg.color;
-          useDefaultCheckbox.id = 'useDefault_' + idx;
-          const useDefaultLabel = document.createElement('label');
-          useDefaultLabel.htmlFor = 'useDefault_' + idx;
-          useDefaultLabel.textContent = 'Use default color';
-          useDefaultLabel.style.cssText = 'font-size: 12px; font-weight: normal; cursor: pointer;';
-
-          // Update color input disabled state based on checkbox
-          colorInput.disabled = useDefaultCheckbox.checked;
-          useDefaultCheckbox.onchange = () => {
-            colorInput.disabled = useDefaultCheckbox.checked;
-          };
-
-          const saveBtn = document.createElement('button');
-          saveBtn.textContent = 'Save';
-          saveBtn.onclick = () => {
-            const newText = textInput.value.trim();
-            if (newText) {
-              const useDefault = useDefaultCheckbox.checked;
-              messages[idx] = {
-                text: newText,
-                color: useDefault ? null : hexToRgb(colorInput.value)
-              };
-              editingIndex = -1;
-              renderMessages();
-              markUnsaved();
-            } else {
-              alert('Message text cannot be empty.');
+        const saveBtn = document.createElement('button');
+        saveBtn.textContent = 'Save';
+        saveBtn.className = 'button button-primary';
+        saveBtn.type = 'button';
+        saveBtn.onclick = () => {
+          const newText = textInput.value.trim();
+          if (newText) {
+            const useDefault = useDefaultCheckbox.checked;
+            const rgbValue = useDefault ? null : hexToRgb(colorInput.value);
+            if (!useDefault && !rgbValue) {
+              alert('Enter a valid hex color like #FFAA00.');
+              return;
             }
-          };
-
-          const cancelBtn = document.createElement('button');
-          cancelBtn.textContent = 'Cancel';
-          cancelBtn.onclick = () => {
+            messages[idx] = {
+              text: newText,
+              color: useDefault ? null : rgbValue
+            };
             editingIndex = -1;
             renderMessages();
-          };
-
-          editRow.appendChild(textInput);
-          editRow.appendChild(colorInput);
-          editRow.appendChild(useDefaultCheckbox);
-          editRow.appendChild(useDefaultLabel);
-          editRow.appendChild(saveBtn);
-          editRow.appendChild(cancelBtn);
-          listEl.appendChild(editRow);
-        } else {
-          // Show normal message item
-          const div = document.createElement('div');
-          div.className = 'message-item' + (idx === selectedIndex ? ' selected' : '');
-
-          const textSpan = document.createElement('span');
-          textSpan.className = 'message-text';
-          textSpan.textContent = msg.text;
-
-          const colorSwatch = document.createElement('div');
-          colorSwatch.className = 'color-swatch';
-          if (msg.color) {
-            colorSwatch.style.backgroundColor = msg.color;
+            markUnsaved();
           } else {
-            colorSwatch.style.backgroundColor = 'transparent';
-            colorSwatch.style.border = '2px dashed #ccc';
+            alert('Message text cannot be empty.');
           }
+        };
 
-          div.appendChild(colorSwatch);
-          div.appendChild(textSpan);
+        const cancelBtn = document.createElement('button');
+        cancelBtn.textContent = 'Cancel';
+        cancelBtn.className = 'button';
+        cancelBtn.type = 'button';
+        cancelBtn.onclick = () => {
+          editingIndex = -1;
+          renderMessages();
+        };
 
-          div.onclick = (e) => {
-            // Don't trigger selection if clicking on edit button
-            if (e.target.tagName === 'BUTTON') return;
-            // Toggle selection: deselect if already selected
-            selectedIndex = (selectedIndex === idx) ? -1 : idx;
-            renderMessages();
-          };
+        colorInput.addEventListener('input', () => {
+          const rgbValue = hexToRgb(colorInput.value);
+          swatch.style.backgroundColor = rgbValue || 'transparent';
+        });
+        useDefaultCheckbox.addEventListener('change', syncColorState);
+        syncColorState();
 
-          const editBtn = document.createElement('button');
-          editBtn.textContent = 'Edit';
-          editBtn.style.cssText = 'padding: 4px 8px; font-size: 12px;';
-          editBtn.onclick = (e) => {
-            e.stopPropagation();
-            editingIndex = idx;
-            selectedIndex = -1;
-            renderMessages();
-          };
-          div.appendChild(editBtn);
+        controls.appendChild(swatch);
+        controls.appendChild(colorInput);
+        controls.appendChild(toggleWrap);
+        controls.appendChild(useDefaultLabel);
+        controls.appendChild(saveBtn);
+        controls.appendChild(cancelBtn);
 
-          listEl.appendChild(div);
+        editRow.appendChild(textInput);
+        editRow.appendChild(controls);
+        listEl.appendChild(editRow);
+      } else {
+        const div = document.createElement('div');
+        div.className = 'message-item' + (idx === selectedIndex ? ' selected' : '');
+
+        const colorSwatch = document.createElement('div');
+        colorSwatch.className = 'color-swatch';
+        if (msg.color) {
+          colorSwatch.style.backgroundColor = msg.color;
+          colorSwatch.style.border = 'none';
         }
-      });
-    }
 
-    document.getElementById('addMessageBtn').onclick = () => {
-      const msg = prompt('Enter new message:');
-      if (msg && msg.trim()) {
-        messages.push({ text: msg.trim(), color: null });
-        editingIndex = messages.length - 1;
+        const textSpan = document.createElement('span');
+        textSpan.className = 'message-text';
+        textSpan.textContent = msg.text;
+
+        div.appendChild(colorSwatch);
+        div.appendChild(textSpan);
+
+        div.onclick = (e) => {
+          if (e.target.tagName === 'BUTTON') return;
+          selectedIndex = (selectedIndex === idx) ? -1 : idx;
+          renderMessages();
+        };
+
+        const editBtn = document.createElement('button');
+        editBtn.textContent = 'Edit';
+        editBtn.className = 'button';
+        editBtn.type = 'button';
+        editBtn.onclick = (e) => {
+          e.stopPropagation();
+          editingIndex = idx;
+          selectedIndex = -1;
+          renderMessages();
+        };
+        div.appendChild(editBtn);
+
+        listEl.appendChild(div);
+      }
+    });
+  }
+
+  document.getElementById('addMessageBtn').onclick = () => {
+    const msg = prompt('Enter new message:');
+    if (msg && msg.trim()) {
+      messages.push({ text: msg.trim(), color: null });
+      editingIndex = messages.length - 1;
+      renderMessages();
+      markUnsaved();
+    }
+  };
+
+  document.getElementById('deleteMessageBtn').onclick = () => {
+    if (selectedIndex >= 0 && selectedIndex < messages.length) {
+      const msgText = messages[selectedIndex].text || messages[selectedIndex];
+      if (confirm(`Delete message: "${msgText}"?`)) {
+        messages.splice(selectedIndex, 1);
+        selectedIndex = -1;
+        editingIndex = -1;
         renderMessages();
         markUnsaved();
       }
-    };
-
-    document.getElementById('deleteMessageBtn').onclick = () => {
-      if (selectedIndex >= 0 && selectedIndex < messages.length) {
-        const msgText = messages[selectedIndex].text || messages[selectedIndex];
-        if (confirm(`Delete message: "${msgText}"?`)) {
-          messages.splice(selectedIndex, 1);
-          selectedIndex = -1;
-          editingIndex = -1;
-          renderMessages();
-          markUnsaved();
-        }
-      } else {
-        alert('Please select a message to delete.');
-      }
-    };
-
-    // Timing mode toggle
-    const periodicRadio = document.getElementById('timingPeriodic');
-    const randomRadio = document.getElementById('timingRandom');
-    const disabledRadio = document.getElementById('timingDisabled');
-    const periodicSettings = document.getElementById('periodicSettings');
-    const randomSettings = document.getElementById('randomSettings');
-
-    function updateTimingDisplay() {
-      if (periodicRadio.checked) {
-        periodicSettings.style.display = 'block';
-        randomSettings.style.display = 'none';
-      } else if (randomRadio.checked) {
-        periodicSettings.style.display = 'none';
-        randomSettings.style.display = 'block';
-      } else {
-        // Disabled mode - hide all settings
-        periodicSettings.style.display = 'none';
-        randomSettings.style.display = 'none';
-      }
+    } else {
+      alert('Please select a message to delete.');
     }
+  };
 
-    periodicRadio.addEventListener('change', updateTimingDisplay);
-    randomRadio.addEventListener('change', updateTimingDisplay);
-    disabledRadio.addEventListener('change', updateTimingDisplay);
+  const periodicRadio = document.getElementById('timingPeriodic');
+  const randomRadio = document.getElementById('timingRandom');
+  const disabledRadio = document.getElementById('timingDisabled');
+  const periodicSettings = document.getElementById('periodicSettings');
+  const randomSettings = document.getElementById('randomSettings');
 
-    // Time window toggles
-    const periodicTimeWindowCheckbox = document.getElementById('periodicTimeWindow');
-    const periodicTimeWindowSettings = document.getElementById('periodicTimeWindowSettings');
-    const randomTimeWindowCheckbox = document.getElementById('randomTimeWindow');
-    const randomTimeWindowSettings = document.getElementById('randomTimeWindowSettings');
+  function updateTimingDisplay() {
+    if (periodicRadio.checked) {
+      periodicSettings.style.display = 'flex';
+      randomSettings.style.display = 'none';
+    } else if (randomRadio.checked) {
+      periodicSettings.style.display = 'none';
+      randomSettings.style.display = 'flex';
+    } else {
+      periodicSettings.style.display = 'none';
+      randomSettings.style.display = 'none';
+    }
+  }
 
-    periodicTimeWindowCheckbox.addEventListener('change', function () {
-      periodicTimeWindowSettings.style.display = this.checked ? 'block' : 'none';
-    });
+  periodicRadio.addEventListener('change', updateTimingDisplay);
+  randomRadio.addEventListener('change', updateTimingDisplay);
+  disabledRadio.addEventListener('change', updateTimingDisplay);
 
-    randomTimeWindowCheckbox.addEventListener('change', function () {
-      randomTimeWindowSettings.style.display = this.checked ? 'block' : 'none';
-    });
+  const periodicTimeWindowCheckbox = document.getElementById('periodicTimeWindow');
+  const periodicTimeWindowSettings = document.getElementById('periodicTimeWindowSettings');
+  const randomTimeWindowCheckbox = document.getElementById('randomTimeWindow');
+  const randomTimeWindowSettings = document.getElementById('randomTimeWindowSettings');
 
-    // Trigger now button with countdown
-    let countdownInterval = null;
-    const triggerBtn = document.getElementById('triggerNowBtn');
-    const originalBtnText = 'Trigger Message Now';
+  periodicTimeWindowCheckbox.addEventListener('change', function () {
+    periodicTimeWindowSettings.style.display = this.checked ? 'flex' : 'none';
+  });
 
-    triggerBtn.onclick = async () => {
-      const message = selectedIndex >= 0 ? messages[selectedIndex] : null;
+  randomTimeWindowCheckbox.addEventListener('change', function () {
+    randomTimeWindowSettings.style.display = this.checked ? 'flex' : 'none';
+  });
 
-      try {
-        const response = await fetch('/api/trigger_message', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken },
-          body: JSON.stringify({ message: message })
-        });
+  let countdownInterval = null;
+  const triggerBtn = document.getElementById('triggerNowBtn');
+  const originalBtnText = 'Trigger message now';
 
-        if (!response.ok) {
-          alert('Failed to trigger message.');
-          return;
-        }
+  triggerBtn.onclick = async () => {
+    const message = selectedIndex >= 0 ? messages[selectedIndex] : null;
 
-        // Calculate total duration: display duration + 2 fade animations + 1 second buffer
-        const config = {{ config | tojson
-      }};
-    const displaySeconds = config.display_duration_seconds || 5;
-    const fadeDurationMs = config.fade_duration_ms || 800;
-    const totalSeconds = displaySeconds + (2 * fadeDurationMs / 1000) + 1;
+    try {
+      const response = await fetch('/api/trigger_message', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken },
+        body: JSON.stringify({ message: message })
+      });
 
-    // Start countdown
-    startCountdown(Math.ceil(totalSeconds));
-          
-        } catch (e) {
+      if (!response.ok) {
+        alert('Failed to trigger message.');
+        return;
+      }
+
+      const config = {{ config | tojson }};
+      const displaySeconds = config.display_duration_seconds || 5;
+      const fadeDurationMs = config.fade_duration_ms || 800;
+      const totalSeconds = displaySeconds + (2 * fadeDurationMs / 1000) + 1;
+      startCountdown(Math.ceil(totalSeconds));
+    } catch (e) {
       alert('Error triggering message: ' + e.message);
     }
-      };
+  };
 
-    function startCountdown(seconds) {
-      let remaining = seconds;
+  function startCountdown(seconds) {
+    let remaining = seconds;
+    triggerBtn.disabled = true;
+    triggerBtn.classList.add('trigger-active');
+    triggerBtn.textContent = `On screen (${remaining})`;
 
-      // Disable button and change style
-      triggerBtn.disabled = true;
-      triggerBtn.classList.add('trigger-active');
-      triggerBtn.textContent = `On Screen (${remaining})`;
+    countdownInterval = setInterval(() => {
+      remaining--;
+      if (remaining <= 0) {
+        clearInterval(countdownInterval);
+        triggerBtn.disabled = false;
+        triggerBtn.classList.remove('trigger-active');
+        triggerBtn.textContent = originalBtnText;
+      } else {
+        triggerBtn.textContent = `On screen (${remaining})`;
+      }
+    }, 1000);
+  }
 
-      // Update every second
-      countdownInterval = setInterval(() => {
-        remaining--;
+  document.getElementById('messagesForm').onsubmit = async (e) => {
+    e.preventDefault();
 
-        if (remaining <= 0) {
-          // Reset button
-          clearInterval(countdownInterval);
-          triggerBtn.disabled = false;
-          triggerBtn.classList.remove('trigger-active');
-          triggerBtn.textContent = originalBtnText;
-        } else {
-          triggerBtn.textContent = `On Screen (${remaining})`;
-        }
-      }, 1000);
-    }
-
-    // Form submission
-    document.getElementById('messagesForm').onsubmit = async (e) => {
-      e.preventDefault();
-
-      const data = {
-        messages: messages,
-        timing_mode: document.querySelector('input[name="timing_mode"]:checked').value,
-        periodic_interval_minutes: parseInt(document.getElementById('periodicInterval').value),
-        periodic_time_window_enabled: document.getElementById('periodicTimeWindow').checked,
-        periodic_window_start: document.getElementById('periodicWindowStart').value,
-        periodic_window_end: document.getElementById('periodicWindowEnd').value,
-        random_min_minutes: parseInt(document.getElementById('randomMin').value),
-        random_max_minutes: parseInt(document.getElementById('randomMax').value),
-        random_time_window_enabled: document.getElementById('randomTimeWindow').checked,
-        random_window_start: document.getElementById('randomWindowStart').value,
-        random_window_end: document.getElementById('randomWindowEnd').value,
-        display_duration_seconds: parseInt(document.getElementById('displayDuration').value),
-        fade_duration_ms: {{ config.get('fade_duration_ms', 800)
-    }}
-      };
+    const data = {
+      messages: messages,
+      timing_mode: document.querySelector('input[name="timing_mode"]:checked').value,
+      periodic_interval_minutes: parseInt(document.getElementById('periodicInterval').value),
+      periodic_time_window_enabled: document.getElementById('periodicTimeWindow').checked,
+      periodic_window_start: document.getElementById('periodicWindowStart').value,
+      periodic_window_end: document.getElementById('periodicWindowEnd').value,
+      random_min_minutes: parseInt(document.getElementById('randomMin').value),
+      random_max_minutes: parseInt(document.getElementById('randomMax').value),
+      random_time_window_enabled: document.getElementById('randomTimeWindow').checked,
+      random_window_start: document.getElementById('randomWindowStart').value,
+      random_window_end: document.getElementById('randomWindowEnd').value,
+      display_duration_seconds: parseInt(document.getElementById('displayDuration').value),
+      fade_duration_ms: {{ config.get('fade_duration_ms', 800) }}
+    };
 
     try {
       const response = await fetch('/messages', {
@@ -627,47 +591,40 @@
       if (response.ok) {
         const result = await response.json();
         document.getElementById('lastSaved').textContent = 'Last saved: ' + result.timestamp;
-        document.getElementById('lastSaved').style.color = '#666';
+        document.getElementById('lastSaved').style.color = 'var(--text-muted)';
       } else {
         alert('Failed to save settings.');
       }
     } catch (e) {
       alert('Error saving settings: ' + e.message);
     }
-      };
+  };
 
-    // Mark as unsaved on change
-    const lastSaved = document.getElementById('lastSaved');
-    function markUnsaved() {
-      if (lastSaved) lastSaved.style.color = '#cc6666';
-    }
-    document.getElementById('messagesForm').addEventListener('change', markUnsaved);
+  const lastSaved = document.getElementById('lastSaved');
+  function markUnsaved() {
+    if (lastSaved) lastSaved.style.color = 'var(--danger)';
+  }
+  document.getElementById('messagesForm').addEventListener('change', markUnsaved);
 
-    // Initialize on load
-    const config = {{ config | tojson }};
-    periodicRadio.checked = config.timing_mode === 'periodic';
-    randomRadio.checked = config.timing_mode === 'random';
-    disabledRadio.checked = config.timing_mode === 'disabled';
-    document.getElementById('periodicInterval').value = config.periodic_interval_minutes;
-    document.getElementById('periodicTimeWindow').checked = config.periodic_time_window_enabled || false;
-    document.getElementById('periodicWindowStart').value = config.periodic_window_start || '09:00';
-    document.getElementById('periodicWindowEnd').value = config.periodic_window_end || '17:00';
-    document.getElementById('randomMin').value = config.random_min_minutes;
-    document.getElementById('randomMax').value = config.random_max_minutes;
-    document.getElementById('randomTimeWindow').checked = config.random_time_window_enabled || false;
-    document.getElementById('randomWindowStart').value = config.random_window_start || '09:00';
-    document.getElementById('randomWindowEnd').value = config.random_window_end || '17:00';
-    document.getElementById('displayDuration').value = config.display_duration_seconds;
+  const config = {{ config | tojson }};
+  periodicRadio.checked = config.timing_mode === 'periodic';
+  randomRadio.checked = config.timing_mode === 'random';
+  disabledRadio.checked = config.timing_mode === 'disabled';
+  document.getElementById('periodicInterval').value = config.periodic_interval_minutes;
+  document.getElementById('periodicTimeWindow').checked = config.periodic_time_window_enabled || false;
+  document.getElementById('periodicWindowStart').value = config.periodic_window_start || '09:00';
+  document.getElementById('periodicWindowEnd').value = config.periodic_window_end || '17:00';
+  document.getElementById('randomMin').value = config.random_min_minutes;
+  document.getElementById('randomMax').value = config.random_max_minutes;
+  document.getElementById('randomTimeWindow').checked = config.random_time_window_enabled || false;
+  document.getElementById('randomWindowStart').value = config.random_window_start || '09:00';
+  document.getElementById('randomWindowEnd').value = config.random_window_end || '17:00';
+  document.getElementById('displayDuration').value = config.display_duration_seconds;
 
-    // Show/hide time window settings based on checkbox state
-    periodicTimeWindowSettings.style.display = config.periodic_time_window_enabled ? 'block' : 'none';
-    randomTimeWindowSettings.style.display = config.random_time_window_enabled ? 'block' : 'none';
+  periodicTimeWindowSettings.style.display = config.periodic_time_window_enabled ? 'flex' : 'none';
+  randomTimeWindowSettings.style.display = config.random_time_window_enabled ? 'flex' : 'none';
 
-    updateTimingDisplay();
-    renderMessages();
-  </script>
-  {% include "_reboot_overlay.html" %}
-  {% include "_reboot_ui_script.html" %}
-</body>
-
-</html>
+  updateTimingDisplay();
+  renderMessages();
+</script>
+{% endblock %}

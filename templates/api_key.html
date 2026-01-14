@@ -1,671 +1,468 @@
-<!doctype html>
-<html>
+{% extends "_layout.html" %}
+{% set page_title = "Authentication Keys" %}
+{% set page_subtitle = "Manage API tokens, SSH keys, and HTTPS certificates." %}
+{% set active_page = "api_key" %}
 
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="csrf-token" content="{{ csrf_token }}">
-  <title>Manage Authentication Keys - {{ display_name }}</title>
-  <style>
-    body {
-      font-family: sans-serif;
-      margin: 0;
-      padding: 0;
-    }
+{% block head_extra %}
+<style>
+  .row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex-wrap: wrap;
+    margin-top: 12px;
+  }
 
-    .container {
-      max-width: 720px;
-      margin: 0 auto;
-      padding: 24px;
-    }
+  .ssh-key-display {
+    width: 100%;
+    min-height: 80px;
+    padding: 12px;
+    border-radius: var(--radius-sm);
+    border: 1px solid var(--border);
+    background: var(--surface-muted);
+    font-family: var(--font-mono);
+    font-size: 12px;
+    color: var(--text-secondary);
+    resize: vertical;
+  }
 
-    .row {
-      margin-bottom: 12px;
-    }
+  .status-message {
+    margin-top: 12px;
+    padding: 12px 16px;
+    border-radius: var(--radius-sm);
+    border: 1px solid var(--border);
+    background: var(--surface-muted);
+    font-size: 13px;
+  }
 
-    label {
-      display: inline-block;
-      min-width: 220px;
-      font-weight: bold;
-    }
+  .status-message.success {
+    border-color: rgba(31, 122, 93, 0.4);
+    background: rgba(31, 122, 93, 0.12);
+    color: var(--success);
+  }
 
-    input[type="text"],
-    input[type="email"] {
-      padding: 6px;
-      font-size: 14px;
-      width: 300px;
-    }
+  .status-message.error {
+    border-color: rgba(192, 55, 43, 0.4);
+    background: rgba(192, 55, 43, 0.12);
+    color: var(--danger);
+  }
 
-    button {
-      padding: 8px 14px;
-      font-weight: bold;
-      cursor: pointer;
-    }
+  .remote-ssh {
+    color: var(--success);
+    background: rgba(31, 122, 93, 0.12);
+    padding: 2px 8px;
+    border-radius: 999px;
+    font-size: 11px;
+  }
 
-    a.btn {
-      text-decoration: none;
-      display: inline-block;
-      padding: 8px 14px;
-      border-radius: 6px;
-      background: #f0f0f0;
-      color: #000;
-      font-weight: 700;
-      border: 1px solid #ddd;
-    }
+  .remote-https {
+    color: var(--warning);
+    background: rgba(164, 91, 0, 0.12);
+    padding: 2px 8px;
+    border-radius: 999px;
+    font-size: 11px;
+  }
 
-    a.btn:hover {
-      background: #e6e6e6;
-    }
+  .remote-unknown {
+    color: var(--text-muted);
+  }
 
-    /* Section box for SSH key section */
-    .section-box {
-      background: #f5f5f5;
-      border-radius: 12px;
-      padding: 20px;
-      margin-top: 24px;
-    }
+  .regenerate-container {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+  }
 
-    .section-box h3 {
-      margin-top: 0;
-      margin-bottom: 16px;
-      font-size: 16px;
-    }
+  .regenerate-email-input {
+    display: none;
+  }
 
-    /* SSH public key textarea */
-    .ssh-key-display {
-      width: 100%;
-      max-width: 460px;
-      height: 60px;
-      padding: 8px;
-      font-family: monospace;
-      font-size: 12px;
-      background: #e0e0e0;
-      border: 1px solid #ccc;
-      border-radius: 6px;
-      resize: none;
-      color: #555;
-    }
+  .regenerate-email-input.visible {
+    display: inline-block;
+  }
 
-    /* Status messages */
-    .status-message {
-      margin-top: 8px;
-      padding: 8px 12px;
-      border-radius: 6px;
-      font-size: 14px;
-    }
+  .confirm-state {
+    background: rgba(164, 91, 0, 0.12);
+    border-color: rgba(164, 91, 0, 0.4);
+    color: var(--warning);
+  }
+</style>
+{% endblock %}
 
-    .status-message.success {
-      background: #d4edda;
-      color: #155724;
-    }
-
-    .status-message.error {
-      background: #f8d7da;
-      color: #721c24;
-    }
-
-    /* Git remote type colors */
-    .remote-ssh {
-      color: #155724;
-      background: #d4edda;
-      padding: 2px 8px;
-      border-radius: 4px;
-    }
-
-    .remote-https {
-      color: #856404;
-      background: #fff3cd;
-      padding: 2px 8px;
-      border-radius: 4px;
-    }
-
-    .remote-unknown {
-      color: #666;
-    }
-
-    /* Loading state */
-    button:disabled {
-      opacity: 0.6;
-      cursor: not-allowed;
-    }
-
-    /* Warning/destructive button */
-    button.warning {
-      background: #dc3545;
-      color: white;
-      border: 1px solid #c82333;
-    }
-
-    button.warning:hover {
-      background: #c82333;
-    }
-
-    button.warning:disabled {
-      background: #dc3545;
-      opacity: 0.6;
-    }
-
-    /* Confirm state button */
-    button.confirm-state {
-      background: #fd7e14;
-      color: white;
-      border: 1px solid #e66a00;
-    }
-
-    button.confirm-state:hover {
-      background: #e66a00;
-    }
-
-    /* Regenerate container */
-    .regenerate-container {
-      display: inline-flex;
-      align-items: center;
-      gap: 8px;
-      margin-left: 8px;
-    }
-
-    .regenerate-email-input {
-      padding: 6px;
-      font-size: 14px;
-      width: 200px;
-      display: none;
-    }
-
-    .regenerate-email-input.visible {
-      display: inline-block;
-    }
-
-    /* SSL status styling */
-    .ssl-status-row {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      margin-bottom: 8px;
-    }
-
-    .ssl-label {
-      font-weight: bold;
-      min-width: 160px;
-    }
-
-    .ssl-not-found {
-      color: #dc3545;
-    }
-
-    .ssl-found {
-      color: #155724;
-    }
-
-    .ssl-value {
-      color: #666;
-    }
-
-    {% include "_reboot_ui_styles.html" %}
-  </style>
-</head>
-
-<body>
-  <div class="container">
-    {% include "_reboot_warning_bar.html" %}
-    <div class="row">
-      <a href="{{ url_for('index') }}" class="btn">← Back</a>
-    </div>
-    <h2>Manage Authentication Keys</h2>
-
-    <!-- Metro API Key Section -->
-    <div class="section-box">
-      <h3>Metro API Key</h3>
-      <form method="post" action="/api-key" id="apiKeyForm">
-        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-        <div class="row">
-          <input type="text" id="api_key" name="api_key" value="{{ api_key }}" placeholder="Enter your API key"
-            style="width: 100%; max-width: 460px;">
+{% block content %}
+<div class="content-grid">
+  <div class="card">
+    <div class="card-title">Metro API key</div>
+    <form method="post" action="/api-key" id="apiKeyForm">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+      <div class="field">
+        <div class="field-label">
+          <strong>WMATA API key</strong>
+          <span class="field-hint">Used to fetch real-time arrival data.</span>
         </div>
-
-        <div class="row" style="display: flex; align-items: center; gap: 16px;">
-          <button type="submit">Save</button>
-          <span id="lastSaved" style="color:#666;">Last saved: {{ last_saved }}</span>
-        </div>
-      </form>
-    </div>
-
-    <!-- Git SSH Key Section -->
-    <div class="section-box" id="sshKeySection">
-      <h3>Git SSH Key</h3>
-      <p id="gitRemoteStatus" style="margin-top: 0; margin-bottom: 16px; color: #666; font-size: 14px;">
-        Git remote: <span id="gitRemoteType"
-          class="{% if git_remote_type == 'ssh' %}remote-ssh{% elif git_remote_type == 'https' %}remote-https{% else %}remote-unknown{% endif %}"
-          style="font-weight: bold; text-transform: uppercase;">{{ git_remote_type }}</span>
-      </p>
-
-      {% if ssh_key_exists %}
-      <!-- Keys exist: show public key and copy button -->
-      <div id="sshKeyExists">
-        <div class="row">
-          <textarea class="ssh-key-display" id="sshPublicKey" readonly>{{ ssh_public_key }}</textarea>
-        </div>
-        <div class="row">
-          <button type="button" id="copyKeyBtn" onclick="copySSHKey()">Copy SSH Public Key</button>
-          <span class="regenerate-container">
-            <input type="email" id="regenerateEmail" class="regenerate-email-input" placeholder="your@email.com">
-            <button type="button" id="regenerateKeyBtn" onclick="handleRegenerateClick()">Regenerate SSH
-              Keypair</button>
-          </span>
+        <div class="field-control">
+          <input class="input mono" type="text" id="api_key" name="api_key" value="{{ api_key }}"
+            placeholder="Enter your API key">
         </div>
       </div>
-      {% else %}
-      <!-- Keys don't exist: show email input and generate button -->
-      <div id="sshKeyGenerate">
-        <div class="row">
-          <label for="sshEmail">Email</label>
-          <input type="email" id="sshEmail" placeholder="your@email.com">
+      <div class="field">
+        <div class="field-label">
+          <strong>Status</strong>
+          <span class="field-hint">Updated on {{ last_saved }}</span>
         </div>
-        <div class="row">
-          <button type="button" id="generateKeyBtn" onclick="generateSSHKey()">Generate SSH Keys</button>
-        </div>
-      </div>
-      {% endif %}
-
-      <div id="sshStatusMessage"></div>
-    </div>
-
-    <!-- SSL Certificate and Key Section -->
-    <div class="section-box" id="sslSection">
-      <h3>SSL (HTTPS) Certificate and Key</h3>
-      {% if not ssl_status.tailscale_installed %}
-      <!-- Tailscale not installed warning -->
-      <div style="color: #dc3545; font-weight: bold; padding: 8px 0;">
-        ⚠️ Tailscale is not installed and is required for configuring HTTPS.
-      </div>
-      {% else %}
-      <!-- Tailscale installed: show cert/key status -->
-      <div id="sslStatusRows">
-        <div class="row ssl-status-row">
-          <span class="ssl-label {% if ssl_status.cert_found %}ssl-found{% else %}ssl-not-found{% endif %}">
-            Certificate (.crt):
-          </span>
-          <span class="ssl-value">
-            {% if ssl_status.cert_found %}
-            ✓ Found
-            {% else %}
-            ✗ Not found
-            {% endif %}
-          </span>
-        </div>
-        <div class="row ssl-status-row">
-          <span class="ssl-label {% if ssl_status.key_found %}ssl-found{% else %}ssl-not-found{% endif %}">
-            Private Key (.key):
-          </span>
-          <span class="ssl-value">
-            {% if ssl_status.key_found %}
-            ✓ Found
-            {% else %}
-            ✗ Not found
-            {% endif %}
-          </span>
+        <div class="field-control">
+          <span id="lastSaved" class="field-hint">Last saved: {{ last_saved }}</span>
+          <button type="submit" class="button button-primary">Save key</button>
         </div>
       </div>
-      <div class="row" style="margin-top: 16px;">
-        {% if ssl_status.cert_found and ssl_status.key_found %}
-        <button type="button" id="generateSslBtn" onclick="generateSslCert()">Regenerate SSL Certificates</button>
-        {% else %}
-        <button type="button" id="generateSslBtn" onclick="generateSslCert()">Generate SSL Certificates</button>
-        {% endif %}
-      </div>
-      <div id="sslStatusMessage"></div>
-      {% endif %}
-    </div>
+    </form>
   </div>
 
-  <script>
-    const csrfToken = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
-    const apiKeyForm = document.getElementById('apiKeyForm');
-    const lastSaved = document.getElementById('lastSaved');
-    function markUnsaved() {
-      if (lastSaved) lastSaved.style.color = '#cc6666';
+  <div class="card" id="sshKeySection">
+    <div class="card-title">Git SSH key</div>
+    <div class="card-subtitle">
+      Git remote:
+      <span id="gitRemoteType"
+        class="{% if git_remote_type == 'ssh' %}remote-ssh{% elif git_remote_type == 'https' %}remote-https{% else %}remote-unknown{% endif %}">
+        {{ git_remote_type }}
+      </span>
+    </div>
+
+    {% if ssh_key_exists %}
+    <div id="sshKeyExists">
+      <div class="row">
+        <textarea class="ssh-key-display" id="sshPublicKey" readonly>{{ ssh_public_key }}</textarea>
+      </div>
+      <div class="row">
+        <button type="button" class="button" id="copyKeyBtn" onclick="copySSHKey()">Copy SSH public key</button>
+        <span class="regenerate-container">
+          <input type="email" id="regenerateEmail" class="input regenerate-email-input" placeholder="your@email.com">
+          <button type="button" class="button" id="regenerateKeyBtn" onclick="handleRegenerateClick()">Regenerate SSH
+            keypair</button>
+        </span>
+      </div>
+    </div>
+    {% else %}
+    <div id="sshKeyGenerate">
+      <div class="field">
+        <div class="field-label">
+          <strong>Email</strong>
+          <span class="field-hint">Used for the SSH key comment.</span>
+        </div>
+        <div class="field-control">
+          <input type="email" id="sshEmail" class="input" placeholder="your@email.com">
+        </div>
+      </div>
+      <div class="row">
+        <button type="button" class="button" id="generateKeyBtn" onclick="generateSSHKey()">Generate SSH keys</button>
+      </div>
+    </div>
+    {% endif %}
+
+    <div id="sshStatusMessage"></div>
+  </div>
+
+  <div class="card" id="sslSection">
+    <div class="card-title">SSL (HTTPS) certificate</div>
+    {% if not ssl_status.tailscale_installed %}
+    <div class="notice danger">
+      Tailscale is not installed and is required for HTTPS setup.
+    </div>
+    {% else %}
+    <div id="sslStatusRows" class="stack">
+      <div class="field">
+        <div class="field-label">
+          <strong>Certificate (.crt)</strong>
+        </div>
+        <div class="field-control">
+          <span class="field-hint">
+            {% if ssl_status.cert_found %}✓ Found{% else %}✗ Not found{% endif %}
+          </span>
+        </div>
+      </div>
+      <div class="field">
+        <div class="field-label">
+          <strong>Private key (.key)</strong>
+        </div>
+        <div class="field-control">
+          <span class="field-hint">
+            {% if ssl_status.key_found %}✓ Found{% else %}✗ Not found{% endif %}
+          </span>
+        </div>
+      </div>
+    </div>
+    <div class="row">
+      <button type="button" class="button" id="generateSslBtn" onclick="generateSslCert()">
+        {% if ssl_status.cert_found and ssl_status.key_found %}
+        Regenerate SSL certificates
+        {% else %}
+        Generate SSL certificates
+        {% endif %}
+      </button>
+    </div>
+    <div id="sslStatusMessage"></div>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+  const csrfToken = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
+  const apiKeyForm = document.getElementById('apiKeyForm');
+  const lastSaved = document.getElementById('lastSaved');
+  function markUnsaved() {
+    if (lastSaved) lastSaved.style.color = 'var(--danger)';
+  }
+  apiKeyForm.addEventListener('change', markUnsaved);
+  apiKeyForm.addEventListener('input', markUnsaved);
+
+  function showStatus(message, isError) {
+    const statusEl = document.getElementById('sshStatusMessage');
+    statusEl.className = 'status-message ' + (isError ? 'error' : 'success');
+    statusEl.textContent = message;
+    statusEl.style.display = 'block';
+  }
+
+  async function generateSSHKey() {
+    const emailInput = document.getElementById('sshEmail');
+    const generateBtn = document.getElementById('generateKeyBtn');
+    const email = emailInput.value.trim();
+
+    if (!email) {
+      showStatus('Please enter an email address.', true);
+      return;
     }
-    // Mark unsaved when API key field changes
-    apiKeyForm.addEventListener('change', markUnsaved);
-    apiKeyForm.addEventListener('input', markUnsaved);
 
-    // SSH Key Functions
-    function showStatus(message, isError) {
-      const statusEl = document.getElementById('sshStatusMessage');
-      statusEl.className = 'status-message ' + (isError ? 'error' : 'success');
-      statusEl.textContent = message;
-      statusEl.style.display = 'block';
+    if (!/^[\w.+-]+@[\w.-]+\.[a-zA-Z]{2,}$/.test(email)) {
+      showStatus('Please enter a valid email address.', true);
+      return;
     }
 
-    async function generateSSHKey() {
-      const emailInput = document.getElementById('sshEmail');
-      const generateBtn = document.getElementById('generateKeyBtn');
-      const email = emailInput.value.trim();
+    generateBtn.disabled = true;
+    generateBtn.textContent = 'Generating...';
 
-      if (!email) {
-        showStatus('Please enter an email address.', true);
-        return;
-      }
+    try {
+      const response = await fetch('/api/generate-ssh-key', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken },
+        body: JSON.stringify({ email: email })
+      });
 
-      // Basic email validation
-      if (!/^[\w.+-]+@[\w.-]+\.[a-zA-Z]{2,}$/.test(email)) {
-        showStatus('Please enter a valid email address.', true);
-        return;
-      }
+      const data = await response.json();
 
-      generateBtn.disabled = true;
-      generateBtn.textContent = 'Generating...';
+      if (data.success) {
+        showStatus('SSH keys generated successfully!', false);
+        const generateDiv = document.getElementById('sshKeyGenerate');
 
-      try {
-        const response = await fetch('/api/generate-ssh-key', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken },
-          body: JSON.stringify({ email: email })
-        });
+        const existsDiv = document.createElement('div');
+        existsDiv.id = 'sshKeyExists';
 
-        const data = await response.json();
+        const row1 = document.createElement('div');
+        row1.className = 'row';
+        const textarea = document.createElement('textarea');
+        textarea.className = 'ssh-key-display';
+        textarea.id = 'sshPublicKey';
+        textarea.readOnly = true;
+        textarea.textContent = data.public_key;
+        row1.appendChild(textarea);
 
-        if (data.success) {
-          showStatus('SSH keys generated successfully!', false);
-          // Update UI to show the public key
-          const sshSection = document.getElementById('sshKeySection');
-          const generateDiv = document.getElementById('sshKeyGenerate');
+        const row2 = document.createElement('div');
+        row2.className = 'row';
+        const copyBtn = document.createElement('button');
+        copyBtn.type = 'button';
+        copyBtn.id = 'copyKeyBtn';
+        copyBtn.textContent = 'Copy SSH public key';
+        copyBtn.className = 'button';
+        copyBtn.onclick = copySSHKey;
+        row2.appendChild(copyBtn);
 
-          // Create the "keys exist" UI safely using DOM methods (not innerHTML)
-          const existsDiv = document.createElement('div');
-          existsDiv.id = 'sshKeyExists';
+        const regenerateContainer = document.createElement('span');
+        regenerateContainer.className = 'regenerate-container';
 
-          const row1 = document.createElement('div');
-          row1.className = 'row';
-          const textarea = document.createElement('textarea');
-          textarea.className = 'ssh-key-display';
-          textarea.id = 'sshPublicKey';
-          textarea.readOnly = true;
-          textarea.textContent = data.public_key;  // Safe: textContent escapes HTML
-          row1.appendChild(textarea);
+        const regenerateEmailInput = document.createElement('input');
+        regenerateEmailInput.type = 'email';
+        regenerateEmailInput.id = 'regenerateEmail';
+        regenerateEmailInput.className = 'input regenerate-email-input';
+        regenerateEmailInput.placeholder = 'your@email.com';
+        regenerateContainer.appendChild(regenerateEmailInput);
 
-          const row2 = document.createElement('div');
-          row2.className = 'row';
-          const copyBtn = document.createElement('button');
-          copyBtn.type = 'button';
-          copyBtn.id = 'copyKeyBtn';
-          copyBtn.textContent = 'Copy SSH Public Key';
-          copyBtn.onclick = copySSHKey;
-          row2.appendChild(copyBtn);
+        const regenerateBtn = document.createElement('button');
+        regenerateBtn.type = 'button';
+        regenerateBtn.id = 'regenerateKeyBtn';
+        regenerateBtn.textContent = 'Regenerate SSH keypair';
+        regenerateBtn.className = 'button';
+        regenerateBtn.onclick = handleRegenerateClick;
+        regenerateContainer.appendChild(regenerateBtn);
 
-          // Add regenerate container with email input and button
-          const regenerateContainer = document.createElement('span');
-          regenerateContainer.className = 'regenerate-container';
+        row2.appendChild(regenerateContainer);
 
-          const regenerateEmailInput = document.createElement('input');
-          regenerateEmailInput.type = 'email';
-          regenerateEmailInput.id = 'regenerateEmail';
-          regenerateEmailInput.className = 'regenerate-email-input';
-          regenerateEmailInput.placeholder = 'your@email.com';
-          regenerateContainer.appendChild(regenerateEmailInput);
+        existsDiv.appendChild(row1);
+        existsDiv.appendChild(row2);
 
-          const regenerateBtn = document.createElement('button');
-          regenerateBtn.type = 'button';
-          regenerateBtn.id = 'regenerateKeyBtn';
-          regenerateBtn.textContent = 'Regenerate SSH Keypair';
-          regenerateBtn.onclick = handleRegenerateClick;
-          regenerateContainer.appendChild(regenerateBtn);
+        generateDiv.replaceWith(existsDiv);
 
-          row2.appendChild(regenerateContainer);
-
-          existsDiv.appendChild(row1);
-          existsDiv.appendChild(row2);
-
-          // Replace the generate UI with the exists UI
-          generateDiv.replaceWith(existsDiv);
-
-          // Update remote type label if remote was converted
-          if (data.remote_type) {
-            const remoteTypeSpan = document.getElementById('gitRemoteType');
-            if (remoteTypeSpan) {
-              remoteTypeSpan.textContent = data.remote_type.toUpperCase();
-              // Update color class
-              remoteTypeSpan.classList.remove('remote-ssh', 'remote-https', 'remote-unknown');
-              remoteTypeSpan.classList.add('remote-' + data.remote_type);
-            }
-            if (data.remote_converted) {
-              showStatus('SSH keys generated and git remote converted to SSH!', false);
-            }
+        if (data.remote_type) {
+          const remoteTypeSpan = document.getElementById('gitRemoteType');
+          if (remoteTypeSpan) {
+            remoteTypeSpan.textContent = data.remote_type.toUpperCase();
+            remoteTypeSpan.classList.remove('remote-ssh', 'remote-https', 'remote-unknown');
+            remoteTypeSpan.classList.add('remote-' + data.remote_type);
           }
-        } else {
-          showStatus('Error: ' + data.error, true);
-          generateBtn.disabled = false;
-          generateBtn.textContent = 'Generate SSH Keys';
+          if (data.remote_converted) {
+            showStatus('SSH keys generated and git remote converted to SSH!', false);
+          }
         }
-      } catch (error) {
-        showStatus('Error: ' + error.message, true);
-        generateBtn.disabled = false;
-        generateBtn.textContent = 'Generate SSH Keys';
-      }
-    }
-
-    async function copySSHKey() {
-      const keyTextarea = document.getElementById('sshPublicKey');
-      const copyBtn = document.getElementById('copyKeyBtn');
-      const keyText = keyTextarea.value;
-
-      try {
-        await navigator.clipboard.writeText(keyText);
-        copyBtn.textContent = 'Copied!';
-        showStatus('SSH public key copied to clipboard!', false);
-        setTimeout(() => {
-          copyBtn.textContent = 'Copy SSH Public Key';
-        }, 2000);
-      } catch (error) {
-        // Fallback: select the text for manual copying
-        keyTextarea.select();
-        keyTextarea.setSelectionRange(0, 99999);
-        showStatus('Press Ctrl+C to copy the selected key.', false);
-      }
-    }
-
-    // Regenerate SSH Key Functions
-    let regenerateConfirmState = false;
-    let regenerateTimeout = null;
-
-    function extractEmailFromPublicKey() {
-      const keyTextarea = document.getElementById('sshPublicKey');
-      if (!keyTextarea) return '';
-      const keyText = keyTextarea.value || '';
-      // SSH public keys typically end with a comment (email)
-      // Format: ssh-ed25519 AAAA... user@email.com
-      const parts = keyText.trim().split(' ');
-      if (parts.length >= 3) {
-        const email = parts[parts.length - 1];
-        // Check if it looks like an email
-        if (/^[\w.+-]+@[\w.-]+\.[a-zA-Z]{2,}$/.test(email)) {
-          return email;
-        }
-      }
-      return '';
-    }
-
-    function resetRegenerateState() {
-      regenerateConfirmState = false;
-      const regenerateBtn = document.getElementById('regenerateKeyBtn');
-      const emailInput = document.getElementById('regenerateEmail');
-      if (regenerateBtn) {
-        regenerateBtn.textContent = 'Regenerate SSH Keypair';
-        regenerateBtn.classList.remove('confirm-state');
-      }
-      if (emailInput) {
-        emailInput.classList.remove('visible');
-      }
-      if (regenerateTimeout) {
-        clearTimeout(regenerateTimeout);
-        regenerateTimeout = null;
-      }
-    }
-
-    function handleRegenerateClick() {
-      const regenerateBtn = document.getElementById('regenerateKeyBtn');
-      const emailInput = document.getElementById('regenerateEmail');
-
-      if (!regenerateConfirmState) {
-        // First click: enter confirmation state
-        regenerateConfirmState = true;
-        regenerateBtn.textContent = 'Confirm Regenerate?';
-        regenerateBtn.classList.remove('warning');
-        regenerateBtn.classList.add('confirm-state');
-        emailInput.classList.add('visible');
-        // Pre-fill email from existing public key
-        const existingEmail = extractEmailFromPublicKey();
-        if (existingEmail) {
-          emailInput.value = existingEmail;
-        }
-        emailInput.focus();
-        // Set 5 second timeout to reset
-        regenerateTimeout = setTimeout(resetRegenerateState, 5000);
       } else {
-        // Second click: perform regeneration
-        regenerateSSHKey();
+        showStatus('Error: ' + data.error, true);
+        generateBtn.disabled = false;
+        generateBtn.textContent = 'Generate SSH keys';
+      }
+    } catch (error) {
+      showStatus('Error: ' + error.message, true);
+      generateBtn.disabled = false;
+      generateBtn.textContent = 'Generate SSH keys';
+    }
+  }
+
+  async function copySSHKey() {
+    const keyTextarea = document.getElementById('sshPublicKey');
+    const copyBtn = document.getElementById('copyKeyBtn');
+    const keyText = keyTextarea.value;
+
+    try {
+      await navigator.clipboard.writeText(keyText);
+      copyBtn.textContent = 'Copied!';
+      showStatus('SSH public key copied to clipboard!', false);
+      setTimeout(() => {
+        copyBtn.textContent = 'Copy SSH public key';
+      }, 2000);
+    } catch (error) {
+      keyTextarea.select();
+      keyTextarea.setSelectionRange(0, 99999);
+      showStatus('Press Ctrl+C to copy the selected key.', false);
+    }
+  }
+
+  let regenerateConfirmState = false;
+  let regenerateTimeout = null;
+
+  function extractEmailFromPublicKey() {
+    const keyTextarea = document.getElementById('sshPublicKey');
+    if (!keyTextarea) return '';
+    const keyText = keyTextarea.value || '';
+    const parts = keyText.trim().split(' ');
+    if (parts.length >= 3) {
+      const email = parts[parts.length - 1];
+      if (/^[\w.+-]+@[\w.-]+\.[a-zA-Z]{2,}$/.test(email)) {
+        return email;
       }
     }
+    return '';
+  }
 
-    async function regenerateSSHKey() {
-      const regenerateBtn = document.getElementById('regenerateKeyBtn');
-      const emailInput = document.getElementById('regenerateEmail');
-      const email = emailInput.value.trim();
+  function resetRegenerateState() {
+    regenerateConfirmState = false;
+    const regenerateBtn = document.getElementById('regenerateKeyBtn');
+    const emailInput = document.getElementById('regenerateEmail');
+    if (regenerateBtn) {
+      regenerateBtn.textContent = 'Regenerate SSH keypair';
+      regenerateBtn.classList.remove('confirm-state');
+    }
+    if (emailInput) {
+      emailInput.classList.remove('visible');
+    }
+    if (regenerateTimeout) {
+      clearTimeout(regenerateTimeout);
+      regenerateTimeout = null;
+    }
+  }
 
-      if (!email) {
-        showStatus('Please enter an email address.', true);
-        return;
+  function handleRegenerateClick() {
+    const regenerateBtn = document.getElementById('regenerateKeyBtn');
+    const emailInput = document.getElementById('regenerateEmail');
+
+    if (!regenerateConfirmState) {
+      regenerateConfirmState = true;
+      regenerateBtn.textContent = 'Confirm regenerate?';
+      regenerateBtn.classList.add('confirm-state');
+      emailInput.classList.add('visible');
+      const existingEmail = extractEmailFromPublicKey();
+      if (existingEmail) {
+        emailInput.value = existingEmail;
       }
+      emailInput.focus();
 
-      // Basic email validation
-      if (!/^[\w.+-]+@[\w.-]+\.[a-zA-Z]{2,}$/.test(email)) {
-        showStatus('Please enter a valid email address.', true);
-        return;
-      }
+      regenerateTimeout = setTimeout(() => {
+        resetRegenerateState();
+      }, 8000);
+      return;
+    }
 
-      // Clear the timeout since we're proceeding
-      if (regenerateTimeout) {
-        clearTimeout(regenerateTimeout);
-        regenerateTimeout = null;
-      }
+    const email = emailInput.value.trim();
+    if (!email) {
+      showStatus('Please enter an email address.', true);
+      return;
+    }
 
-      regenerateBtn.disabled = true;
-      regenerateBtn.textContent = 'Regenerating...';
+    regenerateBtn.disabled = true;
+    regenerateBtn.textContent = 'Regenerating...';
 
-      try {
-        const response = await fetch('/api/regenerate-ssh-key', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken },
-          body: JSON.stringify({ email: email })
-        });
-
-        const data = await response.json();
-
+    fetch('/api/regenerate-ssh-key', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken },
+      body: JSON.stringify({ email: email })
+    })
+      .then((res) => res.json())
+      .then((data) => {
         if (data.success) {
-          showStatus('SSH keys regenerated successfully!', false);
-          // Update the public key textarea
           const keyTextarea = document.getElementById('sshPublicKey');
           if (keyTextarea) {
             keyTextarea.textContent = data.public_key;
-            keyTextarea.value = data.public_key;
           }
-          // Update remote type label if remote was converted
-          if (data.remote_type) {
-            const remoteTypeSpan = document.getElementById('gitRemoteType');
-            if (remoteTypeSpan) {
-              remoteTypeSpan.textContent = data.remote_type.toUpperCase();
-              // Update color class
-              remoteTypeSpan.classList.remove('remote-ssh', 'remote-https', 'remote-unknown');
-              remoteTypeSpan.classList.add('remote-' + data.remote_type);
-            }
-            if (data.remote_converted) {
-              showStatus('SSH keys regenerated and git remote converted to SSH!', false);
-            }
-          }
-          // Reset state
-          resetRegenerateState();
-          regenerateBtn.disabled = false;
+          showStatus('SSH keypair regenerated.', false);
         } else {
           showStatus('Error: ' + data.error, true);
-          regenerateBtn.disabled = false;
-          resetRegenerateState();
         }
-      } catch (error) {
+        regenerateBtn.disabled = false;
+        regenerateBtn.textContent = 'Regenerate SSH keypair';
+        resetRegenerateState();
+      })
+      .catch((error) => {
         showStatus('Error: ' + error.message, true);
         regenerateBtn.disabled = false;
+        regenerateBtn.textContent = 'Regenerate SSH keypair';
         resetRegenerateState();
+      });
+  }
+
+  async function generateSslCert() {
+    const btn = document.getElementById('generateSslBtn');
+    const statusEl = document.getElementById('sslStatusMessage');
+    const initialLabel = btn.textContent;
+    btn.disabled = true;
+    btn.textContent = 'Working...';
+
+    try {
+      const res = await fetch('/api/generate-ssl-cert', {
+        method: 'POST',
+        headers: { 'X-CSRF-Token': csrfToken }
+      });
+      const data = await res.json();
+      if (data.success) {
+        statusEl.className = 'status-message success';
+        statusEl.textContent = 'SSL certificates generated successfully.';
+      } else {
+        statusEl.className = 'status-message error';
+        statusEl.textContent = data.error || 'Failed to generate SSL certificates.';
       }
+    } catch (error) {
+      statusEl.className = 'status-message error';
+      statusEl.textContent = 'Error: ' + error.message;
     }
-
-    // Reset regenerate state when clicking elsewhere
-    document.addEventListener('click', function (e) {
-      if (regenerateConfirmState) {
-        const regenerateBtn = document.getElementById('regenerateKeyBtn');
-        const emailInput = document.getElementById('regenerateEmail');
-        if (e.target !== regenerateBtn && e.target !== emailInput) {
-          resetRegenerateState();
-        }
-      }
-    });
-
-    // SSL Certificate Functions
-    function showSslStatus(message, isError) {
-      const statusEl = document.getElementById('sslStatusMessage');
-      if (!statusEl) return;
-      statusEl.className = 'status-message ' + (isError ? 'error' : 'success');
-      statusEl.textContent = message;
-      statusEl.style.display = 'block';
-    }
-
-    async function generateSslCert() {
-      const generateBtn = document.getElementById('generateSslBtn');
-      if (!generateBtn) return;
-
-      const originalText = generateBtn.textContent;
-      generateBtn.disabled = true;
-      generateBtn.textContent = 'Generating...';
-
-      try {
-        const response = await fetch('/api/generate-ssl-cert', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken }
-        });
-
-        const data = await response.json();
-
-        if (data.success) {
-          showSslStatus(data.message || 'SSL certificates generated successfully!', false);
-          // Update button text since we now have certs
-          generateBtn.textContent = 'Regenerate SSL Certificates';
-          generateBtn.disabled = false;
-
-          // Update status rows to show found
-          const statusRows = document.getElementById('sslStatusRows');
-          if (statusRows) {
-            statusRows.innerHTML = `
-              <div class="row ssl-status-row">
-                <span class="ssl-label ssl-found">Certificate (.crt):</span>
-                <span class="ssl-value">✓ Found</span>
-              </div>
-              <div class="row ssl-status-row">
-                <span class="ssl-label ssl-found">Private Key (.key):</span>
-                <span class="ssl-value">✓ Found</span>
-              </div>
-            `;
-          }
-        } else {
-          showSslStatus('Error: ' + data.error, true);
-          generateBtn.disabled = false;
-          generateBtn.textContent = originalText;
-        }
-      } catch (error) {
-        showSslStatus('Error: ' + error.message, true);
-        generateBtn.disabled = false;
-        generateBtn.textContent = originalText;
-      }
-    }
-  </script>
-  {% include "_reboot_overlay.html" %}
-  {% include "_reboot_ui_script.html" %}
-</body>
-
-</html>
+    statusEl.style.display = 'block';
+    btn.disabled = false;
+    btn.textContent = initialLabel;
+  }
+</script>
+{% endblock %}

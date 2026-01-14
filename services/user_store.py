@@ -11,6 +11,11 @@ USERS_FILE = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "user
 HASH_ITERATIONS = 200_000
 USERNAME_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.-]{2,31}$")
 PASSWORD_MIN_LENGTH = 8
+DEFAULT_PREFERENCES = {
+    "theme": "light",
+    "sidebar_side": "left",
+    "avatar_data_url": "",
+}
 
 
 def _now_iso():
@@ -67,6 +72,25 @@ def _validate_password(password):
     return True, ""
 
 
+def _coerce_preferences(preferences):
+    if not isinstance(preferences, dict):
+        preferences = {}
+    theme = preferences.get("theme", DEFAULT_PREFERENCES["theme"])
+    if theme not in ("light", "dark"):
+        theme = DEFAULT_PREFERENCES["theme"]
+    sidebar_side = preferences.get("sidebar_side", DEFAULT_PREFERENCES["sidebar_side"])
+    if sidebar_side not in ("left", "right"):
+        sidebar_side = DEFAULT_PREFERENCES["sidebar_side"]
+    avatar_data_url = preferences.get("avatar_data_url", DEFAULT_PREFERENCES["avatar_data_url"])
+    if not isinstance(avatar_data_url, str):
+        avatar_data_url = DEFAULT_PREFERENCES["avatar_data_url"]
+    return {
+        "theme": theme,
+        "sidebar_side": sidebar_side,
+        "avatar_data_url": avatar_data_url,
+    }
+
+
 class UserStore:
     def _read_users_raw(self):
         if not os.path.exists(USERS_FILE):
@@ -104,6 +128,7 @@ class UserStore:
                 "created_at": _now_iso(),
                 "updated_at": _now_iso(),
                 "must_change_password": True,
+                "preferences": DEFAULT_PREFERENCES.copy(),
             }
             data["users"] = [record]
             atomic_write_json(USERS_FILE, data)
@@ -162,6 +187,7 @@ class UserStore:
                 "created_at": _now_iso(),
                 "updated_at": _now_iso(),
                 "must_change_password": False,
+                "preferences": DEFAULT_PREFERENCES.copy(),
             }
             users.append(record)
             data["users"] = users
@@ -201,3 +227,34 @@ class UserStore:
             data["users"] = remaining
             atomic_write_json(USERS_FILE, data)
         return True, ""
+
+    def get_preferences(self, username):
+        user = self.get_user(username)
+        if not user:
+            return DEFAULT_PREFERENCES.copy()
+        return _coerce_preferences(user.get("preferences", {}))
+
+    def update_preferences(self, username, updates):
+        if not isinstance(updates, dict) or not updates:
+            return False, "No updates provided.", DEFAULT_PREFERENCES.copy()
+        normalized = _normalize_username(username)
+        lock_path = f"{USERS_FILE}.lock"
+        with file_lock(lock_path):
+            data = self._read_users_raw()
+            users = data.get("users", [])
+            for user in users:
+                if _normalize_username(user.get("username", "")) != normalized:
+                    continue
+                preferences = _coerce_preferences(user.get("preferences", {}))
+                if "theme" in updates:
+                    preferences["theme"] = updates.get("theme")
+                if "sidebar_side" in updates:
+                    preferences["sidebar_side"] = updates.get("sidebar_side")
+                if "avatar_data_url" in updates:
+                    preferences["avatar_data_url"] = updates.get("avatar_data_url")
+                user["preferences"] = _coerce_preferences(preferences)
+                user["updated_at"] = _now_iso()
+                data["users"] = users
+                atomic_write_json(USERS_FILE, data)
+                return True, "", user["preferences"]
+        return False, "User not found.", DEFAULT_PREFERENCES.copy()
