@@ -869,11 +869,16 @@ def start_web_settings_server(data_handler, host="0.0.0.0", port=443):
     @app.get("/api/git-branches")
     def api_git_branches():
         """Get list of available remote git branches."""
-        try:
-            branches = update_service.get_remote_branches(timeout=10)
-            return jsonify({"success": True, "branches": branches})
-        except Exception as e:
-            return jsonify({"success": False, "error": str(e), "branches": []}), 500
+        _git_debug_log("api_git_branches: Attempting to acquire git operation lock...")
+        with background_jobs.git_operation(caller="api_git_branches"):
+            _git_debug_log("api_git_branches: Lock acquired")
+            try:
+                branches = update_service.get_remote_branches(timeout=10)
+                return jsonify({"success": True, "branches": branches})
+            except Exception as e:
+                return jsonify({"success": False, "error": str(e), "branches": []}), 500
+            finally:
+                _git_debug_log("api_git_branches: Releasing git operation lock")
 
     @app.get("/api/current-branch")
     def api_current_branch():
