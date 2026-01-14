@@ -6,59 +6,50 @@ Reviewed the Python application (PyQt5 main display, Flask settings server, WiFi
 
 ## Findings
 
-### [High] Scheduled reboot crashes due to `datetime.timedelta`
-- **Description:** `check_reboot_schedule` calls `datetime.timedelta(...)` even though `datetime` is the class imported from `datetime` and does not expose `timedelta` (`main_display.py:2359`).
-- **Why it matters:** When auto-reboot is enabled, this raises `AttributeError`, breaking the reboot scheduler and potentially spamming the UI/logs or halting the timer loop.
-- **Recommendation:** Replace with the imported `timedelta` (`warning_datetime - timedelta(seconds=60)`), and add a small test or manual verification for the scheduled reboot path.
+### <span style="color: yellow;">[High] Scheduled reboot crashes due to `datetime.timedelta`</span>
+- <span style="color: yellow;">**Description:** `check_reboot_schedule` calls `datetime.timedelta(...)` even though `datetime` is the class imported from `datetime` and does not expose `timedelta` (`main_display.py:2359`).</span>
+- <span style="color: yellow;">**Why it matters:** When auto-reboot is enabled, this raises `AttributeError`, breaking the reboot scheduler and potentially spamming the UI/logs or halting the timer loop.</span>
+- <span style="color: yellow;">**Update:** Switched to the imported `timedelta` when computing the warning time to avoid the `AttributeError`; scheduled reboot warnings should now trigger reliably.</span>
 
 ### [High] Admin web endpoints are unauthenticated
 - **Description:** The web server exposes sensitive actions (update, reboot, shutdown, SSH key generation, SSL cert generation, timezone changes) without authentication or CSRF protection (`web_settings_server.py:525`, `web_settings_server.py:704`, `web_settings_server.py:797`, `web_settings_server.py:982`, `web_settings_server.py:1001`, `web_settings_server.py:1014`).
 - **Why it matters:** Anyone on the network (including in AP/captive mode) can trigger system updates, reboots, or key generation. This is a high-impact security exposure.
 - **Recommendation:** Add an auth layer (shared secret/token, HTTP basic auth, or Tailscale-only access), CSRF protection for POSTs, and consider binding the server to localhost by default with explicit opt-in for remote access.
 
-### [High] Jinja loop for `@font-face` is malformed
-- **Description:** The `change_font` template includes a broken Jinja loop (`templates/change_font.html:9-22`). The `{% for %}` and `{% endfor %}` tags are separated and will render as literal text; `{{ font.name }}` becomes undefined.
-- **Why it matters:** The dynamic `@font-face` declarations do not render, so font previews and loading are unreliable or broken.
-- **Recommendation:** Fix the template tags to proper Jinja syntax:
-  ```jinja
-  {% for font in fonts %}
-  @font-face {
-    font-family: '{{ font.name }}';
-    src: url('/api/font-file/{{ font.name | urlencode }}') format('truetype');
-    font-display: swap;
-  }
-  {% endfor %}
-  ```
+### <span style="color: yellow;">[High] Jinja loop for `@font-face` is malformed</span>
+- <span style="color: yellow;">**Description:** The `change_font` template includes a broken Jinja loop (`templates/change_font.html:9-22`). The `{% for %}` and `{% endfor %}` tags are separated and will render as literal text; `{{ font.name }}` becomes undefined.</span>
+- <span style="color: yellow;">**Why it matters:** The dynamic `@font-face` declarations do not render, so font previews and loading are unreliable or broken.</span>
+- <span style="color: yellow;">**Update:** Fixed `templates/change_font.html` to use a proper Jinja loop so dynamic `@font-face` rules render for each font.</span>
 
-### [Medium] Captive portal server never stops
-- **Description:** `start_portal_server` spins up a Flask server thread; `stop_portal_server` only flips a flag and does not actually stop the server (`wifi_setup.py:884-899`).
-- **Why it matters:** After “Close Setup Network,” the portal continues listening on port 80. Re-entering broadcast mode will likely fail to bind the port, and the portal may remain accessible on the LAN.
-- **Recommendation:** Use a stoppable server (`werkzeug.serving.make_server`) or a dedicated process you can terminate. Also guard against multiple starts by checking `portal_server_running` before spawning a new thread.
+### <span style="color: yellow;">[Medium] Captive portal server never stops</span>
+- <span style="color: yellow;">**Description:** `start_portal_server` spins up a Flask server thread; `stop_portal_server` only flips a flag and does not actually stop the server (`wifi_setup.py:884-899`).</span>
+- <span style="color: yellow;">**Why it matters:** After “Close Setup Network,” the portal continues listening on port 80. Re-entering broadcast mode will likely fail to bind the port, and the portal may remain accessible on the LAN.</span>
+- <span style="color: yellow;">**Update:** The captive portal now runs as a dedicated background process launched from `wifi_setup.py`, and `stop_portal_server` terminates it with a timeout/kill fallback; repeated starts are guarded.</span>
 
-### [Medium] SSID rendering allows JS injection in captive portal
-- **Description:** The WiFi portal builds inline `onclick` handlers with SSIDs embedded in JS strings (`templates/wifi_setup.html:279-299`). `escapeHtml` is HTML-safe but not JS-string-safe; HTML entities are decoded before the JS executes.
-- **Why it matters:** A malicious SSID containing quotes can break out of the string and inject script into the captive portal UI (XSS).
-- **Recommendation:** Avoid inline JS. Build DOM nodes and attach listeners with `addEventListener`, storing SSIDs in `data-*` attributes or closures; use `textContent` for display.
+### <span style="color: yellow;">[Medium] SSID rendering allows JS injection in captive portal</span>
+- <span style="color: yellow;">**Description:** The WiFi portal builds inline `onclick` handlers with SSIDs embedded in JS strings (`templates/wifi_setup.html:279-299`). `escapeHtml` is HTML-safe but not JS-string-safe; HTML entities are decoded before the JS executes.</span>
+- <span style="color: yellow;">**Why it matters:** A malicious SSID containing quotes can break out of the string and inject script into the captive portal UI (XSS).</span>
+- <span style="color: yellow;">**Update:** Rebuilt the captive portal network list and saved network actions with DOM nodes, `addEventListener` handlers, and `textContent` rendering to avoid JS-string interpolation.</span>
 
-### [Medium] Config/message writes are non-atomic and not synchronized
-- **Description:** `config_handler.save_config` and `message_handler.save_messages` perform read-modify-write without file locks or atomic writes (`config_handler.py:40-52`, `message_handler.py:76-84`).
-- **Why it matters:** The UI and web server can write concurrently, leading to lost updates or a partially written JSON file.
-- **Recommendation:** Use file locking (e.g., `fcntl.flock`) and write atomically (write to a temp file then `os.replace`). Consider consolidating writes into a single process/service if possible.
+### <span style="color: yellow;">[Medium] Config/message writes are non-atomic and not synchronized</span>
+- <span style="color: yellow;">**Description:** `ConfigStore.set_values` and `save_messages` performed read-modify-write without file locks or atomic writes (`services/config_store.py`, `services/message_store.py`).</span>
+- <span style="color: yellow;">**Why it matters:** The UI and web server can write concurrently, leading to lost updates or a partially written JSON file.</span>
+- <span style="color: yellow;">**Update:** Config and message writes now take an exclusive lock and write atomically (temp file + `os.replace`) via `services/file_store.py`.</span>
 
-### [Medium] Network calls have no timeout and run on the UI thread
-- **Description:** Metro API requests omit timeouts (`MetroAPI.py:38`, `MetroAPI.py:66`, `MetroAPI.py:91`), and the UI refresh path calls them directly on the Qt thread (`main_display.py:1544-1568`).
-- **Why it matters:** A stalled network call can freeze the UI, blocking input and timers.
-- **Recommendation:** Add conservative timeouts (e.g., 3–5 seconds) and move API fetches to a worker thread (Qt `QRunnable`/`QThreadPool`) or async worker that updates the UI on completion.
+### <span style="color: yellow;">[Medium] Network calls have no timeout and run on the UI thread</span>
+- <span style="color: yellow;">**Description:** Metro API requests omit timeouts (`MetroAPI.py:38`, `MetroAPI.py:66`, `MetroAPI.py:91`), and the UI refresh path calls them directly on the Qt thread (`main_display.py:1544-1568`).</span>
+- <span style="color: yellow;">**Why it matters:** A stalled network call can freeze the UI, blocking input and timers.</span>
+- <span style="color: yellow;">**Update:** Added Metro API request timeouts, moved arrivals refreshes to a `QThreadPool` worker, and exposed a configurable timeout on the display settings page.</span>
 
 ### <span style="color: green;">[Low] Update check interval changes do not propagate to running app</span>
 - <span style="color: green;">**Description:** The update check timer interval is read once on startup and never updated when `update_check_interval_seconds` changes (`main_display.py:700-704` vs. `main_display.py:1654-1718`).
 - <span style="color: green;">**Why it matters:** The web UI indicates the interval was saved, but the running display ignores it until restart.</span>
 - <span style="color: green;">**Update:** Config change notifications now refresh the update check timer interval at runtime.</span>
 
-### [Low] Hard-coded username in git operations
-- **Description:** Git operations are run as the fixed user `max` (`web_settings_server.py:634`, `web_settings_server.py:679`, `web_settings_server.py:811`).
-- **Why it matters:** This breaks portability and will fail on systems without that user or where file ownership differs.
-- **Recommendation:** Use the current user (from `os.getuid()`/`pwd.getpwuid`) or make the git user configurable in the config file.
+### <span style="color: yellow;">[Low] Hard-coded username in git operations</span>
+- <span style="color: yellow;">**Description:** Git operations are run as the fixed user `max` (`web_settings_server.py:634`, `web_settings_server.py:679`, `web_settings_server.py:811`).</span>
+- <span style="color: yellow;">**Why it matters:** This breaks portability and will fail on systems without that user or where file ownership differs.</span>
+- <span style="color: yellow;">**Update:** Git operations now resolve the current OS user via `os.getuid()`/`pwd.getpwuid` and use that user instead of a hard-coded name.</span>
 
 ## Testing Gaps
 - No automated tests for config/message migrations, scheduled reboot logic, or update flows. A small test suite with mocked subprocesses and API responses would catch regressions in these critical paths.

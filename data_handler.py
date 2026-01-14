@@ -96,6 +96,12 @@ class DataHandler:
         if cached is None:
             return self.fetch_predictions(station_id)
         return cached
+
+    def get_predictions_cache(self, station_id):
+        """
+        Get cached predictions data for a specific station without fetching.
+        """
+        return self._predictions_cache.get(station_id)
     
     def refresh(self):
         """
@@ -114,4 +120,3 @@ class DataHandler:
         cached_station_ids = list(self._predictions_cache.keys())
         for station_id in cached_station_ids:
             self.fetch_predictions(station_id)
-

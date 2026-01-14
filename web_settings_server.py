@@ -5,10 +5,10 @@ from services.background_jobs import background_jobs
 from services.config_store import ConfigStore
 from services.message_store import MessageStore
 from services.system_service import SystemService
-from services.update_service import UpdateServiceRunner, has_git_error, has_updates
+from services.update_service import UpdateServiceRunner, build_git_command, has_git_error, has_updates
 from services.system_actions import run_command, start_process
 import os
-from datetime import datetime
+from datetime import datetime, timedelta
 import sys
 import time
 import json
@@ -29,6 +29,58 @@ def _git_debug_log(message, include_stack=False):
 
 
 _data_lock = threading.Lock()
+
+
+def _get_boot_id():
+    try:
+        with open("/proc/sys/kernel/random/boot_id", "r") as handle:
+            return handle.read().strip()
+    except Exception:
+        return None
+
+
+def _clear_update_state(config_store):
+    config_store.set_values({
+        "update_requires_reboot": False,
+        "update_console_output": "",
+        "update_commit_message": "",
+        "update_boot_id": "",
+    })
+
+
+def _persist_update_state(config_store, console_output, commit_message=""):
+    updates = {
+        "update_requires_reboot": True,
+        "update_console_output": console_output or "",
+        "update_commit_message": commit_message or "",
+        "update_boot_id": _get_boot_id() or "",
+    }
+    config_store.set_values(updates)
+
+
+def _clear_update_state_if_rebooted(config_store):
+    if not config_store.get_bool("update_requires_reboot", False):
+        if config_store.get_str("update_boot_id", ""):
+            config_store.set_value("update_boot_id", "")
+        return
+
+    current_boot_id = _get_boot_id()
+    if not current_boot_id:
+        return
+
+    stored_boot_id = config_store.get_str("update_boot_id", "")
+    if stored_boot_id and stored_boot_id != current_boot_id:
+        _clear_update_state(config_store)
+    elif not stored_boot_id:
+        config_store.set_value("update_boot_id", current_boot_id)
+
+
+def _get_saved_update_state(config_store):
+    return {
+        "reboot_required": config_store.get_bool("update_requires_reboot", False),
+        "console_output": config_store.get_str("update_console_output", ""),
+        "commit_message": config_store.get_str("update_commit_message", ""),
+    }
 
 
 def is_git_operation_in_progress():
@@ -78,6 +130,17 @@ def _check_ssl_certs():
     """Check if SSL certificate files exist."""
     cert_path, key_path = _get_ssl_cert_paths()
     return cert_path is not None and key_path is not None
+
+
+def get_current_user():
+    """Resolve the current OS username for sudo/git operations."""
+    try:
+        import pwd
+
+        return pwd.getpwuid(os.getuid()).pw_name
+    except Exception:
+        user = os.environ.get("USER") or os.environ.get("USERNAME")
+        return user if user else None
 
 
 def get_pending_message_trigger():
@@ -193,9 +256,10 @@ def start_web_settings_server(data_handler, host="0.0.0.0", port=443):
     global _ssl_enabled
 
     config_store = ConfigStore()
+    _clear_update_state_if_rebooted(config_store)
     message_store = MessageStore()
     system_service = SystemService()
-    git_user = "max"
+    git_user = get_current_user()
     update_service = UpdateServiceRunner(
         working_dir=os.path.dirname(os.path.abspath(__file__)),
         git_user=git_user,
@@ -242,6 +306,33 @@ def start_web_settings_server(data_handler, host="0.0.0.0", port=443):
             return "Not available"
         except Exception:
             return "Not available"
+
+    def _get_reboot_warning_status():
+        config = config_store.load()
+        reboot_enabled = config.get("reboot_enabled", False)
+        reboot_time_str = config.get("reboot_time", "12:00 AM")
+        now = datetime.now()
+        target_epoch = None
+        seconds_until_reboot = None
+
+        if reboot_enabled:
+            try:
+                reboot_time = datetime.strptime(reboot_time_str, "%I:%M %p").time()
+                target_dt = datetime.combine(now.date(), reboot_time)
+                if target_dt <= now:
+                    target_dt += timedelta(days=1)
+                target_epoch = int(target_dt.timestamp())
+                seconds_until_reboot = int((target_dt - now).total_seconds())
+            except ValueError:
+                pass
+
+        return {
+            "reboot_enabled": reboot_enabled,
+            "reboot_time": reboot_time_str,
+            "target_epoch": target_epoch,
+            "seconds_until_reboot": seconds_until_reboot,
+            "server_now_epoch": int(now.timestamp()),
+        }
 
     def _check_tailscale_installed():
         """Check if tailscale is installed on the system."""
@@ -388,7 +479,9 @@ def start_web_settings_server(data_handler, host="0.0.0.0", port=443):
             update_check_interval=config_store.get_int("update_check_interval_seconds", 60),
             last_saved=_get_config_last_saved(),
             current_branch=current_branch,
-            configured_branch=configured_branch
+            configured_branch=configured_branch,
+            update_available=check_for_updates(),
+            update_state=_get_saved_update_state(config_store)
         )
 
     @app.get("/api-key")
@@ -563,7 +656,7 @@ def start_web_settings_server(data_handler, host="0.0.0.0", port=443):
         cwd = os.path.dirname(os.path.abspath(__file__))
         try:
             result = run_command(
-                ["sudo", "-u", "max", "git", "remote", "-v"],
+                build_git_command(["remote", "-v"], git_user=git_user),
                 cwd=cwd,
                 timeout_s=10,
                 log_label="git_remote_list",
@@ -607,7 +700,7 @@ def start_web_settings_server(data_handler, host="0.0.0.0", port=443):
         cwd = os.path.dirname(os.path.abspath(__file__))
         try:
             result = run_command(
-                ["sudo", "-u", "max", "git", "remote", "set-url", "origin", ssh_url],
+                build_git_command(["remote", "set-url", "origin", ssh_url], git_user=git_user),
                 cwd=cwd,
                 timeout_s=10,
                 log_label="git_remote_set",
@@ -731,9 +824,10 @@ def start_web_settings_server(data_handler, host="0.0.0.0", port=443):
                         }
                         # If update succeeded with changes, get the latest commit message
                         if updates_found and not done_payload["has_error"]:
-                            commit_message = update_service.get_latest_commit_message()
+                            commit_message = update_service.get_latest_commit_message() or ""
                             if commit_message:
                                 done_payload["commit_message"] = commit_message
+                            _persist_update_state(config_store, combined_output, commit_message)
                         _git_debug_log(f"api_update_run: done_payload={done_payload}")
                         yield "event: done\n"
                         yield f"data: {json.dumps(done_payload)}\n\n"
@@ -830,11 +924,16 @@ def start_web_settings_server(data_handler, host="0.0.0.0", port=443):
     @app.get("/api/git-branches")
     def api_git_branches():
         """Get list of available remote git branches."""
-        try:
-            branches = update_service.get_remote_branches(timeout=10)
-            return jsonify({"success": True, "branches": branches})
-        except Exception as e:
-            return jsonify({"success": False, "error": str(e), "branches": []}), 500
+        _git_debug_log("api_git_branches: Attempting to acquire git operation lock...")
+        with background_jobs.git_operation(caller="api_git_branches"):
+            _git_debug_log("api_git_branches: Lock acquired")
+            try:
+                branches = update_service.get_remote_branches(timeout=10)
+                return jsonify({"success": True, "branches": branches})
+            except Exception as e:
+                return jsonify({"success": False, "error": str(e), "branches": []}), 500
+            finally:
+                _git_debug_log("api_git_branches: Releasing git operation lock")
 
     @app.get("/api/current-branch")
     def api_current_branch():
@@ -941,6 +1040,10 @@ def start_web_settings_server(data_handler, host="0.0.0.0", port=443):
             "reboot_time": config_store.get_str("reboot_time", "12:00 AM")
         })
 
+    @app.get("/api/reboot-warning")
+    def api_reboot_warning():
+        return jsonify(_get_reboot_warning_status())
+
     @app.post("/api/reboot-config")
     def api_post_reboot_config():
         data = request.get_json()
@@ -996,6 +1099,15 @@ def start_web_settings_server(data_handler, host="0.0.0.0", port=443):
             refresh_rate_val = None
         if refresh_rate_val is not None:
             updates["refresh_rate_seconds"] = refresh_rate_val
+
+        # Update API timeout
+        api_timeout = form.get("api_timeout_seconds")
+        try:
+            api_timeout_val = int(api_timeout) if api_timeout is not None else None
+        except ValueError:
+            api_timeout_val = None
+        if api_timeout_val is not None:
+            updates["api_timeout_seconds"] = api_timeout_val
 
         # Update selections
         selected_line = form.get("selected_line")

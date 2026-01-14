@@ -1,5 +1,5 @@
 from PyQt5.QtWidgets import QApplication, QMainWindow, QVBoxLayout, QHBoxLayout, QGridLayout, QLabel, QWidget, QPushButton, QStackedWidget, QComboBox, QCheckBox, QSizePolicy, QSlider, QLineEdit, QGraphicsOpacityEffect
-from PyQt5.QtCore import QSize, Qt, QTimer, QEvent, QPropertyAnimation, QEasingCurve
+from PyQt5.QtCore import QSize, Qt, QTimer, QEvent, QPropertyAnimation, QEasingCurve, QObject, pyqtSignal, QRunnable, QThreadPool
 from PyQt5.QtGui import QFontDatabase, QColor, QPalette, QPixmap, QPainter, QIcon
 from MetroAPI import MetroAPI, MetroAPIError
 from data_handler import DataHandler
@@ -9,7 +9,6 @@ from services.settings_server_client import SettingsServerClient
 from services.system_service import SystemService
 from services.update_service import UpdateService
 from views.filters import TouchscreenComboViewFilter
-from views.overlays import RebootWarningOverlay
 from views.popouts import IPPopout, UpdatePopout, ShutdownPopout
 import os
 from services.system_actions import start_process
@@ -17,6 +16,31 @@ import random
 import time
 import argparse
 from datetime import datetime, timedelta
+
+class PredictionsFetchSignals(QObject):
+    success = pyqtSignal(str, int)
+    error = pyqtSignal(str, int, str)
+    finished = pyqtSignal(int)
+
+
+class PredictionsFetchWorker(QRunnable):
+    def __init__(self, data_handler, station_id, request_id):
+        super().__init__()
+        self.data_handler = data_handler
+        self.station_id = station_id
+        self.request_id = request_id
+        self.signals = PredictionsFetchSignals()
+
+    def run(self):
+        try:
+            self.data_handler.fetch_predictions(self.station_id)
+            self.signals.success.emit(self.station_id, self.request_id)
+        except MetroAPIError as exc:
+            self.signals.error.emit(self.station_id, self.request_id, str(exc))
+        except Exception as exc:
+            self.signals.error.emit(self.station_id, self.request_id, f"Failed to fetch arrivals: {exc}")
+        finally:
+            self.signals.finished.emit(self.request_id)
 
 class MainWindow(QMainWindow):
     # Metro line color mapping
@@ -95,9 +119,16 @@ class MainWindow(QMainWindow):
         
         # Error state tracking for refresh countdown (must be initialized before first data load)
         self.refresh_error_message = None
+        self.api_thread_pool = QThreadPool()
+        self.refresh_in_progress = False
+        self.active_station_id = None
+        self.pending_station_id = None
+        self.pending_refresh_source = None
+        self.refresh_request_id = 0
+        self.refresh_request_context = {}
         
-        # Track which arrival rows are showing actual time (persists across refreshes)
-        self.rows_showing_actual_time = set()
+        # Track which trains are showing actual time (persists across refreshes)
+        self.trains_showing_actual_time = []
         
         # Initialize settings with config values
         self.initialize_settings_from_config()
@@ -132,7 +163,6 @@ class MainWindow(QMainWindow):
         
         self.reboot_countdown_timer = None
         self.reboot_countdown_seconds = 0
-        self.reboot_warning_overlay = None
         self.reboot_scheduled_for_today = False  # Track if we already triggered reboot today
         
         # API key detection for retry after web interface adds key
@@ -204,40 +234,102 @@ class MainWindow(QMainWindow):
     
     def perform_initial_load(self):
         """Perform initial API data load after window is shown"""
-        try:
-            # Switch subtitle when we actually begin the API call
-            self.startup_status_label.setText("Connecting to Metro API...")
-            self.startup_status_label.setStyleSheet(f"font-family: {self.font_family}; font-size: 24px; color: #666;")
+        # Switch subtitle when we actually begin the API call
+        self.startup_status_label.setText("Connecting to Metro API...")
+        self.startup_status_label.setStyleSheet(f"font-family: {self.font_family}; font-size: 24px; color: #666;")
 
-            api_key = self.config_store.get_str('api_key')
-            if not api_key:
-                # Stay on startup page and prompt user to add API key
-                message = "API Key Missing. Add it by visiting nicoletrains.local"
-                self.startup_status_label.setText(message)
-                self.startup_status_label.setStyleSheet(f"font-family: {self.font_family}; font-size: 24px; color: #cc0000;")
-                # Start checking for API key to be added
-                self.waiting_for_api_key = True
-                self.api_key_check_timer.start(2000)  # Check every 2 seconds
-                return
-
-            # Stop API key check timer if it was running
-            self.waiting_for_api_key = False
-            self.api_key_check_timer.stop()
-
-            self.update_arrivals_display()
-            # Success - switch to home page and start timers
-            print("Switching to main schedule page at time:", datetime.now().strftime("%H:%M:%S"))
-            self.stack.setCurrentIndex(1)  # Home page
-            self.refresh_timer.start(self.refresh_rate_seconds * 1000)
-            self.countdown_timer.start(1000)
-        except MetroAPIError as e:
-            # Store error for reference
-            self.refresh_error_message = str(e)
-            # Update startup screen to show error
-            self.startup_status_label.setText(str(e))
+        api_key = self.config_store.get_str('api_key')
+        if not api_key:
+            # Stay on startup page and prompt user to add API key
+            message = "API Key Missing. Add it by visiting nicoletrains.local"
+            self.startup_status_label.setText(message)
             self.startup_status_label.setStyleSheet(f"font-family: {self.font_family}; font-size: 24px; color: #cc0000;")
-            # Show the action buttons
+            # Start checking for API key to be added
+            self.waiting_for_api_key = True
+            self.api_key_check_timer.start(2000)  # Check every 2 seconds
+            return
+
+        # Stop API key check timer if it was running
+        self.waiting_for_api_key = False
+        self.api_key_check_timer.stop()
+
+        station_id = self.config_store.get_str('selected_station')
+        if not station_id:
+            self.update_arrivals_display()
+            self.enter_home_page()
+            return
+
+        self.startup_status_label.setText("Loading arrivals...")
+        self.queue_predictions_refresh(station_id, source="startup")
+
+    def enter_home_page(self):
+        """Switch to the home page and start refresh timers."""
+        print("Switching to main schedule page at time:", datetime.now().strftime("%H:%M:%S"))
+        self.stack.setCurrentIndex(1)  # Home page
+        self.refresh_timer.start(self.refresh_rate_seconds * 1000)
+        self.countdown_timer.start(1000)
+
+    def queue_predictions_refresh(self, station_id, source):
+        if not station_id:
+            self.refresh_error_message = None
+            self.update_arrivals_display()
+            if source == "startup":
+                self.enter_home_page()
+            return
+
+        if self.refresh_in_progress:
+            if station_id != self.active_station_id:
+                self.pending_station_id = station_id
+                self.pending_refresh_source = source
+            return
+
+        self.refresh_in_progress = True
+        self.pending_station_id = None
+        self.pending_refresh_source = None
+        self.refresh_request_id += 1
+        request_id = self.refresh_request_id
+        self.refresh_request_context[request_id] = source
+        self.active_station_id = station_id
+
+        worker = PredictionsFetchWorker(self.data_handler, station_id, request_id)
+        worker.signals.success.connect(self.on_predictions_fetch_success)
+        worker.signals.error.connect(self.on_predictions_fetch_error)
+        worker.signals.finished.connect(self.on_predictions_fetch_finished)
+        self.api_thread_pool.start(worker)
+
+    def on_predictions_fetch_success(self, station_id, request_id):
+        source = self.refresh_request_context.get(request_id)
+        current_station_id = self.config_store.get_str('selected_station')
+        if station_id != current_station_id and source != "startup":
+            return
+        self.refresh_error_message = None
+        self.update_arrivals_display()
+        if source == "startup":
+            self.enter_home_page()
+
+    def on_predictions_fetch_error(self, station_id, request_id, message):
+        source = self.refresh_request_context.get(request_id)
+        current_station_id = self.config_store.get_str('selected_station')
+        if station_id != current_station_id and source != "startup":
+            return
+        self.refresh_error_message = message
+        if source == "startup":
+            self.startup_status_label.setText(message)
+            self.startup_status_label.setStyleSheet(f"font-family: {self.font_family}; font-size: 24px; color: #cc0000;")
             self.startup_buttons_container.show()
+            return
+        self.update_arrivals_display()
+
+    def on_predictions_fetch_finished(self, request_id):
+        self.refresh_in_progress = False
+        self.active_station_id = None
+        self.refresh_request_context.pop(request_id, None)
+        if self.pending_station_id:
+            pending_station_id = self.pending_station_id
+            pending_source = self.pending_refresh_source or "refresh"
+            self.pending_station_id = None
+            self.pending_refresh_source = None
+            self.queue_predictions_refresh(pending_station_id, pending_source)
     
     def check_for_api_key(self):
         """Check if API key has been added via web interface and retry initial load"""
@@ -720,6 +812,8 @@ class MainWindow(QMainWindow):
         row.time_label = time_label
         row.row_index = index
         row.base_color = bg_color  # Store base color for press effect
+        row.prediction_signature = None
+        row.prediction_arrival_minutes = None
         
         # Make row clickable with press effect
         row.mousePressEvent = lambda event: self.on_arrival_row_pressed(index)
@@ -739,19 +833,25 @@ class MainWindow(QMainWindow):
         row = self.arrival_rows[index]
         
         # Don't toggle if the row is empty (showing "—")
-        if row.time_label.text() == "—":
+        if row.time_label.text() == "—" or not row.prediction_signature or row.prediction_arrival_minutes is None:
             # Restore base color but don't toggle anything
             base_color = "#ffffff" if index % 2 == 0 else "#f5f5f5"
             row.setStyleSheet(f"background-color: {base_color};")
             return
         
         # Toggle the time display state
-        if index in self.rows_showing_actual_time:
+        matching_index = self.find_matching_toggle_index(
+            row.prediction_signature,
+            row.prediction_arrival_minutes
+        )
+        if matching_index is not None:
             # Row is currently showing actual time, toggle it off
-            self.rows_showing_actual_time.remove(index)
+            del self.trains_showing_actual_time[matching_index]
         else:
             # Row is not showing actual time, toggle it on
-            self.rows_showing_actual_time.add(index)
+            self.trains_showing_actual_time.append(
+                (row.prediction_signature, row.prediction_arrival_minutes)
+            )
         
         # Restore base color
         base_color = "#ffffff" if index % 2 == 0 else "#f5f5f5"
@@ -762,6 +862,15 @@ class MainWindow(QMainWindow):
     
     def calculate_actual_time(self, min_value):
         """Calculate the actual arrival time given minutes until arrival"""
+        arrival_time = self.calculate_actual_datetime(min_value)
+        if not arrival_time:
+            return None
+
+        # Format as 12-hour time with AM/PM, remove leading zero
+        return arrival_time.strftime("%I:%M %p").lstrip('0')
+
+    def calculate_actual_datetime(self, min_value):
+        """Calculate the actual arrival datetime given minutes until arrival."""
         # Handle special cases that shouldn't show actual time
         if min_value in ['ARR', 'BRD', '—']:
             return None
@@ -777,10 +886,57 @@ class MainWindow(QMainWindow):
         
         # Calculate actual arrival time
         now = datetime.now()
-        arrival_time = now + timedelta(minutes=minutes)
-        
-        # Format as 12-hour time with AM/PM, remove leading zero
-        return arrival_time.strftime("%I:%M %p").lstrip('0')
+        return now + timedelta(minutes=minutes)
+
+    def arrival_time_to_minutes(self, arrival_time):
+        """Convert an arrival datetime to minutes since midnight."""
+        if not arrival_time:
+            return None
+        return (arrival_time.hour * 60) + arrival_time.minute
+
+    def arrival_minutes_within_tolerance(self, minutes_a, minutes_b, tolerance=1):
+        """Return True if two minute-of-day values are within tolerance."""
+        if minutes_a is None or minutes_b is None:
+            return False
+        diff = abs(minutes_a - minutes_b)
+        diff = min(diff, 1440 - diff)
+        return diff <= tolerance
+
+    def normalize_prediction_value(self, value):
+        """Normalize prediction values for stable key creation."""
+        if value is None:
+            return ''
+        try:
+            if value != value:
+                return ''
+        except Exception:
+            return ''
+        return str(value)
+
+    def build_prediction_signature(self, prediction):
+        """Build a stable signature for a prediction to track it across refreshes."""
+        location_code = self.normalize_prediction_value(prediction.get('LocationCode'))
+        line = self.normalize_prediction_value(prediction.get('Line'))
+        group = self.normalize_prediction_value(prediction.get('Group'))
+        car = self.normalize_prediction_value(prediction.get('Car'))
+
+        signature = (location_code, line, group, car)
+        if not any(signature):
+            return None
+        return signature
+
+    def find_matching_toggle_index(self, signature, arrival_minutes):
+        """Find the index of a matching toggle using arrival-time tolerance."""
+        for idx, (toggle_signature, toggle_minutes) in enumerate(self.trains_showing_actual_time):
+            if signature != toggle_signature:
+                continue
+            if self.arrival_minutes_within_tolerance(arrival_minutes, toggle_minutes):
+                return idx
+        return None
+
+    def is_toggle_active(self, signature, arrival_minutes):
+        """Return True if a toggle matches the signature and arrival time."""
+        return self.find_matching_toggle_index(signature, arrival_minutes) is not None
     
     def update_arrivals_display(self):
         """Update the arrivals display with latest prediction data"""
@@ -794,30 +950,20 @@ class MainWindow(QMainWindow):
                 row.circle_label.setStyleSheet("background-color: #cccccc; border-radius: 10px;")
                 row.destination_label.setText("—")
                 row.time_label.setText("—")
-            self.rows_showing_actual_time.clear()
+            self.trains_showing_actual_time.clear()
             return
         
-        # Get predictions for the selected station
-        try:
-            predictions_data = self.data_handler.get_cached_predictions(station_id)
-        except MetroAPIError as e:
-            # Store error for display in countdown
-            self.refresh_error_message = str(e)
-            # Show empty rows when error occurs
-            for row in self.arrival_rows:
-                row.circle_label.setStyleSheet("background-color: #cccccc; border-radius: 10px;")
-                row.destination_label.setText("—")
-                row.time_label.setText("—")
-            self.rows_showing_actual_time.clear()
-            return
+        # Get cached predictions for the selected station
+        predictions_data = self.data_handler.get_predictions_cache(station_id)
         
         if predictions_data is None or predictions_data.empty:
             # No data available, show empty rows
+            empty_text = "—" if self.refresh_error_message else "No arrivals"
             for row in self.arrival_rows:
                 row.circle_label.setStyleSheet("background-color: #cccccc; border-radius: 10px;")
-                row.destination_label.setText("No arrivals")
+                row.destination_label.setText(empty_text)
                 row.time_label.setText("—")
-            self.rows_showing_actual_time.clear()
+            self.trains_showing_actual_time.clear()
             return
         
         # Apply filtering if enabled (use config flag to reflect remote changes)
@@ -834,7 +980,7 @@ class MainWindow(QMainWindow):
                         row.circle_label.setStyleSheet("background-color: #cccccc; border-radius: 10px;")
                         row.destination_label.setText("No arrivals")
                         row.time_label.setText("—")
-                    self.rows_showing_actual_time.clear()
+                    self.trains_showing_actual_time.clear()
                     return
         
         # Apply direction-based filtering if enabled
@@ -879,7 +1025,7 @@ class MainWindow(QMainWindow):
                         row.circle_label.setStyleSheet("background-color: #cccccc; border-radius: 10px;")
                         row.destination_label.setText("No arrivals")
                         row.time_label.setText("—")
-                    self.rows_showing_actual_time.clear()
+                    self.trains_showing_actual_time.clear()
                     return
         
         # Sort predictions by arrival time (Min field)
@@ -902,9 +1048,17 @@ class MainWindow(QMainWindow):
         )
         
         # Update each arrival row
+        visible_predictions = []
         for i, row in enumerate(self.arrival_rows):
             if i < len(sorted_predictions):
                 prediction = sorted_predictions[i]
+                prediction_signature = self.build_prediction_signature(prediction)
+                actual_datetime = self.calculate_actual_datetime(prediction.get('Min'))
+                arrival_minutes = self.arrival_time_to_minutes(actual_datetime)
+                row.prediction_signature = prediction_signature
+                row.prediction_arrival_minutes = arrival_minutes
+                if prediction_signature and arrival_minutes is not None:
+                    visible_predictions.append((prediction_signature, arrival_minutes))
                 
                 # Update row background to base color
                 base_color = "#ffffff" if i % 2 == 0 else "#f5f5f5"
@@ -926,7 +1080,10 @@ class MainWindow(QMainWindow):
                 elif isinstance(min_val, (int, float)) or (isinstance(min_val, str) and min_val.isdigit()):
                     time_text = f"{min_val} min"
                     # Add actual time if this row is clicked
-                    if i in self.rows_showing_actual_time:
+                    if prediction_signature and self.is_toggle_active(
+                        prediction_signature,
+                        arrival_minutes
+                    ):
                         actual_time = self.calculate_actual_time(min_val)
                         if actual_time:
                             time_text = f"{actual_time} • {min_val} min"
@@ -940,8 +1097,19 @@ class MainWindow(QMainWindow):
                 row.circle_label.setStyleSheet("background-color: #cccccc; border-radius: 10px;")
                 row.destination_label.setText("—")
                 row.time_label.setText("—")
-                # Clear arrival time toggle for empty rows
-                self.rows_showing_actual_time.discard(i)
+                row.prediction_signature = None
+                row.prediction_arrival_minutes = None
+
+        # Remove toggles for trains no longer visible
+        self.trains_showing_actual_time = [
+            (toggle_signature, toggle_minutes)
+            for toggle_signature, toggle_minutes in self.trains_showing_actual_time
+            if any(
+                toggle_signature == visible_signature
+                and self.arrival_minutes_within_tolerance(toggle_minutes, visible_minutes)
+                for visible_signature, visible_minutes in visible_predictions
+            )
+        ]
     
     def refresh_arrivals(self):
         """Refresh arrivals data from API and update display"""
@@ -951,17 +1119,10 @@ class MainWindow(QMainWindow):
         station_id = config.get('selected_station')
         
         if station_id:
-            try:
-                # Fetch fresh predictions from API
-                self.data_handler.fetch_predictions(station_id)
-                # Clear error message on success
-                self.refresh_error_message = None
-            except MetroAPIError as e:
-                # Store error message for display
-                self.refresh_error_message = str(e)
-        
-        # Update the display
-        self.update_arrivals_display()
+            self.queue_predictions_refresh(station_id, source="refresh")
+        else:
+            self.refresh_error_message = None
+            self.update_arrivals_display()
         
         # Reset countdown to configured refresh rate
         self.seconds_until_refresh = self.refresh_rate_seconds
@@ -1094,6 +1255,11 @@ class MainWindow(QMainWindow):
                     self.refresh_timer.stop()
                     self.refresh_timer.start(refresh_rate_seconds * 1000)  # Convert seconds to milliseconds
             self.seconds_until_refresh = refresh_rate_seconds
+        # API timeout
+        if should_update('api_timeout_seconds'):
+            timeout_seconds = config.get('api_timeout_seconds', 5)
+            if hasattr(self.data_handler, 'metro_api'):
+                self.data_handler.metro_api.set_timeout_seconds(timeout_seconds)
         # Background update check interval
         if should_update('update_check_interval_seconds') and hasattr(self, 'update_check_timer'):
             update_interval = config.get('update_check_interval_seconds', 60)
@@ -1504,6 +1670,7 @@ class MainWindow(QMainWindow):
         
         if not reboot_enabled:
             # Reset the flag when reboot is disabled
+            self.cancel_reboot()
             self.reboot_scheduled_for_today = False
             return
         
@@ -1520,7 +1687,7 @@ class MainWindow(QMainWindow):
             # Calculate the time when warning should appear (60 seconds before reboot)
             warning_datetime = datetime.combine(now.date(), reboot_time)
             warning_datetime = warning_datetime.replace(second=0, microsecond=0)
-            warning_time = (warning_datetime - datetime.timedelta(seconds=60)).time()
+            warning_time = (warning_datetime - timedelta(seconds=60)).time()
             
             # Create time objects for comparison (ignore seconds)
             current_minute = current_time.replace(second=0, microsecond=0)
@@ -1546,16 +1713,9 @@ class MainWindow(QMainWindow):
     def start_reboot_countdown(self):
         """Start the 60-second reboot countdown"""
         self.reboot_countdown_seconds = 60
-        
-        # Create and show overlay
-        if self.reboot_warning_overlay is None:
-            self.reboot_warning_overlay = RebootWarningOverlay(self.config_store, self)
-            self.reboot_warning_overlay.cancel_button.clicked.connect(self.cancel_reboot)
-        
-        # Set overlay to cover the entire window
-        self.reboot_warning_overlay.setGeometry(self.geometry())
-        self.reboot_warning_overlay.show()
-        self.reboot_warning_overlay.raise_()
+
+        self.update_reboot_warning_label(self.reboot_countdown_seconds)
+        self.show_reboot_warning()
         
         # Start countdown timer
         if self.reboot_countdown_timer is None:
@@ -1566,29 +1726,46 @@ class MainWindow(QMainWindow):
     
     def update_reboot_countdown(self):
         """Update the reboot countdown each second"""
+        if not self.config_store.get_bool('reboot_enabled', False):
+            self.cancel_reboot()
+            return
+
         self.reboot_countdown_seconds -= 1
         
         if self.reboot_countdown_seconds <= 0:
             # Time's up, perform reboot
             self.reboot_countdown_timer.stop()
-            if self.reboot_warning_overlay:
-                self.reboot_warning_overlay.hide()
+            self.hide_reboot_warning()
             self.perform_system_reboot()
         else:
-            # Update the overlay display
-            if self.reboot_warning_overlay:
-                self.reboot_warning_overlay.update_countdown(self.reboot_countdown_seconds)
+            self.update_reboot_warning_label(self.reboot_countdown_seconds)
     
     def cancel_reboot(self):
         """Cancel the scheduled reboot"""
         if self.reboot_countdown_timer:
             self.reboot_countdown_timer.stop()
-        
-        if self.reboot_warning_overlay:
-            self.reboot_warning_overlay.hide()
+
+        self.hide_reboot_warning()
         
         self.reboot_countdown_seconds = 0
         # Don't reset reboot_scheduled_for_today so it won't trigger again today
+
+    def show_reboot_warning(self):
+        if hasattr(self, "reboot_warning_container"):
+            self.reboot_warning_container.show()
+        if hasattr(self, "home_arrivals_layout") and hasattr(self, "home_arrivals_margins"):
+            left, _, right, bottom = self.home_arrivals_margins
+            self.home_arrivals_layout.setContentsMargins(left, 0, right, bottom)
+
+    def hide_reboot_warning(self):
+        if hasattr(self, "reboot_warning_container"):
+            self.reboot_warning_container.hide()
+        if hasattr(self, "home_arrivals_layout") and hasattr(self, "home_arrivals_margins"):
+            self.home_arrivals_layout.setContentsMargins(*self.home_arrivals_margins)
+
+    def update_reboot_warning_label(self, seconds):
+        if hasattr(self, "reboot_warning_label"):
+            self.reboot_warning_label.setText(f"Rebooting in {seconds} seconds")
     
     def perform_system_reboot(self):
         """Perform system reboot"""
@@ -1714,11 +1891,8 @@ class MainWindow(QMainWindow):
         self.config_store.refresh_if_changed()
         
         # Refresh the arrivals display immediately
-        try:
-            self.refresh_error_message = None  # Clear any previous error
-            self.refresh_arrivals()
-        except MetroAPIError as e:
-            self.refresh_error_message = str(e)
+        self.refresh_error_message = None  # Clear any previous error
+        self.refresh_arrivals()
     
     def schedule_next_message(self):
         """Calculate and schedule the next automatic message display"""
@@ -2202,7 +2376,7 @@ class MainWindow(QMainWindow):
 
         self.update_notification_label = QLabel("Update Available")
         self.update_notification_label.setStyleSheet(
-            """
+            f"""
             font-family: {self.font_family};
             font-size: 14px;
             font-weight: bold;
@@ -2287,8 +2461,12 @@ class MainWindow(QMainWindow):
 
     def build_home_arrivals_content(self):
         content_layout = QVBoxLayout()
-        content_layout.setContentsMargins(20, 20, 20, 20)
+        self.home_arrivals_margins = (20, 20, 20, 20)
+        content_layout.setContentsMargins(*self.home_arrivals_margins)
         content_layout.setSpacing(0)
+        self.home_arrivals_layout = content_layout
+
+        content_layout.addWidget(self.build_reboot_warning_banner())
 
         self.arrival_rows = []
         for i in range(5):
@@ -2301,6 +2479,73 @@ class MainWindow(QMainWindow):
         content_widget = QWidget()
         content_widget.setLayout(content_layout)
         return content_widget
+
+    def build_reboot_warning_banner(self):
+        self.reboot_warning_container = QWidget()
+        self.reboot_warning_container.setStyleSheet("background-color: transparent;")
+        self.reboot_warning_container.setFixedHeight(50)
+
+        # Horizontal layout for label and button
+        content_layout = QHBoxLayout()
+        content_layout.setContentsMargins(0, 0, 0, 0)
+        content_layout.setSpacing(10)
+        content_layout.setAlignment(Qt.AlignCenter)
+
+        self.reboot_warning_label = QLabel("Rebooting in 60 seconds")
+        self.reboot_warning_label.setStyleSheet(
+            f"""
+            font-family: {self.font_family};
+            font-size: 14px;
+            font-weight: bold;
+            color: #721c24;
+            background-color: #f8d7da;
+            padding: 4px 8px;
+            border-radius: 4px;
+        """
+        )
+        self.reboot_warning_label.setAlignment(Qt.AlignCenter)
+        self.reboot_warning_label.setWordWrap(False)
+        content_layout.addWidget(self.reboot_warning_label)
+
+        self.reboot_cancel_button = QPushButton("Cancel")
+        self.reboot_cancel_button.setStyleSheet(
+            f"""
+            QPushButton {{
+                font-family: {self.font_family};
+                font-size: 12px;
+                font-weight: bold;
+                padding: 3px 8px;
+                background-color: #ffffff;
+                color: #721c24;
+                border: 1px solid #f5c6cb;
+                border-radius: 4px;
+            }}
+            QPushButton:hover {{
+                background-color: #f8d7da;
+            }}
+            QPushButton:pressed {{
+                background-color: #f5c6cb;
+                padding-bottom: 2px;
+            }}
+        """
+        )
+        self.reboot_cancel_button.clicked.connect(self.cancel_reboot)
+        content_layout.addWidget(self.reboot_cancel_button)
+
+        # Wrap the horizontal content to allow alignment on the parent layout
+        content_widget = QWidget()
+        content_widget.setLayout(content_layout)
+
+        # Vertical layout to center content within fixed height
+        warning_layout = QVBoxLayout()
+        warning_layout.setContentsMargins(0, 0, 0, 0)
+        warning_layout.setSpacing(0)
+        warning_layout.setAlignment(Qt.AlignCenter)
+        warning_layout.addWidget(content_widget, alignment=Qt.AlignCenter)
+
+        self.reboot_warning_container.setLayout(warning_layout)
+        self.reboot_warning_container.hide()
+        return self.reboot_warning_container
     
     def create_home_page(self):
         """Create the home page"""
@@ -2946,7 +3191,8 @@ def main():
     working_dir = os.path.dirname(os.path.abspath(__file__))
     update_service = UpdateService(settings_server, working_dir=working_dir)
 
-    metro_api = MetroAPI(config_store.get_str('api_key', ''))
+    api_timeout_seconds = config_store.get_int('api_timeout_seconds', 5)
+    metro_api = MetroAPI(config_store.get_str('api_key', ''), timeout_seconds=api_timeout_seconds)
     data_handler = DataHandler(metro_api)
 
     try:
