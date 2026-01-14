@@ -11,10 +11,10 @@ Reviewed the Python application (PyQt5 main display, Flask settings server, WiFi
 - <span style="color: yellow;">**Why it matters:** When auto-reboot is enabled, this raises `AttributeError`, breaking the reboot scheduler and potentially spamming the UI/logs or halting the timer loop.</span>
 - <span style="color: yellow;">**Update:** Switched to the imported `timedelta` when computing the warning time to avoid the `AttributeError`; scheduled reboot warnings should now trigger reliably.</span>
 
-### [High] Admin web endpoints are unauthenticated
-- **Description:** The web server exposes sensitive actions (update, reboot, shutdown, SSH key generation, SSL cert generation, timezone changes) without authentication or CSRF protection (`web_settings_server.py:525`, `web_settings_server.py:704`, `web_settings_server.py:797`, `web_settings_server.py:982`, `web_settings_server.py:1001`, `web_settings_server.py:1014`).
-- **Why it matters:** Anyone on the network (including in AP/captive mode) can trigger system updates, reboots, or key generation. This is a high-impact security exposure.
-- **Recommendation:** Add an auth layer (shared secret/token, HTTP basic auth, or Tailscale-only access), CSRF protection for POSTs, and consider binding the server to localhost by default with explicit opt-in for remote access.
+### <span style="color: yellow;">[High] Admin web endpoints are unauthenticated</span>
+- <span style="color: yellow;">**Description:** The web server exposes sensitive actions (update, reboot, shutdown, SSH key generation, SSL cert generation, timezone changes) without authentication or CSRF protection (`web_settings_server.py:525`, `web_settings_server.py:704`, `web_settings_server.py:797`, `web_settings_server.py:982`, `web_settings_server.py:1001`, `web_settings_server.py:1014`).</span>
+- <span style="color: yellow;">**Why it matters:** Anyone on the network (including in AP/captive mode) can trigger system updates, reboots, or key generation. This is a high-impact security exposure.</span>
+- <span style="color: yellow;">**Update:** Added session-based login with per-user credentials, CSRF checks for POSTs, and a User Access page to add/change/remove accounts; all web settings routes now require authentication.</span>
 
 ### <span style="color: yellow;">[High] Jinja loop for `@font-face` is malformed</span>
 - <span style="color: yellow;">**Description:** The `change_font` template includes a broken Jinja loop (`templates/change_font.html:9-22`). The `{% for %}` and `{% endfor %}` tags are separated and will render as literal text; `{{ font.name }}` becomes undefined.</span>

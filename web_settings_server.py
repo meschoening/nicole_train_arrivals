@@ -1,13 +1,15 @@
 import threading
-from flask import Flask, request, jsonify, render_template, redirect, url_for, Response
+from flask import Flask, request, jsonify, render_template, redirect, url_for, Response, session
 from subprocess import PIPE, STDOUT
 from services.background_jobs import background_jobs
 from services.config_store import ConfigStore
 from services.message_store import MessageStore
+from services.user_store import UserStore
 from services.system_service import SystemService
 from services.update_service import UpdateServiceRunner, build_git_command, has_git_error, has_updates
 from services.system_actions import run_command, start_process
 import os
+import secrets
 from datetime import datetime, timedelta
 import sys
 import time
@@ -276,6 +278,83 @@ def start_web_settings_server(data_handler, host="0.0.0.0", port=443):
         port = 80  # Fall back to HTTP port
     
     app = Flask(__name__, template_folder="templates")
+    user_store = UserStore()
+
+    def _ensure_session_secret():
+        secret = config_store.get_str("web_session_secret", "")
+        if not secret:
+            secret = secrets.token_hex(32)
+            config_store.set_value("web_session_secret", secret)
+        return secret
+
+    app.secret_key = _ensure_session_secret()
+    app.config.update({
+        "SESSION_COOKIE_HTTPONLY": True,
+        "SESSION_COOKIE_SAMESITE": "Lax",
+        "SESSION_COOKIE_SECURE": _ssl_enabled,
+    })
+
+    def _ensure_csrf_token():
+        token = session.get("csrf_token")
+        if not token:
+            token = secrets.token_urlsafe(32)
+            session["csrf_token"] = token
+        return token
+
+    def _validate_csrf_token():
+        token = session.get("csrf_token")
+        if not token:
+            return False
+        submitted = request.form.get("csrf_token")
+        if not submitted:
+            submitted = request.headers.get("X-CSRF-Token")
+        if not submitted and request.is_json:
+            data = request.get_json(silent=True) or {}
+            submitted = data.get("csrf_token")
+        return secrets.compare_digest(token, submitted or "")
+
+    def _is_safe_next(next_url):
+        if not next_url:
+            return None
+        if next_url.startswith("/") and not next_url.startswith("//"):
+            return next_url
+        return None
+
+    def _is_authenticated():
+        return bool(session.get("user"))
+
+    def _auth_required_response():
+        if request.path.startswith("/api/"):
+            return jsonify({"error": "authentication_required"}), 401
+        next_url = _is_safe_next(request.full_path or request.path)
+        return redirect(url_for("login", next=next_url))
+
+    default_user = user_store.ensure_default_user()
+    if default_user:
+        config_store.set_values({
+            "initial_admin_username": default_user["username"],
+            "initial_admin_password": default_user["password"],
+        })
+
+    @app.context_processor
+    def inject_auth_context():
+        return {
+            "current_user": session.get("user"),
+            "csrf_token": _ensure_csrf_token(),
+            "force_password_change": session.get("must_change_password", False),
+        }
+
+    @app.before_request
+    def enforce_authentication():
+        if request.path in ("/login", "/logout"):
+            if request.method == "POST" and not _validate_csrf_token():
+                return "Invalid CSRF token", 400
+            return None
+        if not _is_authenticated():
+            return _auth_required_response()
+        if request.method == "POST" and not _validate_csrf_token():
+            return "Invalid CSRF token", 400
+        return None
 
     def _get_config_last_saved():
         config_path = config_store.path
@@ -393,6 +472,105 @@ def start_web_settings_server(data_handler, host="0.0.0.0", port=443):
             return local_head != remote_head
         except Exception:
             return False
+
+    @app.get("/login")
+    def login():
+        return render_template(
+            "login.html",
+            display_name=_get_display_name(),
+            error=None,
+            next=_is_safe_next(request.args.get("next")),
+            initial_admin_username=config_store.get_str("initial_admin_username", ""),
+            initial_admin_password=config_store.get_str("initial_admin_password", ""),
+        )
+
+    @app.post("/login")
+    def post_login():
+        username = request.form.get("username", "").strip()
+        password = request.form.get("password", "")
+        user = user_store.verify_user(username, password)
+        if not user:
+            return render_template(
+                "login.html",
+                display_name=_get_display_name(),
+                error="Invalid username or password.",
+                next=_is_safe_next(request.form.get("next")),
+                initial_admin_username=config_store.get_str("initial_admin_username", ""),
+                initial_admin_password=config_store.get_str("initial_admin_password", ""),
+            ), 401
+
+        session.clear()
+        session["user"] = user.get("username", "")
+        session["must_change_password"] = bool(user.get("must_change_password", False))
+        _ensure_csrf_token()
+
+        initial_username = config_store.get_str("initial_admin_username", "")
+        initial_password = config_store.get_str("initial_admin_password", "")
+        if initial_password and initial_username == user.get("username", ""):
+            config_store.set_values({
+                "initial_admin_username": "",
+                "initial_admin_password": "",
+            })
+
+        next_url = _is_safe_next(request.form.get("next"))
+        return redirect(next_url or url_for("index"))
+
+    @app.get("/logout")
+    def logout():
+        session.clear()
+        return redirect(url_for("login"))
+
+    def _render_users_page(message=None, error=None):
+        users = user_store.list_users()
+        return render_template(
+            "users.html",
+            users=users,
+            message=message,
+            error=error,
+            display_name=_get_display_name(),
+            current_username=session.get("user", ""),
+        )
+
+    @app.get("/users")
+    def get_users():
+        return _render_users_page()
+
+    @app.post("/users/add")
+    def post_add_user():
+        username = request.form.get("username", "").strip()
+        password = request.form.get("password", "")
+        confirm_password = request.form.get("confirm_password", "")
+        if password != confirm_password:
+            return _render_users_page(error="Passwords do not match.")
+        success, error = user_store.add_user(username, password)
+        if not success:
+            return _render_users_page(error=error)
+        return _render_users_page(message="User added.")
+
+    @app.post("/users/password")
+    def post_update_password():
+        username = request.form.get("username", "").strip()
+        password = request.form.get("password", "")
+        confirm_password = request.form.get("confirm_password", "")
+        if password != confirm_password:
+            return _render_users_page(error="Passwords do not match.")
+        success, error = user_store.set_password(username, password)
+        if not success:
+            return _render_users_page(error=error)
+        if session.get("user") == username.strip().lower():
+            session["must_change_password"] = False
+        return _render_users_page(message="Password updated.")
+
+    @app.post("/users/remove")
+    def post_remove_user():
+        username = request.form.get("username", "").strip()
+        success, error = user_store.remove_user(username)
+        if not success:
+            return _render_users_page(error=error)
+        if session.get("user") == username.strip().lower():
+            session.clear()
+            return redirect(url_for("login"))
+        return _render_users_page(message="User removed.")
 
     @app.get("/messages")
     def get_messages():

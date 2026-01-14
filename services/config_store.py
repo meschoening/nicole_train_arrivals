@@ -133,6 +133,9 @@ CONFIG_SCHEMA = {
     "show_countdown": ConfigField(True, _coerce_bool),
     "filter_by_direction": ConfigField(False, _coerce_bool),
     "filter_by_destination_direction": ConfigField(False, _coerce_bool),
+    "web_session_secret": ConfigField("", _coerce_str),
+    "initial_admin_username": ConfigField("", _coerce_str),
+    "initial_admin_password": ConfigField("", _coerce_str),
 }
 
 DEFAULT_CONFIG = {key: field.default for key, field in CONFIG_SCHEMA.items()}

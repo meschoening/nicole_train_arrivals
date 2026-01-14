@@ -4,6 +4,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="csrf-token" content="{{ csrf_token }}">
   <title>Title Message Settings - {{ display_name }}</title>
   <style>
     body {
@@ -202,6 +203,7 @@
     <h2>Title Message Display Settings</h2>
 
     <form id="messagesForm">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
       <div class="message-list-container">
         <h3>Custom Messages</h3>
         <div class="message-list" id="messageList">
@@ -306,6 +308,7 @@
   </div>
 
   <script>
+    const csrfToken = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
     // Helper function to convert hex to RGB
     function hexToRgb(hex) {
       // Remove # if present
@@ -545,7 +548,7 @@
       try {
         const response = await fetch('/api/trigger_message', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken },
           body: JSON.stringify({ message: message })
         });
 
@@ -617,7 +620,7 @@
     try {
       const response = await fetch('/messages', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken },
         body: JSON.stringify(data)
       });
 

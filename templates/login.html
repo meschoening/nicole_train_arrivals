@@ -1,0 +1,100 @@
+<!doctype html>
+<html>
+
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="csrf-token" content="{{ csrf_token }}">
+  <title>Sign In - {{ display_name }}</title>
+  <style>
+    body {
+      font-family: sans-serif;
+      margin: 0;
+      padding: 0;
+    }
+
+    .container {
+      max-width: 520px;
+      margin: 0 auto;
+      padding: 32px 24px;
+    }
+
+    .row {
+      margin-bottom: 12px;
+    }
+
+    label {
+      display: inline-block;
+      min-width: 120px;
+      font-weight: bold;
+    }
+
+    input[type="text"],
+    input[type="password"] {
+      padding: 8px;
+      font-size: 14px;
+      width: 260px;
+    }
+
+    button {
+      padding: 10px 16px;
+      font-weight: bold;
+      cursor: pointer;
+    }
+
+    .notice {
+      background: #fff3cd;
+      border: 1px solid #ffc107;
+      color: #856404;
+      padding: 10px 14px;
+      border-radius: 6px;
+      margin-bottom: 16px;
+    }
+
+    .error {
+      background: #f8d7da;
+      border: 1px solid #f5c6cb;
+      color: #721c24;
+      padding: 10px 14px;
+      border-radius: 6px;
+      margin-bottom: 16px;
+    }
+  </style>
+</head>
+
+<body>
+  <div class="container">
+    <h2>Nicole's Train Tracker: Sign In</h2>
+
+    {% if initial_admin_password %}
+    <div class="notice">
+      <strong>First-time setup:</strong> A default user was created.<br>
+      Username: <strong>{{ initial_admin_username }}</strong><br>
+      Password: <strong>{{ initial_admin_password }}</strong><br>
+      Please sign in and update the password on the User Access page.
+    </div>
+    {% endif %}
+
+    {% if error %}
+    <div class="error">{{ error }}</div>
+    {% endif %}
+
+    <form method="post" action="/login">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+      <input type="hidden" name="next" value="{{ next or '' }}">
+      <div class="row">
+        <label for="username">Username</label>
+        <input type="text" id="username" name="username" autocomplete="username" required>
+      </div>
+      <div class="row">
+        <label for="password">Password</label>
+        <input type="password" id="password" name="password" autocomplete="current-password" required>
+      </div>
+      <div class="row">
+        <button type="submit">Sign In</button>
+      </div>
+    </form>
+  </div>
+</body>
+
+</html>

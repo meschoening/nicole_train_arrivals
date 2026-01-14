@@ -4,6 +4,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="csrf-token" content="{{ csrf_token }}">
   <title>Display Settings - {{ display_name }}</title>
   <style>
     body {
@@ -73,6 +74,7 @@
     <h2>Schedule Display Settings</h2>
 
     <form method="post" action="/settings" id="settingsForm">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
       <div class="row">
         <label for="selected_line">Line</label>
         <select id="selected_line" name="selected_line">

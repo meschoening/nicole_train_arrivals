@@ -1,0 +1,250 @@
+<!doctype html>
+<html>
+
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="csrf-token" content="{{ csrf_token }}">
+  <title>User Access - {{ display_name }}</title>
+  <style>
+    body {
+      font-family: sans-serif;
+      margin: 0;
+      padding: 0;
+    }
+
+    .container {
+      max-width: 720px;
+      margin: 0 auto;
+      padding: 24px;
+    }
+
+    .row {
+      margin-bottom: 12px;
+    }
+
+    label {
+      display: inline-block;
+      min-width: 160px;
+      font-weight: bold;
+    }
+
+    input[type="text"],
+    input[type="password"],
+    select {
+      padding: 6px;
+      font-size: 14px;
+      width: 240px;
+    }
+
+    button {
+      padding: 8px 14px;
+      font-weight: bold;
+      cursor: pointer;
+    }
+
+    a.btn {
+      text-decoration: none;
+      display: inline-block;
+      padding: 8px 14px;
+      border-radius: 6px;
+      background: #f0f0f0;
+      color: #000;
+      font-weight: 700;
+      border: 1px solid #ddd;
+    }
+
+    a.btn:hover {
+      background: #e6e6e6;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 8px;
+    }
+
+    th,
+    td {
+      border-bottom: 1px solid #ddd;
+      padding: 8px 6px;
+      text-align: left;
+      font-size: 14px;
+    }
+
+    th {
+      background: #f6f6f6;
+    }
+
+    .badge {
+      display: inline-block;
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-size: 12px;
+      background: #eee;
+      color: #555;
+      margin-left: 6px;
+    }
+
+    .notice {
+      background: #fff3cd;
+      border: 1px solid #ffc107;
+      color: #856404;
+      padding: 10px 14px;
+      border-radius: 6px;
+      margin-bottom: 16px;
+    }
+
+    .error {
+      background: #f8d7da;
+      border: 1px solid #f5c6cb;
+      color: #721c24;
+      padding: 10px 14px;
+      border-radius: 6px;
+      margin-bottom: 16px;
+    }
+
+    .success {
+      background: #d4edda;
+      border: 1px solid #c3e6cb;
+      color: #155724;
+      padding: 10px 14px;
+      border-radius: 6px;
+      margin-bottom: 16px;
+    }
+
+    .section {
+      border: 1px solid #ddd;
+      border-radius: 8px;
+      padding: 16px;
+      margin-top: 18px;
+      background: #fafafa;
+    }
+  </style>
+</head>
+
+<body>
+  <div class="container">
+    <div class="row">
+      <a href="{{ url_for('index') }}" class="btn">← Back</a>
+      <a href="{{ url_for('logout') }}" class="btn" style="margin-left: 8px;">Sign out</a>
+    </div>
+
+    <h2>User Access</h2>
+
+    {% if force_password_change %}
+    <div class="notice">
+      Your account requires a password update. Use the "Change Password" form below.
+    </div>
+    {% endif %}
+
+    {% if error %}
+    <div class="error">{{ error }}</div>
+    {% endif %}
+
+    {% if message %}
+    <div class="success">{{ message }}</div>
+    {% endif %}
+
+    <div class="section">
+      <h3>Existing Users</h3>
+      <table>
+        <thead>
+          <tr>
+            <th>Username</th>
+            <th>Updated</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for user in users %}
+          <tr>
+            <td>
+              {{ user.username }}
+              {% if current_username == user.username %}
+              <span class="badge">current</span>
+              {% endif %}
+              {% if user.must_change_password %}
+              <span class="badge">needs update</span>
+              {% endif %}
+            </td>
+            <td>{{ user.updated_at or user.created_at }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+
+    <div class="section">
+      <h3>Add User</h3>
+      <form method="post" action="/users/add">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+        <div class="row">
+          <label for="new_username">Username</label>
+          <input type="text" id="new_username" name="username" required>
+        </div>
+        <div class="row">
+          <label for="new_password">Password</label>
+          <input type="password" id="new_password" name="password" required>
+        </div>
+        <div class="row">
+          <label for="new_password_confirm">Confirm Password</label>
+          <input type="password" id="new_password_confirm" name="confirm_password" required>
+        </div>
+        <div class="row">
+          <button type="submit">Add User</button>
+        </div>
+      </form>
+    </div>
+
+    <div class="section">
+      <h3>Change Password</h3>
+      <form method="post" action="/users/password">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+        <div class="row">
+          <label for="change_username">User</label>
+          <select id="change_username" name="username">
+            {% for user in users %}
+            <option value="{{ user.username }}" {% if current_username==user.username %}selected{% endif %}>
+              {{ user.username }}
+            </option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="row">
+          <label for="change_password">New Password</label>
+          <input type="password" id="change_password" name="password" required>
+        </div>
+        <div class="row">
+          <label for="change_password_confirm">Confirm Password</label>
+          <input type="password" id="change_password_confirm" name="confirm_password" required>
+        </div>
+        <div class="row">
+          <button type="submit">Update Password</button>
+        </div>
+      </form>
+    </div>
+
+    <div class="section">
+      <h3>Remove User</h3>
+      <form method="post" action="/users/remove">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+        <div class="row">
+          <label for="remove_username">User</label>
+          <select id="remove_username" name="username">
+            {% for user in users %}
+            <option value="{{ user.username }}">{{ user.username }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="row">
+          <button type="submit" {% if users|length <= 1 %}disabled{% endif %}>Remove User</button>
+          {% if users|length <= 1 %}
+          <span style="color:#666; margin-left: 8px;">At least one user is required.</span>
+          {% endif %}
+        </div>
+      </form>
+    </div>
+  </div>
+</body>
+
+</html>

@@ -1,4 +1,5 @@
 config.json
+users.json
 __pycache__/
 autostart.sh
 usage.csv
