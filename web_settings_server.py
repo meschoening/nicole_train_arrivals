@@ -31,6 +31,58 @@ def _git_debug_log(message, include_stack=False):
 _data_lock = threading.Lock()
 
 
+def _get_boot_id():
+    try:
+        with open("/proc/sys/kernel/random/boot_id", "r") as handle:
+            return handle.read().strip()
+    except Exception:
+        return None
+
+
+def _clear_update_state(config_store):
+    config_store.set_values({
+        "update_requires_reboot": False,
+        "update_console_output": "",
+        "update_commit_message": "",
+        "update_boot_id": "",
+    })
+
+
+def _persist_update_state(config_store, console_output, commit_message=""):
+    updates = {
+        "update_requires_reboot": True,
+        "update_console_output": console_output or "",
+        "update_commit_message": commit_message or "",
+        "update_boot_id": _get_boot_id() or "",
+    }
+    config_store.set_values(updates)
+
+
+def _clear_update_state_if_rebooted(config_store):
+    if not config_store.get_bool("update_requires_reboot", False):
+        if config_store.get_str("update_boot_id", ""):
+            config_store.set_value("update_boot_id", "")
+        return
+
+    current_boot_id = _get_boot_id()
+    if not current_boot_id:
+        return
+
+    stored_boot_id = config_store.get_str("update_boot_id", "")
+    if stored_boot_id and stored_boot_id != current_boot_id:
+        _clear_update_state(config_store)
+    elif not stored_boot_id:
+        config_store.set_value("update_boot_id", current_boot_id)
+
+
+def _get_saved_update_state(config_store):
+    return {
+        "reboot_required": config_store.get_bool("update_requires_reboot", False),
+        "console_output": config_store.get_str("update_console_output", ""),
+        "commit_message": config_store.get_str("update_commit_message", ""),
+    }
+
+
 def is_git_operation_in_progress():
     """Check if a git operation is currently in progress."""
     result = background_jobs.is_git_operation_in_progress()
@@ -204,6 +256,7 @@ def start_web_settings_server(data_handler, host="0.0.0.0", port=443):
     global _ssl_enabled
 
     config_store = ConfigStore()
+    _clear_update_state_if_rebooted(config_store)
     message_store = MessageStore()
     system_service = SystemService()
     git_user = get_current_user()
@@ -427,7 +480,8 @@ def start_web_settings_server(data_handler, host="0.0.0.0", port=443):
             last_saved=_get_config_last_saved(),
             current_branch=current_branch,
             configured_branch=configured_branch,
-            update_available=check_for_updates()
+            update_available=check_for_updates(),
+            update_state=_get_saved_update_state(config_store)
         )
 
     @app.get("/api-key")
@@ -770,9 +824,10 @@ def start_web_settings_server(data_handler, host="0.0.0.0", port=443):
                         }
                         # If update succeeded with changes, get the latest commit message
                         if updates_found and not done_payload["has_error"]:
-                            commit_message = update_service.get_latest_commit_message()
+                            commit_message = update_service.get_latest_commit_message() or ""
                             if commit_message:
                                 done_payload["commit_message"] = commit_message
+                            _persist_update_state(config_store, combined_output, commit_message)
                         _git_debug_log(f"api_update_run: done_payload={done_payload}")
                         yield "event: done\n"
                         yield f"data: {json.dumps(done_payload)}\n\n"

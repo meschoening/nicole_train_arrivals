@@ -295,6 +295,7 @@
     const successLabelEl = document.getElementById('successLabel');
 
     let evtSource = null;
+    const savedUpdateState = {{ update_state | tojson }};
 
     function clearConsole() { consoleEl.textContent = ''; }
     function appendLine(line) { consoleEl.textContent += (line.endsWith('\n') ? line : line + '\n'); consoleEl.scrollTop = consoleEl.scrollHeight; }
@@ -304,9 +305,28 @@
     function showSuccessLabel(message) { successLabelEl.textContent = 'Installed Update: ' + message; successLabelEl.style.display = 'block'; }
     function hideSuccessLabel() { successLabelEl.style.display = 'none'; }
 
+    function applySavedUpdateState(state) {
+      if (!state || !state.reboot_required) {
+        return;
+      }
+      if (state.console_output) {
+        consoleEl.textContent = state.console_output;
+        consoleEl.scrollTop = consoleEl.scrollHeight;
+      }
+      setStatus('Update completed. Reboot required.', '#d49200');
+      showReboot(true);
+      if (state.commit_message) {
+        showSuccessLabel(state.commit_message);
+      } else {
+        hideSuccessLabel();
+      }
+    }
+
     function closeEventSource() {
       if (evtSource) { evtSource.close(); evtSource = null; }
     }
+
+    applySavedUpdateState(savedUpdateState);
 
     runBtn.addEventListener('click', () => {
       clearConsole();
