@@ -1,6 +1,8 @@
 config.json
+users.json
 __pycache__/
 autostart.sh
 usage.csv
 usage_calculator.py
 instructions.md
+design-principles.md

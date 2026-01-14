@@ -4,6 +4,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="csrf-token" content="{{ csrf_token }}">
   <title>Device Home - {{ display_name }}</title>
   <style>
     body {
@@ -53,6 +54,10 @@
 <body>
   <div class="container">
     {% include "_reboot_warning_bar.html" %}
+    {% if current_user %}
+    <div style="color:#666;margin:8px 0 16px;">Signed in as {{ current_user }} · <a
+        href="{{ url_for('logout') }}">Sign out</a></div>
+    {% endif %}
     <h2>Nicole's Train Tracker: Remote Control Dashboard</h2>
     <div style="color:#666;margin:8px 0 16px;">Device IP: {{ device_ip }}</div>
     <div style="color:#666;margin:8px 0 16px;">Tailscale Address: {{ tailscale_address }}</div>
@@ -76,6 +81,7 @@
       <a href="{{ url_for('get_messages') }}" class="btn">Title Messages</a>
       <a href="{{ url_for('get_change_font') }}" class="btn">Change Font</a>
       <a href="{{ url_for('get_api_key') }}" class="btn">Authentication Keys</a>
+      <a href="{{ url_for('get_users') }}" class="btn">User Access</a>
       <a href="{{ url_for('get_update') }}" class="btn">Software Update</a>
       <a href="{{ url_for('get_system_management') }}" class="btn">Power Management</a>
     </div>

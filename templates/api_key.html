@@ -4,6 +4,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="csrf-token" content="{{ csrf_token }}">
   <title>Manage Authentication Keys - {{ display_name }}</title>
   <style>
     body {
@@ -215,6 +216,7 @@
     <div class="section-box">
       <h3>Metro API Key</h3>
       <form method="post" action="/api-key" id="apiKeyForm">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
         <div class="row">
           <input type="text" id="api_key" name="api_key" value="{{ api_key }}" placeholder="Enter your API key"
             style="width: 100%; max-width: 460px;">
@@ -316,6 +318,7 @@
   </div>
 
   <script>
+    const csrfToken = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
     const apiKeyForm = document.getElementById('apiKeyForm');
     const lastSaved = document.getElementById('lastSaved');
     function markUnsaved() {
@@ -355,7 +358,7 @@
       try {
         const response = await fetch('/api/generate-ssh-key', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken },
           body: JSON.stringify({ email: email })
         });
 
@@ -551,7 +554,7 @@
       try {
         const response = await fetch('/api/regenerate-ssh-key', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken },
           body: JSON.stringify({ email: email })
         });
 
@@ -624,7 +627,7 @@
       try {
         const response = await fetch('/api/generate-ssl-cert', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' }
+          headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken }
         });
 
         const data = await response.json();

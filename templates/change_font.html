@@ -4,6 +4,7 @@
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="csrf-token" content="{{ csrf_token }}">
     <title>Change Font - {{ display_name }}</title>
     <style>
         /* Dynamic @font-face rules for each installed font */
@@ -258,6 +259,7 @@
     </div>
 
     <script>
+        const csrfToken = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
         const fontList = document.getElementById('fontList');
         const applyBtn = document.getElementById('applyBtn');
         const revertBtn = document.getElementById('revertBtn');
@@ -312,7 +314,7 @@
                 applyBtn.disabled = true;
                 applyBtn.textContent = 'Restarting...';
                 try {
-                    const res = await fetch('/api/restart-app', { method: 'POST' });
+                    const res = await fetch('/api/restart-app', { method: 'POST', headers: { 'X-CSRF-Token': csrfToken } });
                     const data = await res.json();
                     if (data.success) {
                         showStatus('Restarting application... Page will reload when ready.');
@@ -338,7 +340,7 @@
             try {
                 const res = await fetch('/api/font', {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
+                    headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken },
                     body: JSON.stringify({ font_family: selectedFont })
                 });
                 const data = await res.json();
@@ -400,7 +402,7 @@
             hideStatus();
 
             try {
-                const res = await fetch('/api/font/revert', { method: 'POST' });
+                const res = await fetch('/api/font/revert', { method: 'POST', headers: { 'X-CSRF-Token': csrfToken } });
                 const data = await res.json();
 
                 if (data.success) {
@@ -529,6 +531,7 @@
             });
 
             xhr.open('POST', '/api/font/upload');
+            xhr.setRequestHeader('X-CSRF-Token', csrfToken);
             xhr.send(formData);
         });
 

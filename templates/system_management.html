@@ -4,6 +4,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="csrf-token" content="{{ csrf_token }}">
   <title>System and Power Management - {{ display_name }}</title>
   <style>
     body {
@@ -149,6 +150,7 @@
   {% include "_reboot_overlay.html" %}
 
   <script>
+    const csrfToken = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
     const rebootBtn = document.getElementById('rebootBtn');
     const shutdownBtn = document.getElementById('shutdownBtn');
     const statusEl = document.getElementById('status');
@@ -199,7 +201,7 @@
         rebootBtn.disabled = true;
         setStatus('Rebooting system...', '#d49200');
         try {
-          await fetch('/api/reboot', { method: 'POST' });
+          await fetch('/api/reboot', { method: 'POST', headers: { 'X-CSRF-Token': csrfToken } });
         } catch (e) {
           // Expected - connection may drop immediately
         }
@@ -229,7 +231,7 @@
         shutdownBtn.disabled = true;
         setStatus('Shutting down system...', '#d49200');
         try {
-          await fetch('/api/shutdown', { method: 'POST' });
+          await fetch('/api/shutdown', { method: 'POST', headers: { 'X-CSRF-Token': csrfToken } });
           setStatus('System is shutting down... this page may become unreachable.', '#d49200');
         } catch (e) {
           setStatus('Failed to trigger shutdown.', '#cc3333');
@@ -249,6 +251,7 @@
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
+            'X-CSRF-Token': csrfToken,
           },
           body: JSON.stringify({
             reboot_enabled: enabled,

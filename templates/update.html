@@ -4,6 +4,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="csrf-token" content="{{ csrf_token }}">
   <title>Software Update - {{ display_name }}</title>
   <style>
     body {
@@ -288,6 +289,7 @@
   {% include "_reboot_overlay.html" %}
 
   <script>
+    const csrfToken = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
     const runBtn = document.getElementById('runUpdate');
     const rebootBtn = document.getElementById('rebootBtn');
     const consoleEl = document.getElementById('console');
@@ -375,7 +377,7 @@
       setStatus('Rebooting system...');
 
       try {
-        await fetch('/api/reboot', { method: 'POST' });
+        await fetch('/api/reboot', { method: 'POST', headers: { 'X-CSRF-Token': csrfToken } });
       } catch (e) {
         // Expected - connection may drop immediately
       }
@@ -417,7 +419,7 @@
       try {
         const response = await fetch('/api/update-check-interval', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken },
           body: JSON.stringify({ interval: interval })
         });
 
@@ -539,7 +541,7 @@
       try {
         const response = await fetch('/api/switch-branch', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken },
           body: JSON.stringify({ branch: pendingBranch })
         });
 
@@ -559,7 +561,7 @@
             window.startRebootOverlay();
           }
           try {
-            await fetch('/api/reboot', { method: 'POST' });
+            await fetch('/api/reboot', { method: 'POST', headers: { 'X-CSRF-Token': csrfToken } });
           } catch (e) {
             // Expected - connection may drop during restart
           }
