@@ -6,7 +6,7 @@
 {% block head_extra %}
 <style>
   #status {
-    margin-top: 8px;
+    margin-top: 0;
     margin-bottom: 0;
   }
 
@@ -20,7 +20,7 @@
     overflow: auto;
     font-family: var(--font-mono);
     font-size: 12px;
-    margin: 8px 0 0 0;
+    margin: 4px 0 0 0;
   }
 
   #successLabel {
@@ -145,7 +145,7 @@
       <div class="field-label">
         <strong>Updater</strong>
         <span class="field-hint">Runs git pull and installs changes.</span>
-        <div id="status" class="field-hint" style="margin-top: 8px;"></div>
+        <div id="status" class="field-hint"></div>
       </div>
       <div class="field-control">
         <button id="runUpdate" class="button button-primary" type="button">Run update</button>
