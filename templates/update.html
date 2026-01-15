@@ -415,11 +415,16 @@
     branchStatusEl.style.color = 'var(--text-muted)';
 
     try {
-      const response = await fetch('/api/git-branch', {
+      const response = await fetch('/api/switch-branch', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken },
         body: JSON.stringify({ branch: pendingBranch })
       });
+      const contentType = response.headers.get('content-type') || '';
+      if (!contentType.includes('application/json')) {
+        const text = await response.text();
+        throw new Error(`Unexpected response (not JSON). HTTP ${response.status}. ${text.slice(0, 200)}`);
+      }
       const data = await response.json();
       if (data.success) {
         currentBranch = pendingBranch;

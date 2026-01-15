@@ -118,15 +118,17 @@
   rebootAmpm.addEventListener('change', updateSchedule);
 
   rebootBtn.addEventListener('click', async () => {
-    rebootBtn.disabled = true;
-    statusEl.textContent = 'Rebooting...';
+    // Mirror the reboot behavior used on the update page:
+    // send the reboot command, then show the reboot waiting overlay + redirect.
+    statusEl.textContent = '';
     try {
       await postJson('/api/reboot', {});
-      statusEl.textContent = 'Reboot command sent.';
     } catch (err) {
-      statusEl.textContent = 'Failed to reboot.';
+      // Ignore errors here; the overlay will handle the user experience.
     }
-    rebootBtn.disabled = false;
+    if (window.startRebootOverlay) {
+      window.startRebootOverlay();
+    }
   });
 
   shutdownBtn.addEventListener('click', async () => {
