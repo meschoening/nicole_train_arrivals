@@ -187,6 +187,7 @@
 
   let evtSource = null;
   const savedUpdateState = {{ update_state | tojson }};
+  let rebootRequired = false;
 
   function clearConsole() { consoleEl.textContent = ''; }
   function appendLine(line) {
@@ -211,6 +212,7 @@
     setStatus('Update completed. Reboot required.', 'var(--warning)');
     showReboot(true);
     setRebootForUpdate(true);
+    rebootRequired = true;
     if (state.commit_message) {
       showSuccessLabel(state.commit_message);
     } else {
@@ -227,8 +229,10 @@
   runBtn.addEventListener('click', () => {
     clearConsole();
     hideSuccessLabel();
-    showReboot(false);
-    setRebootForUpdate(false);
+    if (!rebootRequired) {
+      showReboot(false);
+      setRebootForUpdate(false);
+    }
     setStatus('Running update...');
     disableRun(true);
     closeEventSource();
@@ -245,19 +249,24 @@
         const payload = JSON.parse(e.data || '{}');
         if (payload.has_error) {
           setStatus('Error updating. See console for details.', 'var(--danger)');
-          showReboot(false);
-          setRebootForUpdate(false);
+          if (!rebootRequired) {
+            showReboot(false);
+            setRebootForUpdate(false);
+          }
         } else if (payload.has_updates) {
           setStatus('Update completed. Reboot required.', 'var(--warning)');
           showReboot(true);
           setRebootForUpdate(true);
+          rebootRequired = true;
           if (payload.commit_message) {
             showSuccessLabel(payload.commit_message);
           }
         } else {
           setStatus('Already up to date.', 'var(--success)');
-          showReboot(false);
-          setRebootForUpdate(false);
+          if (!rebootRequired) {
+            showReboot(false);
+            setRebootForUpdate(false);
+          }
         }
       } catch {
         setStatus('Update finished.');
