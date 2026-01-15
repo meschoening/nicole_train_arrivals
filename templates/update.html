@@ -440,6 +440,21 @@
         currentBranchDisplay.textContent = pendingBranch;
         branchStatusEl.textContent = 'Branch switched to ' + pendingBranch + '.';
         branchStatusEl.style.color = 'var(--success)';
+
+        // After a successful branch switch, reboot the system using the same
+        // behavior as the "Reboot system" button used after an update.
+        setStatus('Rebooting system...');
+        try {
+          await fetch('/api/reboot', {
+            method: 'POST',
+            headers: { 'X-CSRF-Token': csrfToken }
+          });
+        } catch (e) {
+          // Ignore network errors here; the overlay/redirect will still attempt to proceed.
+        }
+        if (window.startRebootOverlay) {
+          window.startRebootOverlay();
+        }
       } else {
         branchStatusEl.textContent = 'Error: ' + (data.error || 'Failed to switch branch.');
         branchStatusEl.style.color = 'var(--danger)';
