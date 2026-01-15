@@ -3,6 +3,14 @@
 {% set page_subtitle = "Schedule reboots and control system power." %}
 {% set active_page = "system_management" %}
 
+{% block head_extra %}
+<style>
+  .field.no-border {
+    border-bottom: none;
+  }
+</style>
+{% endblock %}
+
 {% block content %}
 <div class="content-grid">
   <div class="card">
@@ -49,7 +57,7 @@
 
   <div class="card">
     <div class="card-title">Immediate actions</div>
-    <div class="field">
+    <div class="field no-border">
       <div class="field-label">
         <strong>System controls</strong>
         <span class="field-hint">Restart or power down the device.</span>

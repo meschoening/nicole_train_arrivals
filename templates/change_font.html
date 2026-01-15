@@ -90,6 +90,10 @@
     align-items: center;
     flex-wrap: wrap;
   }
+
+  .current-font-display {
+    font-size: 2em;
+  }
 </style>
 {% endblock %}
 
@@ -99,10 +103,7 @@
     <div class="card-title">Current font</div>
     <div class="field">
       <div class="field-label">
-        <strong>Active display font</strong>
-      </div>
-      <div class="field-control">
-        <span id="currentFontDisplay" style="font-family: '{{ current_font }}';">{{ current_font }}</span>
+        <span id="currentFontDisplay" class="current-font-display" style="font-family: '{{ current_font }}';">{{ current_font }}</span>
       </div>
     </div>
   </div>
