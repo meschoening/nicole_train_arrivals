@@ -5,6 +5,11 @@
 
 {% block head_extra %}
 <style>
+  #status {
+    margin-top: 0;
+    margin-bottom: 0;
+  }
+
   #console {
     background: #0b0f14;
     color: #e2e8f0;
@@ -15,6 +20,7 @@
     overflow: auto;
     font-family: var(--font-mono);
     font-size: 12px;
+    margin: 0;
   }
 
   #successLabel {
@@ -22,7 +28,7 @@
     padding: 12px 16px;
     border-radius: var(--radius-sm);
     font-weight: 600;
-    margin-top: 8px;
+    margin: 0;
     border: 1px solid rgba(31, 122, 93, 0.4);
     background: rgba(31, 122, 93, 0.12);
     color: var(--success);
@@ -60,6 +66,18 @@
     justify-content: flex-end;
     gap: 12px;
     margin-top: 16px;
+  }
+
+  /* Remove border and adjust padding for Switch to field */
+  .field-last {
+    border-bottom: none;
+    padding-bottom: 0;
+  }
+
+  /* Ensure branchStatus has consistent spacing */
+  #branchStatus {
+    margin-top: 0;
+    padding-top: 0;
   }
 </style>
 {% endblock %}
@@ -107,7 +125,7 @@
         <span class="mono" id="currentBranchDisplay">{{ current_branch }}</span>
       </div>
     </div>
-    <div class="field">
+    <div class="field field-last">
       <div class="field-label">
         <strong>Switch to</strong>
       </div>
