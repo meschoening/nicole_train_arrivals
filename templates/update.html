@@ -196,6 +196,7 @@
   function setStatus(text, color = 'var(--text-muted)') { statusEl.textContent = text; statusEl.style.color = color; }
   function disableRun(disabled) { runBtn.disabled = disabled; }
   function showReboot(show) { rebootBtn.style.display = show ? 'inline-flex' : 'none'; }
+  function setRebootForUpdate(isUpdate) { rebootBtn.classList.toggle('button-success', !!isUpdate); }
   function showSuccessLabel(message) { successLabelEl.textContent = 'Installed Update: ' + message; successLabelEl.style.display = 'block'; }
   function hideSuccessLabel() { successLabelEl.style.display = 'none'; }
 
@@ -209,6 +210,7 @@
     }
     setStatus('Update completed. Reboot required.', 'var(--warning)');
     showReboot(true);
+    setRebootForUpdate(true);
     if (state.commit_message) {
       showSuccessLabel(state.commit_message);
     } else {
@@ -226,6 +228,7 @@
     clearConsole();
     hideSuccessLabel();
     showReboot(false);
+    setRebootForUpdate(false);
     setStatus('Running update...');
     disableRun(true);
     closeEventSource();
@@ -243,15 +246,18 @@
         if (payload.has_error) {
           setStatus('Error updating. See console for details.', 'var(--danger)');
           showReboot(false);
+          setRebootForUpdate(false);
         } else if (payload.has_updates) {
           setStatus('Update completed. Reboot required.', 'var(--warning)');
           showReboot(true);
+          setRebootForUpdate(true);
           if (payload.commit_message) {
             showSuccessLabel(payload.commit_message);
           }
         } else {
           setStatus('Already up to date.', 'var(--success)');
           showReboot(false);
+          setRebootForUpdate(false);
         }
       } catch {
         setStatus('Update finished.');
