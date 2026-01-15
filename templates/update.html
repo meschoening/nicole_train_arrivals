@@ -7,7 +7,7 @@
 <style>
   #status {
     margin-top: 4px;
-    margin-bottom: 4px;
+    margin-bottom: 0;
   }
 
   #console {
@@ -20,7 +20,7 @@
     overflow: auto;
     font-family: var(--font-mono);
     font-size: 12px;
-    margin: 0;
+    margin: 8px 0 0 0;
   }
 
   #successLabel {
@@ -141,17 +141,17 @@
 
   <div class="card">
     <div class="card-title">Run update</div>
-    <div class="field">
+    <div class="field field-last">
       <div class="field-label">
         <strong>Updater</strong>
         <span class="field-hint">Runs git pull and installs changes.</span>
+        <div id="status" class="field-hint" style="margin-top: 4px;"></div>
       </div>
       <div class="field-control">
         <button id="runUpdate" class="button button-primary" type="button">Run update</button>
         <button id="rebootBtn" class="button" type="button" style="display: none;">Reboot system</button>
       </div>
     </div>
-    <div id="status" class="field-hint"></div>
     <pre id="console"></pre>
     <div id="successLabel"></div>
   </div>
