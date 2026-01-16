@@ -3,6 +3,14 @@
 {% set page_subtitle = "Remote control dashboard for Nicole's Train Tracker" %}
 {% set active_page = "" %}
 
+{% block head_extra %}
+<style>
+  .update-actions {
+    margin-top: 12px;
+  }
+</style>
+{% endblock %}
+
 {% block content %}
 <div class="content-grid">
   <div class="card">
@@ -54,7 +62,7 @@
       <div class="notice success">
         Update available. Install the latest release when you're ready.
       </div>
-      <div class="field-control">
+      <div class="field-control update-actions">
         <a class="button button-primary" href="{{ url_for('get_update') }}">Open updater</a>
       </div>
       {% else %}
