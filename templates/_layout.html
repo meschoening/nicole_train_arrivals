@@ -202,6 +202,10 @@
       background: var(--surface-muted);
     }
 
+    [data-theme="dark"] .collapse-label {
+      color: var(--accent);
+    }
+
     .nav {
       display: flex;
       flex-direction: column;
@@ -712,6 +716,16 @@
 
     .toggle input:checked + .toggle-ui::after {
       transform: translateX(20px);
+    }
+
+    [data-theme="dark"] .toggle-ui::after {
+      background: var(--accent);
+      border-color: var(--accent);
+    }
+
+    [data-theme="dark"] .toggle input:checked + .toggle-ui {
+      background: var(--surface-muted);
+      border-color: var(--border);
     }
 
     .pill-group {

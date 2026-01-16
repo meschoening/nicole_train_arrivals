@@ -94,6 +94,10 @@
   #sslStatusRows .field:last-child {
     padding-bottom: 8px;
   }
+
+  [data-theme="dark"] #sslStatusRows .field-hint.found-status {
+    color: var(--success);
+  }
 </style>
 {% endblock %}
 
@@ -183,7 +187,7 @@
           <strong>Certificate (.crt)</strong>
         </div>
         <div class="field-control">
-          <span class="field-hint">
+          <span class="field-hint{% if ssl_status.cert_found %} found-status{% endif %}">
             {% if ssl_status.cert_found %}✓ Found{% else %}✗ Not found{% endif %}
           </span>
         </div>
@@ -193,7 +197,7 @@
           <strong>Private key (.key)</strong>
         </div>
         <div class="field-control">
-          <span class="field-hint">
+          <span class="field-hint{% if ssl_status.key_found %} found-status{% endif %}">
             {% if ssl_status.key_found %}✓ Found{% else %}✗ Not found{% endif %}
           </span>
         </div>
