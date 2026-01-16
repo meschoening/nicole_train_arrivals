@@ -132,8 +132,13 @@
     }
 
     .app-shell[data-sidebar-side="right"] .sidebar {
+      grid-column: 2;
       border-right: none;
       border-left: 1px solid var(--border);
+    }
+
+    .app-shell[data-sidebar-side="right"] .main {
+      grid-column: 1;
     }
 
     .app-shell[data-sidebar-side="right"] .collapse-label svg {
