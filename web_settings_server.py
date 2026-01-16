@@ -598,6 +598,13 @@ def start_web_settings_server(data_handler, host="0.0.0.0", port=443):
         sidebar_side = data.get("sidebar_side")
         if sidebar_side in ("left", "right"):
             updates["sidebar_side"] = sidebar_side
+        sidebar_collapsed = data.get("sidebar_collapsed")
+        if isinstance(sidebar_collapsed, str):
+            sidebar_collapsed = sidebar_collapsed.strip().lower()
+            if sidebar_collapsed in ("true", "false"):
+                updates["sidebar_collapsed"] = sidebar_collapsed == "true"
+        elif isinstance(sidebar_collapsed, bool):
+            updates["sidebar_collapsed"] = sidebar_collapsed
         if "avatar_data_url" in data:
             avatar_data_url = data.get("avatar_data_url")
             valid, error = _validate_avatar_data_url(avatar_data_url)

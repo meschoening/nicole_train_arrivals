@@ -14,6 +14,7 @@ PASSWORD_MIN_LENGTH = 8
 DEFAULT_PREFERENCES = {
     "theme": "light",
     "sidebar_side": "left",
+    "sidebar_collapsed": False,
     "avatar_data_url": "",
 }
 
@@ -81,12 +82,18 @@ def _coerce_preferences(preferences):
     sidebar_side = preferences.get("sidebar_side", DEFAULT_PREFERENCES["sidebar_side"])
     if sidebar_side not in ("left", "right"):
         sidebar_side = DEFAULT_PREFERENCES["sidebar_side"]
+    sidebar_collapsed = preferences.get("sidebar_collapsed", DEFAULT_PREFERENCES["sidebar_collapsed"])
+    if isinstance(sidebar_collapsed, str):
+        sidebar_collapsed = sidebar_collapsed.strip().lower() == "true"
+    if not isinstance(sidebar_collapsed, bool):
+        sidebar_collapsed = DEFAULT_PREFERENCES["sidebar_collapsed"]
     avatar_data_url = preferences.get("avatar_data_url", DEFAULT_PREFERENCES["avatar_data_url"])
     if not isinstance(avatar_data_url, str):
         avatar_data_url = DEFAULT_PREFERENCES["avatar_data_url"]
     return {
         "theme": theme,
         "sidebar_side": sidebar_side,
+        "sidebar_collapsed": sidebar_collapsed,
         "avatar_data_url": avatar_data_url,
     }
 
@@ -250,6 +257,8 @@ class UserStore:
                     preferences["theme"] = updates.get("theme")
                 if "sidebar_side" in updates:
                     preferences["sidebar_side"] = updates.get("sidebar_side")
+                if "sidebar_collapsed" in updates:
+                    preferences["sidebar_collapsed"] = updates.get("sidebar_collapsed")
                 if "avatar_data_url" in updates:
                     preferences["avatar_data_url"] = updates.get("avatar_data_url")
                 user["preferences"] = _coerce_preferences(preferences)

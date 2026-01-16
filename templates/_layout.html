@@ -941,7 +941,7 @@
     {"id": "update", "label": "Software Update", "short": "SU", "href": url_for("get_update")},
     {"id": "system_management", "label": "Power Management", "short": "PM", "href": url_for("get_system_management")},
   ] %}
-  <div class="app-shell" data-sidebar-side="{{ user_preferences.sidebar_side }}">
+  <div class="app-shell" data-sidebar-side="{{ user_preferences.sidebar_side }}" data-sidebar-collapsed="{{ 'true' if user_preferences.sidebar_collapsed else 'false' }}">
     <aside class="sidebar">
       <div class="sidebar-header">
         <div class="brand">
@@ -1109,7 +1109,9 @@
       if (sidebarCollapse) {
         sidebarCollapse.addEventListener('click', () => {
           const isCollapsed = appShell.dataset.sidebarCollapsed === 'true';
-          appShell.dataset.sidebarCollapsed = isCollapsed ? 'false' : 'true';
+          const nextCollapsed = !isCollapsed;
+          appShell.dataset.sidebarCollapsed = nextCollapsed ? 'true' : 'false';
+          persistPreferences({ sidebar_collapsed: nextCollapsed }).catch(() => {});
         });
       }
 
