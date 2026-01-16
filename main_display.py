@@ -117,8 +117,14 @@ class MainWindow(QMainWindow):
         
         self.setCentralWidget(self.stack)
         
-        # Error state tracking for refresh countdown (must be initialized before first data load)
+        # Error state tracking for refresh warnings (must be initialized before first data load)
         self.refresh_error_message = None
+        self.main_display_errors = {}
+        self.main_display_error_labels = []
+        if not hasattr(self, "main_display_error_container"):
+            self.main_display_error_container = None
+        if not hasattr(self, "main_display_error_layout"):
+            self.main_display_error_layout = None
         self.api_thread_pool = QThreadPool()
         self.refresh_in_progress = False
         self.active_station_id = None
@@ -271,7 +277,7 @@ class MainWindow(QMainWindow):
 
     def queue_predictions_refresh(self, station_id, source):
         if not station_id:
-            self.refresh_error_message = None
+            self.set_refresh_error_message(None)
             self.update_arrivals_display()
             if source == "startup":
                 self.enter_home_page()
@@ -302,7 +308,7 @@ class MainWindow(QMainWindow):
         current_station_id = self.config_store.get_str('selected_station')
         if station_id != current_station_id and source != "startup":
             return
-        self.refresh_error_message = None
+        self.set_refresh_error_message(None)
         self.update_arrivals_display()
         if source == "startup":
             self.enter_home_page()
@@ -312,7 +318,7 @@ class MainWindow(QMainWindow):
         current_station_id = self.config_store.get_str('selected_station')
         if station_id != current_station_id and source != "startup":
             return
-        self.refresh_error_message = message
+        self.set_refresh_error_message(message)
         if source == "startup":
             self.startup_status_label.setText(message)
             self.startup_status_label.setStyleSheet(f"font-family: {self.font_family}; font-size: 24px; color: #cc0000;")
@@ -505,8 +511,8 @@ class MainWindow(QMainWindow):
                     station_code = station.get('Code', '')
                     self.station_combo.addItem(station_name, station_code)
         except MetroAPIError as e:
-            # Store error for display in countdown
-            self.refresh_error_message = str(e)
+            # Store error for display in main warning area
+            self.set_refresh_error_message(str(e))
     
     def populate_directions(self, station_code):
         """Populate destination dropdown with unique destinations from station predictions"""
@@ -549,8 +555,8 @@ class MainWindow(QMainWindow):
                     
                     self.destination_combo.addItem(icon, destination)
         except MetroAPIError as e:
-            # Store error for display in countdown
-            self.refresh_error_message = str(e)
+            # Store error for display in main warning area
+            self.set_refresh_error_message(str(e))
     
     def get_destination_direction(self, destination_name, destination_line):
         """
@@ -1110,6 +1116,20 @@ class MainWindow(QMainWindow):
                 for visible_signature, visible_minutes in visible_predictions
             )
         ]
+
+    def set_main_display_error(self, key, message):
+        if message:
+            self.main_display_errors[key] = message
+        else:
+            self.main_display_errors.pop(key, None)
+        self.update_main_display_error_labels()
+
+    def set_refresh_error_message(self, message):
+        self.refresh_error_message = message
+        if message:
+            self.set_main_display_error("refresh", message)
+        else:
+            self.set_main_display_error("refresh", None)
     
     def refresh_arrivals(self):
         """Refresh arrivals data from API and update display"""
@@ -1121,7 +1141,7 @@ class MainWindow(QMainWindow):
         if station_id:
             self.queue_predictions_refresh(station_id, source="refresh")
         else:
-            self.refresh_error_message = None
+            self.set_refresh_error_message(None)
             self.update_arrivals_display()
         
         # Reset countdown to configured refresh rate
@@ -1149,19 +1169,10 @@ class MainWindow(QMainWindow):
         # Format the time display
         time_display = self.format_time_display(self.seconds_until_refresh)
         
-        # Update the label text and styling based on error state
-        if self.refresh_error_message:
-            # Display error message with red background
-            self.refresh_countdown_label.setText(
-                f"Error Refreshing: {self.refresh_error_message} Trying again in {time_display}"
-            )
-            self.refresh_countdown_label.setStyleSheet(
-                f"font-family: {self.font_family}; font-size: 14px; color: white; background-color: #e74c3c; padding: 5px; border-radius: 3px;"
-            )
-        else:
-            # Normal countdown display
-            self.refresh_countdown_label.setText(f"Refresh in {time_display}")
-            self.refresh_countdown_label.setStyleSheet(f"font-family: {self.font_family}; font-size: 14px; color: #666;")
+        # Normal countdown display
+        self.refresh_countdown_label.setText(f"Refresh in {time_display}")
+        self.refresh_countdown_label.setStyleSheet(f"font-family: {self.font_family}; font-size: 14px; color: #666;")
+        self.update_main_display_error_labels(time_display)
     
     def toggle_countdown_visibility(self):
         """Toggle the visibility of the countdown label"""
@@ -1891,7 +1902,7 @@ class MainWindow(QMainWindow):
         self.config_store.refresh_if_changed()
         
         # Refresh the arrivals display immediately
-        self.refresh_error_message = None  # Clear any previous error
+        self.set_refresh_error_message(None)  # Clear any previous error
         self.refresh_arrivals()
     
     def schedule_next_message(self):
@@ -2466,6 +2477,7 @@ class MainWindow(QMainWindow):
         content_layout.setSpacing(0)
         self.home_arrivals_layout = content_layout
 
+        content_layout.addWidget(self.build_main_display_error_banner())
         content_layout.addWidget(self.build_reboot_warning_banner())
 
         self.arrival_rows = []
@@ -2479,6 +2491,67 @@ class MainWindow(QMainWindow):
         content_widget = QWidget()
         content_widget.setLayout(content_layout)
         return content_widget
+
+    def main_display_error_label_stylesheet(self):
+        return (
+            f"font-family: {self.font_family}; font-size: 14px; font-weight: bold; "
+            "color: white; background-color: #e74c3c; padding: 4px 8px; border-radius: 4px;"
+        )
+
+    def build_main_display_error_banner(self):
+        self.main_display_error_container = QWidget()
+        self.main_display_error_container.setStyleSheet("background-color: transparent;")
+
+        self.main_display_error_layout = QVBoxLayout()
+        self.main_display_error_layout.setContentsMargins(0, 0, 0, 0)
+        self.main_display_error_layout.setSpacing(6)
+        self.main_display_error_layout.setAlignment(Qt.AlignCenter)
+
+        self.main_display_error_container.setLayout(self.main_display_error_layout)
+        self.main_display_error_container.hide()
+        return self.main_display_error_container
+
+    def update_main_display_error_labels(self, time_display=None):
+        if self.main_display_error_container is None or self.main_display_error_layout is None:
+            return
+
+        if time_display is None and hasattr(self, "seconds_until_refresh"):
+            time_display = self.format_time_display(self.seconds_until_refresh)
+
+        error_texts = []
+        for key, message in self.main_display_errors.items():
+            if key == "refresh":
+                if time_display:
+                    error_texts.append(
+                        f"Error Refreshing: {message} Trying again in {time_display}"
+                    )
+                else:
+                    error_texts.append(f"Error Refreshing: {message}")
+            else:
+                error_texts.append(message)
+
+        if not error_texts:
+            self.main_display_error_container.hide()
+            for label in self.main_display_error_labels:
+                label.hide()
+            return
+
+        while len(self.main_display_error_labels) < len(error_texts):
+            label = QLabel()
+            label.setStyleSheet(self.main_display_error_label_stylesheet())
+            label.setAlignment(Qt.AlignCenter)
+            label.setWordWrap(False)
+            self.main_display_error_layout.addWidget(label, alignment=Qt.AlignCenter)
+            self.main_display_error_labels.append(label)
+
+        for idx, label in enumerate(self.main_display_error_labels):
+            if idx < len(error_texts):
+                label.setText(error_texts[idx])
+                label.show()
+            else:
+                label.hide()
+
+        self.main_display_error_container.show()
 
     def build_reboot_warning_banner(self):
         self.reboot_warning_container = QWidget()
