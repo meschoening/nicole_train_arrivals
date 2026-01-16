@@ -1006,223 +1006,225 @@
   {% block scripts %}{% endblock %}
   {% include "_reboot_ui_script.html" %}
   <script>
-    const csrfToken = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
-    const appShell = document.querySelector('.app-shell');
-    const sidebarToggle = document.querySelector('[data-sidebar-toggle]');
-    const sidebarCollapse = document.querySelector('[data-sidebar-collapse]');
-    const sidebarBackdrop = document.querySelector('[data-sidebar-backdrop]');
-    const themeButtons = document.querySelectorAll('[data-theme-picker] button');
-    const sideButtons = document.querySelectorAll('[data-sidebar-picker] button');
-    const avatarInput = document.getElementById('avatarUpload');
-    const avatarUploadButton = document.querySelector('[data-avatar-upload]');
-    const avatarRemoveButton = document.querySelector('[data-avatar-remove]');
-    const avatarStatus = document.querySelector('[data-avatar-status]');
-    const userAvatar = document.querySelector('.user-avatar');
+    (function () {
+      const csrfToken = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
+      const appShell = document.querySelector('.app-shell');
+      const sidebarToggle = document.querySelector('[data-sidebar-toggle]');
+      const sidebarCollapse = document.querySelector('[data-sidebar-collapse]');
+      const sidebarBackdrop = document.querySelector('[data-sidebar-backdrop]');
+      const themeButtons = document.querySelectorAll('[data-theme-picker] button');
+      const sideButtons = document.querySelectorAll('[data-sidebar-picker] button');
+      const avatarInput = document.getElementById('avatarUpload');
+      const avatarUploadButton = document.querySelector('[data-avatar-upload]');
+      const avatarRemoveButton = document.querySelector('[data-avatar-remove]');
+      const avatarStatus = document.querySelector('[data-avatar-status]');
+      const userAvatar = document.querySelector('.user-avatar');
 
-    function setActiveSegment(buttons, value, attr) {
-      buttons.forEach((btn) => {
-        const isActive = btn.getAttribute(attr) === value;
-        btn.classList.toggle('active', isActive);
-      });
-    }
-
-    function persistPreferences(payload) {
-      return fetch('/api/user/preferences', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'X-CSRF-Token': csrfToken,
-        },
-        body: JSON.stringify(payload),
-      }).then((response) => response.json().then((data) => ({ ok: response.ok, data })));
-    }
-
-    function setAvatarImage(dataUrl) {
-      const initial = userAvatar?.dataset?.initial || '?';
-      if (!userAvatar) return;
-      userAvatar.innerHTML = '';
-      if (dataUrl) {
-        const img = document.createElement('img');
-        img.src = dataUrl;
-        img.alt = 'User avatar';
-        userAvatar.appendChild(img);
-      } else {
-        const span = document.createElement('span');
-        span.textContent = initial.toUpperCase();
-        userAvatar.appendChild(span);
+      function setActiveSegment(buttons, value, attr) {
+        buttons.forEach((btn) => {
+          const isActive = btn.getAttribute(attr) === value;
+          btn.classList.toggle('active', isActive);
+        });
       }
-    }
 
-    function setAvatarStatus(message, tone = 'muted') {
-      if (!avatarStatus) return;
-      avatarStatus.textContent = message || '';
-      avatarStatus.style.color = tone === 'error' ? 'var(--danger)' : 'var(--text-muted)';
-    }
+      function persistPreferences(payload) {
+        return fetch('/api/user/preferences', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-CSRF-Token': csrfToken,
+          },
+          body: JSON.stringify(payload),
+        }).then((response) => response.json().then((data) => ({ ok: response.ok, data })));
+      }
 
-    if (sidebarToggle) {
-      sidebarToggle.addEventListener('click', () => {
-        const isOpen = appShell.dataset.sidebarOpen === 'true';
-        appShell.dataset.sidebarOpen = isOpen ? 'false' : 'true';
-      });
-    }
-
-    if (sidebarBackdrop) {
-      sidebarBackdrop.addEventListener('click', () => {
-        appShell.dataset.sidebarOpen = 'false';
-      });
-    }
-
-    if (sidebarCollapse) {
-      sidebarCollapse.addEventListener('click', () => {
-        const isCollapsed = appShell.dataset.sidebarCollapsed === 'true';
-        appShell.dataset.sidebarCollapsed = isCollapsed ? 'false' : 'true';
-      });
-    }
-
-    themeButtons.forEach((button) => {
-      button.addEventListener('click', () => {
-        const theme = button.getAttribute('data-theme');
-        document.documentElement.dataset.theme = theme;
-        setActiveSegment(themeButtons, theme, 'data-theme');
-        persistPreferences({ theme }).catch(() => {});
-      });
-    });
-
-    sideButtons.forEach((button) => {
-      button.addEventListener('click', () => {
-        const side = button.getAttribute('data-side');
-        appShell.dataset.sidebarSide = side;
-        setActiveSegment(sideButtons, side, 'data-side');
-        persistPreferences({ sidebar_side: side }).catch(() => {});
-      });
-    });
-
-    setActiveSegment(themeButtons, document.documentElement.dataset.theme, 'data-theme');
-    setActiveSegment(sideButtons, appShell.dataset.sidebarSide, 'data-side');
-
-    if (avatarUploadButton && avatarInput) {
-      avatarUploadButton.addEventListener('click', () => {
-        avatarInput.click();
-      });
-      avatarInput.addEventListener('change', () => {
-        const file = avatarInput.files[0];
-        if (!file) {
-          return;
+      function setAvatarImage(dataUrl) {
+        const initial = userAvatar?.dataset?.initial || '?';
+        if (!userAvatar) return;
+        userAvatar.innerHTML = '';
+        if (dataUrl) {
+          const img = document.createElement('img');
+          img.src = dataUrl;
+          img.alt = 'User avatar';
+          userAvatar.appendChild(img);
+        } else {
+          const span = document.createElement('span');
+          span.textContent = initial.toUpperCase();
+          userAvatar.appendChild(span);
         }
-        if (file.size > 150 * 1024) {
-          setAvatarStatus('Image too large (max 150KB).', 'error');
-          avatarInput.value = '';
-          return;
-        }
-        const reader = new FileReader();
-        reader.onload = () => {
-          const dataUrl = reader.result;
-          setAvatarStatus('Saving photo...');
-          persistPreferences({ avatar_data_url: dataUrl })
+      }
+
+      function setAvatarStatus(message, tone = 'muted') {
+        if (!avatarStatus) return;
+        avatarStatus.textContent = message || '';
+        avatarStatus.style.color = tone === 'error' ? 'var(--danger)' : 'var(--text-muted)';
+      }
+
+      if (sidebarToggle) {
+        sidebarToggle.addEventListener('click', () => {
+          const isOpen = appShell.dataset.sidebarOpen === 'true';
+          appShell.dataset.sidebarOpen = isOpen ? 'false' : 'true';
+        });
+      }
+
+      if (sidebarBackdrop) {
+        sidebarBackdrop.addEventListener('click', () => {
+          appShell.dataset.sidebarOpen = 'false';
+        });
+      }
+
+      if (sidebarCollapse) {
+        sidebarCollapse.addEventListener('click', () => {
+          const isCollapsed = appShell.dataset.sidebarCollapsed === 'true';
+          appShell.dataset.sidebarCollapsed = isCollapsed ? 'false' : 'true';
+        });
+      }
+
+      themeButtons.forEach((button) => {
+        button.addEventListener('click', () => {
+          const theme = button.getAttribute('data-theme');
+          document.documentElement.dataset.theme = theme;
+          setActiveSegment(themeButtons, theme, 'data-theme');
+          persistPreferences({ theme }).catch(() => {});
+        });
+      });
+
+      sideButtons.forEach((button) => {
+        button.addEventListener('click', () => {
+          const side = button.getAttribute('data-side');
+          appShell.dataset.sidebarSide = side;
+          setActiveSegment(sideButtons, side, 'data-side');
+          persistPreferences({ sidebar_side: side }).catch(() => {});
+        });
+      });
+
+      setActiveSegment(themeButtons, document.documentElement.dataset.theme, 'data-theme');
+      setActiveSegment(sideButtons, appShell.dataset.sidebarSide, 'data-side');
+
+      if (avatarUploadButton && avatarInput) {
+        avatarUploadButton.addEventListener('click', () => {
+          avatarInput.click();
+        });
+        avatarInput.addEventListener('change', () => {
+          const file = avatarInput.files[0];
+          if (!file) {
+            return;
+          }
+          if (file.size > 150 * 1024) {
+            setAvatarStatus('Image too large (max 150KB).', 'error');
+            avatarInput.value = '';
+            return;
+          }
+          const reader = new FileReader();
+          reader.onload = () => {
+            const dataUrl = reader.result;
+            setAvatarStatus('Saving photo...');
+            persistPreferences({ avatar_data_url: dataUrl })
+              .then(({ ok, data }) => {
+                if (!ok) {
+                  setAvatarStatus(data.error || 'Failed to save photo.', 'error');
+                  return;
+                }
+                setAvatarImage(data.preferences.avatar_data_url);
+                setAvatarStatus('Photo updated.');
+                avatarInput.value = '';
+              })
+              .catch(() => {
+                setAvatarStatus('Failed to save photo.', 'error');
+              });
+          };
+          reader.readAsDataURL(file);
+        });
+      }
+
+      if (avatarRemoveButton) {
+        avatarRemoveButton.addEventListener('click', () => {
+          setAvatarStatus('Removing photo...');
+          persistPreferences({ avatar_data_url: '' })
             .then(({ ok, data }) => {
               if (!ok) {
-                setAvatarStatus(data.error || 'Failed to save photo.', 'error');
+                setAvatarStatus(data.error || 'Failed to remove photo.', 'error');
                 return;
               }
-              setAvatarImage(data.preferences.avatar_data_url);
-              setAvatarStatus('Photo updated.');
-              avatarInput.value = '';
+              setAvatarImage('');
+              setAvatarStatus('Photo removed.');
             })
             .catch(() => {
-              setAvatarStatus('Failed to save photo.', 'error');
+              setAvatarStatus('Failed to remove photo.', 'error');
             });
-        };
-        reader.readAsDataURL(file);
-      });
-    }
-
-    if (avatarRemoveButton) {
-      avatarRemoveButton.addEventListener('click', () => {
-        setAvatarStatus('Removing photo...');
-        persistPreferences({ avatar_data_url: '' })
-          .then(({ ok, data }) => {
-            if (!ok) {
-              setAvatarStatus(data.error || 'Failed to remove photo.', 'error');
-              return;
-            }
-            setAvatarImage('');
-            setAvatarStatus('Photo removed.');
-          })
-          .catch(() => {
-            setAvatarStatus('Failed to remove photo.', 'error');
-          });
-      });
-    }
-
-    function buildCustomSelect(select) {
-      if (!select || select.dataset.customized === 'true') {
-        return;
-      }
-      const wrapper = document.createElement('div');
-      wrapper.className = 'select-wrap';
-      select.parentNode.insertBefore(wrapper, select);
-      wrapper.appendChild(select);
-
-      select.classList.add('select-native');
-      select.setAttribute('aria-hidden', 'true');
-      select.tabIndex = -1;
-
-      const trigger = document.createElement('button');
-      trigger.type = 'button';
-      trigger.className = 'select-trigger';
-      const triggerLabel = document.createElement('span');
-      trigger.appendChild(triggerLabel);
-
-      const menu = document.createElement('div');
-      menu.className = 'select-menu';
-
-      wrapper.appendChild(trigger);
-      wrapper.appendChild(menu);
-
-      const syncOptions = () => {
-        menu.innerHTML = '';
-        const options = Array.from(select.options || []);
-        options.forEach((option) => {
-          const optionButton = document.createElement('button');
-          optionButton.type = 'button';
-          optionButton.className = 'select-option';
-          optionButton.textContent = option.textContent;
-          optionButton.dataset.value = option.value;
-          if (option.value === select.value) {
-            optionButton.classList.add('active');
-          }
-          optionButton.addEventListener('click', () => {
-            select.value = option.value;
-            select.dispatchEvent(new Event('change', { bubbles: true }));
-            triggerLabel.textContent = option.textContent;
-            wrapper.classList.remove('open');
-          });
-          menu.appendChild(optionButton);
         });
-        const selectedOption = select.options[select.selectedIndex];
-        triggerLabel.textContent = selectedOption ? selectedOption.textContent : 'Select...';
-      };
+      }
 
-      const observer = new MutationObserver(syncOptions);
-      observer.observe(select, { childList: true });
-
-      trigger.addEventListener('click', () => {
-        wrapper.classList.toggle('open');
-      });
-
-      document.addEventListener('click', (event) => {
-        if (!wrapper.contains(event.target)) {
-          wrapper.classList.remove('open');
+      function buildCustomSelect(select) {
+        if (!select || select.dataset.customized === 'true') {
+          return;
         }
-      });
+        const wrapper = document.createElement('div');
+        wrapper.className = 'select-wrap';
+        select.parentNode.insertBefore(wrapper, select);
+        wrapper.appendChild(select);
 
-      select.addEventListener('change', syncOptions);
+        select.classList.add('select-native');
+        select.setAttribute('aria-hidden', 'true');
+        select.tabIndex = -1;
 
-      syncOptions();
-      select.dataset.customized = 'true';
-    }
+        const trigger = document.createElement('button');
+        trigger.type = 'button';
+        trigger.className = 'select-trigger';
+        const triggerLabel = document.createElement('span');
+        trigger.appendChild(triggerLabel);
 
-    document.querySelectorAll('select').forEach(buildCustomSelect);
+        const menu = document.createElement('div');
+        menu.className = 'select-menu';
+
+        wrapper.appendChild(trigger);
+        wrapper.appendChild(menu);
+
+        const syncOptions = () => {
+          menu.innerHTML = '';
+          const options = Array.from(select.options || []);
+          options.forEach((option) => {
+            const optionButton = document.createElement('button');
+            optionButton.type = 'button';
+            optionButton.className = 'select-option';
+            optionButton.textContent = option.textContent;
+            optionButton.dataset.value = option.value;
+            if (option.value === select.value) {
+              optionButton.classList.add('active');
+            }
+            optionButton.addEventListener('click', () => {
+              select.value = option.value;
+              select.dispatchEvent(new Event('change', { bubbles: true }));
+              triggerLabel.textContent = option.textContent;
+              wrapper.classList.remove('open');
+            });
+            menu.appendChild(optionButton);
+          });
+          const selectedOption = select.options[select.selectedIndex];
+          triggerLabel.textContent = selectedOption ? selectedOption.textContent : 'Select...';
+        };
+
+        const observer = new MutationObserver(syncOptions);
+        observer.observe(select, { childList: true });
+
+        trigger.addEventListener('click', () => {
+          wrapper.classList.toggle('open');
+        });
+
+        document.addEventListener('click', (event) => {
+          if (!wrapper.contains(event.target)) {
+            wrapper.classList.remove('open');
+          }
+        });
+
+        select.addEventListener('change', syncOptions);
+
+        syncOptions();
+        select.dataset.customized = 'true';
+      }
+
+      document.querySelectorAll('select').forEach(buildCustomSelect);
+    })();
   </script>
 </body>
 
