@@ -143,8 +143,21 @@
       grid-row: 1;
     }
 
+    .collapse-label svg {
+      transform: rotate(0deg);
+      transition: transform var(--transition);
+    }
+
     .app-shell[data-sidebar-side="right"] .collapse-label svg {
       transform: rotate(180deg);
+    }
+
+    .app-shell[data-sidebar-collapsed="true"] .collapse-label svg {
+      transform: rotate(180deg);
+    }
+
+    .app-shell[data-sidebar-side="right"][data-sidebar-collapsed="true"] .collapse-label svg {
+      transform: rotate(0deg);
     }
 
     .sidebar-header {
