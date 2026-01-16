@@ -271,6 +271,18 @@
       pointer-events: none;
     }
 
+    .app-shell[data-sidebar-collapsed="true"] .sidebar-header {
+      flex-direction: column;
+      align-items: center;
+      justify-content: flex-start;
+      gap: 8px;
+    }
+
+    .app-shell[data-sidebar-collapsed="true"] .brand {
+      flex-direction: column;
+      gap: 0;
+    }
+
     .app-shell[data-sidebar-collapsed="true"] .sidebar {
       padding: 20px 12px;
     }
