@@ -765,14 +765,19 @@
       transform: translateX(20px);
     }
 
+    [data-theme="dark"] .toggle-ui {
+      background: rgba(255, 255, 255, 0.18);
+      border-color: rgba(255, 255, 255, 0.35);
+    }
+
     [data-theme="dark"] .toggle-ui::after {
-      background: var(--accent);
-      border-color: var(--accent);
+      background: var(--surface);
+      border-color: rgba(255, 255, 255, 0.35);
     }
 
     [data-theme="dark"] .toggle input:checked + .toggle-ui {
-      background: var(--surface-muted);
-      border-color: var(--border);
+      background: var(--accent);
+      border-color: var(--accent);
     }
 
     .pill-group {
