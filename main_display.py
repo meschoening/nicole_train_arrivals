@@ -152,6 +152,9 @@ class MainWindow(QMainWindow):
         self.checking_animation_timer = QTimer()
         self.checking_animation_timer.timeout.connect(self.update_checking_animation)
         self.checking_animation_state = 0
+
+        # Flip display button state
+        self.flip_display_confirmed = False
         self.update_service.pull_output.connect(self.on_update_service_output)
         self.update_service.pull_finished.connect(self.on_update_service_finished)
         self.update_service.update_available_changed.connect(self.on_update_available_changed)
@@ -223,13 +226,22 @@ class MainWindow(QMainWindow):
                 click_pos = event.globalPos()
                 popout_rect = self.shutdown_popout.geometry()
                 popout_rect.moveTopLeft(self.shutdown_popout.mapToGlobal(self.shutdown_popout.rect().topLeft()))
-                
+
                 button_rect = self.shutdown_exit_button.geometry()
                 button_rect.moveTopLeft(self.shutdown_exit_button.mapToGlobal(self.shutdown_exit_button.rect().topLeft()))
-                
+
                 if not popout_rect.contains(click_pos) and not button_rect.contains(click_pos):
                     self.close_shutdown_popout()
-        
+
+            # Reset flip display button if clicked outside it
+            if hasattr(self, 'flip_display_confirmed') and self.flip_display_confirmed:
+                if hasattr(self, 'flip_display_button'):
+                    click_pos = event.globalPos()
+                    button_rect = self.flip_display_button.geometry()
+                    button_rect.moveTopLeft(self.flip_display_button.mapToGlobal(self.flip_display_button.rect().topLeft()))
+                    if not button_rect.contains(click_pos):
+                        self.reset_flip_display_state()
+
         return super().eventFilter(obj, event)
     
     def perform_initial_load(self):
@@ -382,7 +394,80 @@ class MainWindow(QMainWindow):
             print(f"Error launching WiFi setup: {e}")
             self.startup_status_label.setText(f"Failed to launch WiFi setup: {e}")
             self.startup_status_label.setStyleSheet(f"font-family: {self.font_family}; font-size: 24px; color: #cc0000;")
-    
+
+    def on_flip_display_clicked(self):
+        """Handle flip display button click with two-stage confirmation."""
+        if not self.flip_display_confirmed:
+            # First click - change to confirm state
+            self.set_flip_display_confirm_state()
+        else:
+            # Second click - perform the flip and reboot
+            self.perform_flip_display()
+
+    def set_flip_display_confirm_state(self):
+        """Set the flip display button to confirmation state (red)."""
+        self.flip_display_confirmed = True
+        self.flip_display_button.setText("Confirm Reboot")
+        self.flip_display_button.setStyleSheet(
+            f"""
+            QPushButton {{
+                font-family: {self.font_family};
+                font-size: 20px;
+                font-weight: bold;
+                padding: 8px 12px;
+                background-color: #f44336;
+                color: white;
+                border: none;
+                border-radius: 5px;
+            }}
+            QPushButton:hover {{
+                background-color: #da190b;
+            }}
+            QPushButton:pressed {{
+                background-color: #c1170a;
+                padding-bottom: 7px;
+            }}
+        """
+        )
+
+    def reset_flip_display_state(self):
+        """Reset the flip display button to its default state."""
+        self.flip_display_confirmed = False
+        self.flip_display_button.setText("Flip Display")
+        self.flip_display_button.setStyleSheet(
+            f"""
+            QPushButton {{
+                font-family: {self.font_family};
+                font-size: 20px;
+                font-weight: bold;
+                padding: 8px 12px;
+                background-color: #e0e0e0;
+                border: none;
+                border-radius: 5px;
+            }}
+            QPushButton:hover {{
+                background-color: #d0d0d0;
+            }}
+            QPushButton:pressed {{
+                background-color: #c0c0c0;
+                padding-bottom: 7px;
+            }}
+        """
+        )
+
+    def perform_flip_display(self):
+        """Toggle display rotation and reboot."""
+        current = self.system_service.get_display_rotation()
+        new_value = 0 if current == 2 else 2
+
+        if self.system_service.set_display_rotation(new_value):
+            # Apply touchscreen rotation immediately (for next boot it'll be correct)
+            self.system_service.set_touchscreen_rotation(new_value == 2)
+            self.system_service.reboot()
+        else:
+            self.show_status_message("Failed to update display settings")
+            self.reset_flip_display_state()
+
     def get_device_ip(self):
         """Get the local IP address of the device"""
         return self.system_service.get_device_ip()
@@ -2999,6 +3084,30 @@ class MainWindow(QMainWindow):
         )
         self.wifi_button.clicked.connect(self.launch_wifi_setup)
         left_buttons_layout.addWidget(self.wifi_button)
+
+        self.flip_display_button = QPushButton("Flip Display")
+        self.flip_display_button.setStyleSheet(
+            f"""
+            QPushButton {{
+                font-family: {self.font_family};
+                font-size: 20px;
+                font-weight: bold;
+                padding: 8px 12px;
+                background-color: #e0e0e0;
+                border: none;
+                border-radius: 5px;
+            }}
+            QPushButton:hover {{
+                background-color: #d0d0d0;
+            }}
+            QPushButton:pressed {{
+                background-color: #c0c0c0;
+                padding-bottom: 7px;
+            }}
+        """
+        )
+        self.flip_display_button.clicked.connect(self.on_flip_display_clicked)
+        left_buttons_layout.addWidget(self.flip_display_button)
 
         left_buttons_container.setLayout(left_buttons_layout)
         return left_buttons_container

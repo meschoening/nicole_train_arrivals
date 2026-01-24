@@ -91,6 +91,60 @@ class SystemService:
             log_label="reboot",
         )
 
+    def get_display_rotation(self):
+        """Read current display_rotate value from /boot/config.txt. Returns 0 or 2."""
+        result = run_command(
+            ["grep", "^display_rotate=", "/boot/config.txt"],
+            timeout_s=5,
+            log_label="get_display_rotation",
+        )
+        if result.ok and result.stdout.strip():
+            try:
+                return int(result.stdout.strip().split("=")[1])
+            except (IndexError, ValueError):
+                return 0
+        return 0
+
+    def set_display_rotation(self, value):
+        """Set display_rotate in /boot/config.txt. Value should be 0 or 2."""
+        # Check if line exists
+        check = run_command(
+            ["grep", "-q", "^display_rotate=", "/boot/config.txt"],
+            timeout_s=5,
+            log_label="check_display_rotation",
+        )
+        if check.ok:
+            # Line exists, replace it
+            result = run_command(
+                ["sudo", "sed", "-i", f"s/^display_rotate=.*/display_rotate={value}/", "/boot/config.txt"],
+                timeout_s=10,
+                log_label="set_display_rotation",
+            )
+        else:
+            # Line doesn't exist, append it
+            result = run_command(
+                ["sudo", "sh", "-c", f"echo 'display_rotate={value}' >> /boot/config.txt"],
+                timeout_s=10,
+                log_label="append_display_rotation",
+            )
+        return result.ok
+
+    def set_touchscreen_rotation(self, rotated):
+        """Set touchscreen input transformation. rotated=True for 180 degrees."""
+        if rotated:
+            # 180 degree rotation matrix: invert X and Y
+            matrix = "-1 0 1 0 -1 1 0 0 1"
+        else:
+            # Identity matrix (normal)
+            matrix = "1 0 0 0 1 0 0 0 1"
+
+        result = run_command(
+            ["xinput", "set-prop", "yldzkj USB2IIC_CTP_CONTROL", "Coordinate Transformation Matrix"] + matrix.split(),
+            timeout_s=5,
+            log_label="set_touchscreen_rotation",
+        )
+        return result.ok
+
     def apply_screen_sleep_settings(self, enabled, minutes):
         """Apply screen sleep settings using xset."""
         if enabled:
