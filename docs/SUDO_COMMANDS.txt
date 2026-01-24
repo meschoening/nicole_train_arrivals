@@ -41,8 +41,8 @@ sudo chown <user> <cert_file> <key_file>
 
 ## Display Rotation (main_display.py)
 
-sudo sed -i 's/^display_rotate=.*/display_rotate=X/' /boot/config.txt
-sudo sh -c "echo 'display_rotate=X' >> /boot/config.txt"
+sudo sed -i 's/^display_hdmi_rotate=.*/display_hdmi_rotate=X/' /boot/config.txt
+sudo sh -c "echo 'display_hdmi_rotate=X' >> /boot/config.txt"
 
 ---
 
