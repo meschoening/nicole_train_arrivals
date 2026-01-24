@@ -65,6 +65,10 @@ class MainWindow(QMainWindow):
         self.system_service = system_service
         self.update_service = update_service
 
+        # Apply touchscreen rotation based on current display rotation setting
+        current_rotation = self.system_service.get_display_rotation()
+        self.system_service.set_touchscreen_rotation(current_rotation == 2)
+
         self.default_title_text = self.config_store.get_str('title_text', "Nicole's Train Tracker!")
         self.font_family = self.config_store.get_str('font_family', 'Quicksand')
 
@@ -461,8 +465,6 @@ class MainWindow(QMainWindow):
         new_value = 0 if current == 2 else 2
 
         if self.system_service.set_display_rotation(new_value):
-            # Apply touchscreen rotation immediately (for next boot it'll be correct)
-            self.system_service.set_touchscreen_rotation(new_value == 2)
             self.system_service.reboot()
         else:
             self.show_status_message("Failed to update display settings")
