@@ -407,7 +407,7 @@ class MainWindow(QMainWindow):
     def set_flip_display_confirm_state(self):
         """Set the flip display button to confirmation state (red)."""
         self.flip_display_confirmed = True
-        self.flip_display_button.setText("Confirm Reboot")
+        self.flip_display_button.setText("Reboot")
         self.flip_display_button.setStyleSheet(
             f"""
             QPushButton {{
