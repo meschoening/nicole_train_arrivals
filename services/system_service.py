@@ -91,6 +91,84 @@ class SystemService:
             log_label="reboot",
         )
 
+    def get_display_rotation(self):
+        """Read current display_hdmi_rotate value from /boot/firmware/config.txt. Returns 0 or 2."""
+        result = run_command(
+            ["grep", "^display_hdmi_rotate=", "/boot/firmware/config.txt"],
+            timeout_s=5,
+            log_label="get_display_rotation",
+        )
+        if result.ok and result.stdout.strip():
+            try:
+                return int(result.stdout.strip().split("=")[1])
+            except (IndexError, ValueError):
+                return 0
+        return 0
+
+    def set_display_rotation(self, value):
+        """Set display_hdmi_rotate in /boot/firmware/config.txt. Value should be 0 or 2."""
+        # Check if line exists
+        check = run_command(
+            ["grep", "-q", "^display_hdmi_rotate=", "/boot/firmware/config.txt"],
+            timeout_s=5,
+            log_label="check_display_rotation",
+        )
+        if check.ok:
+            # Line exists, replace it
+            result = run_command(
+                ["sudo", "sed", "-i", f"s/^display_hdmi_rotate=.*/display_hdmi_rotate={value}/", "/boot/firmware/config.txt"],
+                timeout_s=10,
+                log_label="set_display_rotation",
+            )
+        else:
+            # Line doesn't exist, append it
+            result = run_command(
+                ["sudo", "sh", "-c", f"echo 'display_hdmi_rotate={value}' >> /boot/firmware/config.txt"],
+                timeout_s=10,
+                log_label="append_display_rotation",
+            )
+        return result.ok
+
+    def get_touchscreen_device_id(self):
+        """Find the xinput device ID for the touchscreen."""
+        result = run_command(
+            ["xinput", "list"],
+            timeout_s=5,
+            log_label="xinput_list",
+        )
+        if not result.ok:
+            return None
+
+        # Look for the touchscreen device and extract its ID
+        import re
+        for line in result.stdout.split("\n"):
+            if "yldzkj USB2IIC_CTP_CONTROL" in line:
+                match = re.search(r"id=(\d+)", line)
+                if match:
+                    return match.group(1)
+        return None
+
+    def set_touchscreen_rotation(self, rotated):
+        """Set touchscreen input transformation. rotated=True for 180 degrees."""
+        device_id = self.get_touchscreen_device_id()
+        if not device_id:
+            logger.warning("Could not find touchscreen device ID")
+            return False
+
+        if rotated:
+            # 180 degree rotation matrix: invert X and Y
+            matrix = "-1 0 1 0 -1 1 0 0 1"
+        else:
+            # Identity matrix (normal)
+            matrix = "1 0 0 0 1 0 0 0 1"
+
+        result = run_command(
+            ["xinput", "set-prop", device_id, "Coordinate Transformation Matrix"] + matrix.split(),
+            timeout_s=5,
+            log_label="set_touchscreen_rotation",
+        )
+        return result.ok
+
     def apply_screen_sleep_settings(self, enabled, minutes):
         """Apply screen sleep settings using xset."""
         if enabled:
