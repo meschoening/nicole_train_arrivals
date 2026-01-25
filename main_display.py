@@ -2273,8 +2273,8 @@ class MainWindow(QMainWindow):
         self.startup_exit_button = QPushButton("Exit to Desktop")
         self.startup_exit_button.setMinimumWidth(180)
         self.startup_exit_button.setStyleSheet(
-            """
-            QPushButton {
+            f"""
+            QPushButton {{
                 font-family: {self.font_family};
                 font-size: 18px;
                 font-weight: bold;
@@ -2282,14 +2282,14 @@ class MainWindow(QMainWindow):
                 background-color: #e0e0e0;
                 border: none;
                 border-radius: 5px;
-            }
-            QPushButton:hover {
+            }}
+            QPushButton:hover {{
                 background-color: #d0d0d0;
-            }
-            QPushButton:pressed {
+            }}
+            QPushButton:pressed {{
                 background-color: #c0c0c0;
                 padding-bottom: 9px;
-            }
+            }}
         """
         )
         self.startup_exit_button.clicked.connect(QApplication.instance().quit)
@@ -2298,8 +2298,8 @@ class MainWindow(QMainWindow):
         self.startup_reboot_button = QPushButton("Reboot")
         self.startup_reboot_button.setMinimumWidth(180)
         self.startup_reboot_button.setStyleSheet(
-            """
-            QPushButton {
+            f"""
+            QPushButton {{
                 font-family: {self.font_family};
                 font-size: 18px;
                 font-weight: bold;
@@ -2307,14 +2307,14 @@ class MainWindow(QMainWindow):
                 background-color: #e0e0e0;
                 border: none;
                 border-radius: 5px;
-            }
-            QPushButton:hover {
+            }}
+            QPushButton:hover {{
                 background-color: #d0d0d0;
-            }
-            QPushButton:pressed {
+            }}
+            QPushButton:pressed {{
                 background-color: #c0c0c0;
                 padding-bottom: 9px;
-            }
+            }}
         """
         )
         self.startup_reboot_button.clicked.connect(self.perform_system_reboot)
@@ -2323,8 +2323,8 @@ class MainWindow(QMainWindow):
         self.startup_shutdown_button = QPushButton("Shutdown")
         self.startup_shutdown_button.setMinimumWidth(180)
         self.startup_shutdown_button.setStyleSheet(
-            """
-            QPushButton {
+            f"""
+            QPushButton {{
                 font-family: {self.font_family};
                 font-size: 18px;
                 font-weight: bold;
@@ -2332,14 +2332,14 @@ class MainWindow(QMainWindow):
                 background-color: #e0e0e0;
                 border: none;
                 border-radius: 5px;
-            }
-            QPushButton:hover {
+            }}
+            QPushButton:hover {{
                 background-color: #d0d0d0;
-            }
-            QPushButton:pressed {
+            }}
+            QPushButton:pressed {{
                 background-color: #c0c0c0;
                 padding-bottom: 9px;
-            }
+            }}
         """
         )
         self.startup_shutdown_button.clicked.connect(self.perform_system_shutdown)
