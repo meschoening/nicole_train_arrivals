@@ -2499,37 +2499,12 @@ class MainWindow(QMainWindow):
         settings_button.setFixedHeight(45)
         settings_button.clicked.connect(self.open_settings_page)
 
-        close_button = QPushButton("✕")
-        close_button.setStyleSheet(
-            """
-            QPushButton {
-                font-family: {self.font_family};
-                font-size: 22px;
-                font-weight: bold;
-                padding: 5px 20px;
-                background-color: lightgray;
-                border: none;
-                border-radius: 5px;
-            }
-            QPushButton:hover {
-                background-color: #b0b0b0;
-            }
-            QPushButton:pressed {
-                background-color: #909090;
-                padding-bottom: 4px;
-            }
-        """
-        )
-        close_button.setFixedHeight(45)
-        close_button.clicked.connect(QApplication.instance().quit)
-
         buttons_container = QWidget()
         buttons_container.setStyleSheet("background-color: lightgray;")
         buttons_layout = QHBoxLayout()
         buttons_layout.setContentsMargins(0, 0, 0, 0)
         buttons_layout.setSpacing(10)
         buttons_layout.addWidget(settings_button)
-        buttons_layout.addWidget(close_button)
         buttons_container.setLayout(buttons_layout)
 
         title_bar = self.create_title_bar(
