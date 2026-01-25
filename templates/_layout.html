@@ -238,9 +238,15 @@
       flex: 1;
       min-height: 0;
       overflow-y: auto;
+      direction: rtl;
+    }
+
+    .app-shell[data-sidebar-side="right"] .nav {
+      direction: ltr;
     }
 
     .nav-item {
+      direction: ltr;
       display: flex;
       align-items: center;
       gap: 12px;
