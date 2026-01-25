@@ -39,6 +39,11 @@ sudo timedatectl set-timezone <timezone>
 sudo tailscale cert --cert-file <path> --key-file <path> <hostname>
 sudo chown <user> <cert_file> <key_file>
 
+## Display Rotation (main_display.py)
+
+sudo sed -i 's/^display_hdmi_rotate=.*/display_hdmi_rotate=X/' /boot/firmware/config.txt
+sudo sh -c "echo 'display_hdmi_rotate=X' >> /boot/firmware/config.txt"
+
 ---
 
 # Sudoers Configuration
@@ -58,6 +63,8 @@ max ALL=(ALL) NOPASSWD: /sbin/shutdown
 max ALL=(ALL) NOPASSWD: /usr/bin/timedatectl
 max ALL=(ALL) NOPASSWD: /usr/bin/tailscale cert *
 max ALL=(ALL) NOPASSWD: /bin/chown *
+max ALL=(ALL) NOPASSWD: /usr/bin/sed -i * /boot/firmware/config.txt
+max ALL=(ALL) NOPASSWD: /bin/sh -c echo * >> /boot/firmware/config.txt
 ```
 
 Replace "max" with your application user.
