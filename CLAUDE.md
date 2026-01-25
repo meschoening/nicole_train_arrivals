@@ -75,7 +75,7 @@ python3 -c "import wifi_setup"
 
 ## Commits
 
-Short, sentence-case messages without prefixes (e.g., "Update README", "Clean for delivery"). Keep messages concise. If addressing items from `CODE_REVIEW.md`, update that section to yellow status with an update note.
+Short, sentence-case messages without prefixes (e.g., "Update README", "Clean for delivery"). Keep messages concise. Do not include Claude attribution (Co-Authored-By) in commit or PR messages. If addressing items from `CODE_REVIEW.md`, update that section to yellow status with an update note.
 
 ## Configuration Files
 
