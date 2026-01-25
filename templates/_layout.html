@@ -238,15 +238,14 @@
       flex: 1;
       min-height: 0;
       overflow-y: auto;
-      direction: rtl;
+      scrollbar-width: none;
     }
 
-    .app-shell[data-sidebar-side="right"] .nav {
-      direction: ltr;
+    .nav::-webkit-scrollbar {
+      display: none;
     }
 
     .nav-item {
-      direction: ltr;
       display: flex;
       align-items: center;
       gap: 12px;
