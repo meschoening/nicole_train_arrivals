@@ -1,104 +1,53 @@
-<!doctype html>
-<html>
+{% extends "_layout.html" %}
+{% set page_title = "Display Settings" %}
+{% set page_subtitle = "Tune the arrivals display, timing, and behavior." %}
+{% set active_page = "settings" %}
 
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="csrf-token" content="{{ csrf_token }}">
-  <title>Display Settings - {{ display_name }}</title>
-  <style>
-    body {
-      font-family: sans-serif;
-      margin: 0;
-      padding: 0;
-    }
+{% block content %}
+<form method="post" action="/settings" id="settingsForm" class="content-grid">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
 
-    .container {
-      max-width: 720px;
-      margin: 0 auto;
-      padding: 24px;
-    }
-
-    .row {
-      margin-bottom: 12px;
-    }
-
-    label {
-      display: inline-block;
-      min-width: 220px;
-      font-weight: bold;
-    }
-
-    input[type="checkbox"] {
-      transform: scale(1.3);
-      margin-right: 8px;
-    }
-
-    select,
-    input[type="number"],
-    input[type="text"] {
-      padding: 6px;
-      font-size: 14px;
-    }
-
-    button {
-      padding: 8px 14px;
-      font-weight: bold;
-    }
-
-    a.btn {
-      text-decoration: none;
-      display: inline-block;
-      padding: 8px 14px;
-      border-radius: 6px;
-      background: #f0f0f0;
-      color: #000;
-      font-weight: 700;
-      border: 1px solid #ddd;
-    }
-
-    a.btn:hover {
-      background: #e6e6e6;
-    }
-
-    {% include "_reboot_ui_styles.html" %}
-  </style>
-</head>
-
-<body>
-  <div class="container">
-    {% include "_reboot_warning_bar.html" %}
-    <div class="row">
-      <a href="{{ url_for('index') }}" class="btn">← Back</a>
-    </div>
-    <h2>Schedule Display Settings</h2>
-
-    <form method="post" action="/settings" id="settingsForm">
-      <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-      <div class="row">
-        <label for="selected_line">Line</label>
+  <div class="card">
+    <div class="card-title">Route selection</div>
+    <div class="field">
+      <div class="field-label">
+        <strong>Line</strong>
+        <span class="field-hint">Choose the primary WMATA line.</span>
+      </div>
+      <div class="field-control">
         <select id="selected_line" name="selected_line">
           {% for line in lines %}
           <option value="{{ line.line_code }}" {% if config.get('selected_line')==line.line_code %}selected{% endif %}>
-            {{ line.display_name }}</option>
+            {{ line.display_name }}
+          </option>
           {% endfor %}
         </select>
       </div>
+    </div>
 
-      <div class="row">
-        <label for="selected_station">Station</label>
+    <div class="field">
+      <div class="field-label">
+        <strong>Station</strong>
+        <span class="field-hint">The stop to monitor for arrivals.</span>
+      </div>
+      <div class="field-control">
         <select id="selected_station" name="selected_station">
           {% for st in stations %}
-          <option value="{{ st.code }}" {% if config.get('selected_station')==st.code %}selected{% endif %}>{{ st.name
-            }}</option>
+          <option value="{{ st.code }}" {% if config.get('selected_station')==st.code %}selected{% endif %}>
+            {{ st.name }}
+          </option>
           {% endfor %}
         </select>
       </div>
+    </div>
 
-      <div class="row">
-        <label for="selected_destination">Destination</label>
+    <div class="field">
+      <div class="field-label">
+        <strong>Destination</strong>
+        <span class="field-hint">Filter arrivals by destination.</span>
+      </div>
+      <div class="field-control">
         <select id="selected_destination" name="selected_destination">
-          {# directions may be strings (legacy) or objects {name, lines} #}
           {% set emoji_map = {'RD':'🔴','OR':'🟠','YL':'🟡','GR':'🟢','BL':'🔵','SV':'⚫'} %}
           {% for d in directions %}
           {% if d is mapping %}
@@ -108,172 +57,250 @@
           {% for code in lines %}
           {% set ns.emoji = ns.emoji + (emoji_map.get(code, '⚪')) %}
           {% endfor %}
-          <option value="{{ name }}" {% if config.get('selected_destination')==name %}selected{% endif %}>{{ (ns.emoji ~
-            ' ') if ns.emoji else '' }}{{ name }}</option>
+          <option value="{{ name }}" {% if config.get('selected_destination')==name %}selected{% endif %}>
+            {{ (ns.emoji ~ ' ') if ns.emoji else '' }}{{ name }}
+          </option>
           {% else %}
           <option value="{{ d }}" {% if config.get('selected_destination')==d %}selected{% endif %}>{{ d }}</option>
           {% endif %}
           {% endfor %}
         </select>
       </div>
+    </div>
+  </div>
 
-      <div class="row">
-        <label for="refresh_rate_seconds">Refresh Rate</label>
-        <input type="number" min="5" max="120" step="1" id="refresh_rate_seconds" name="refresh_rate_seconds"
-          value="{{ config.get('refresh_rate_seconds', 30) }}">
-        <span style="color:#999; font-size:12px; margin-left:8px;">seconds (5-120)</span>
+  <div class="card">
+    <div class="card-title">Refresh & filtering</div>
+    <div class="field">
+      <div class="field-label">
+        <strong>Refresh rate</strong>
+        <span class="field-hint">How often to refresh arrivals (5-120 seconds).</span>
       </div>
-
-      <div class="row">
-        <label>Show Time to Refresh</label>
-        <input type="checkbox" name="show_countdown" {% if config.get('show_countdown', True) %}checked{% endif %}>
+      <div class="field-control">
+        <input class="input mono" type="number" min="5" max="120" step="1" id="refresh_rate_seconds"
+          name="refresh_rate_seconds" value="{{ config.get('refresh_rate_seconds', 30) }}">
+        <span class="field-hint">seconds</span>
       </div>
+    </div>
 
-      <div class="row">
-        <label>Show Clock in Top Bar</label>
-        <input type="checkbox" name="show_clock" {% if config.get('show_clock', True) %}checked{% endif %}>
+    <div class="field">
+      <div class="field-label">
+        <strong>Show time to refresh</strong>
+        <span class="field-hint">Countdown until the next update.</span>
       </div>
-
-      <div class="row">
-        <label>Filter by Selected Destination</label>
-        <input type="checkbox" name="filter_by_direction" {% if config.get('filter_by_direction', False) %}checked{%
-          endif %}>
+      <div class="field-control">
+        <label class="toggle">
+          <input type="checkbox" name="show_countdown" {% if config.get('show_countdown', True) %}checked{% endif %}>
+          <span class="toggle-ui"></span>
+        </label>
       </div>
+    </div>
 
-      <div class="row">
-        <label>Filter by Destination Direction</label>
-        <input type="checkbox" name="filter_by_destination_direction" {% if
-          config.get('filter_by_destination_direction', False) %}checked{% endif %}>
+    <div class="field">
+      <div class="field-label">
+        <strong>Show clock in top bar</strong>
+        <span class="field-hint">Display the local time on-screen.</span>
       </div>
-
-      <hr>
-
-      <div class="row">
-        <label for="title_text">Title Text</label>
-        <input type="text" id="title_text" name="title_text" value="{{ config.get('title_text', " Nicole's Train
-          Tracker!") }}" style="min-width: 300px;">
+      <div class="field-control">
+        <label class="toggle">
+          <input type="checkbox" name="show_clock" {% if config.get('show_clock', True) %}checked{% endif %}>
+          <span class="toggle-ui"></span>
+        </label>
       </div>
+    </div>
 
-      <div class="row">
-        <label for="timezone">Timezone</label>
+    <div class="field">
+      <div class="field-label">
+        <strong>Filter by selected destination</strong>
+        <span class="field-hint">Show only trains matching the destination.</span>
+      </div>
+      <div class="field-control">
+        <label class="toggle">
+          <input type="checkbox" name="filter_by_direction" {% if config.get('filter_by_direction', False) %}checked{% endif %}>
+          <span class="toggle-ui"></span>
+        </label>
+      </div>
+    </div>
+
+    <div class="field">
+      <div class="field-label">
+        <strong>Filter by destination direction</strong>
+        <span class="field-hint">Only show trains going in a selected direction.</span>
+      </div>
+      <div class="field-control">
+        <label class="toggle">
+          <input type="checkbox" name="filter_by_destination_direction"
+            {% if config.get('filter_by_destination_direction', False) %}checked{% endif %}>
+          <span class="toggle-ui"></span>
+        </label>
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-title">Display copy & timezone</div>
+    <div class="field">
+      <div class="field-label">
+        <strong>Title text</strong>
+        <span class="field-hint">Displayed at the top of the screen.</span>
+      </div>
+      <div class="field-control">
+        <input class="input" type="text" id="title_text" name="title_text"
+          value="{{ config.get('title_text', " Nicole's Train Tracker!") }}">
+      </div>
+    </div>
+
+    <div class="field">
+      <div class="field-label">
+        <strong>Timezone</strong>
+        <span class="field-hint">Clock and schedule timing.</span>
+      </div>
+      <div class="field-control">
         <select id="timezone" name="timezone">
           {% for tz in timezones %}
           <option value="{{ tz }}" {% if current_timezone==tz %}selected{% endif %}>{{ tz }}</option>
           {% endfor %}
         </select>
       </div>
-
-      <div class="row">
-        <label>Enable Screen Sleep</label>
-        <input type="checkbox" name="screen_sleep_enabled" {% if config.get('screen_sleep_enabled', False) %}checked{%
-          endif %}>
-      </div>
-
-      <div class="row">
-        <label>Screen Sleep Timeout (minutes)</label>
-        <input type="number" min="0" max="240" step="1" name="screen_sleep_minutes"
-          value="{{ config.get('screen_sleep_minutes', 5) }}">
-      </div>
-
-      <hr>
-
-      <div class="row">
-        <label for="api_timeout_seconds">Universal Network Timeout (seconds)</label>
-        <input type="number" min="1" max="15" step="1" id="api_timeout_seconds" name="api_timeout_seconds"
-          value="{{ config.get('api_timeout_seconds', 5) }}">
-        <span style="color:#999; font-size:12px; margin-left:8px;">seconds (1-15)</span>
-      </div>
-
-      <hr>
-
-      <div class="row" style="color:#666;">
-        <span id="lastSaved">Last saved: {{ last_saved }}</span>
-      </div>
-
-      <div class="row">
-        <button type="submit">Save</button>
-      </div>
-    </form>
+    </div>
   </div>
 
-  <script>
-    const lineSel = document.getElementById('selected_line');
-    const stationSel = document.getElementById('selected_station');
-    const destSel = document.getElementById('selected_destination');
+  <div class="card">
+    <div class="card-title">Sleep & network</div>
+    <div class="field">
+      <div class="field-label">
+        <strong>Enable screen sleep</strong>
+        <span class="field-hint">Allow the display to sleep after inactivity.</span>
+      </div>
+      <div class="field-control">
+        <label class="toggle">
+          <input type="checkbox" name="screen_sleep_enabled"
+            {% if config.get('screen_sleep_enabled', False) %}checked{% endif %}>
+          <span class="toggle-ui"></span>
+        </label>
+      </div>
+    </div>
 
-    async function loadStations(lineCode) {
-      stationSel.innerHTML = '';
-      destSel.innerHTML = '';
-      if (!lineCode) return;
-      const res = await fetch(`/api/stations?line=${encodeURIComponent(lineCode)}`);
-      const stations = await res.json();
-      for (const st of stations) {
-        const opt = document.createElement('option');
-        opt.value = st.code;
-        opt.textContent = st.name;
-        stationSel.appendChild(opt);
+    <div class="field">
+      <div class="field-label">
+        <strong>Screen sleep timeout</strong>
+        <span class="field-hint">Minutes before sleep (0-240).</span>
+      </div>
+      <div class="field-control">
+        <input class="input mono" type="number" min="0" max="240" step="1" name="screen_sleep_minutes"
+          value="{{ config.get('screen_sleep_minutes', 5) }}">
+      </div>
+    </div>
+
+    <div class="field">
+      <div class="field-label">
+        <strong>Universal network timeout</strong>
+        <span class="field-hint">Max seconds for API requests (1-15).</span>
+      </div>
+      <div class="field-control">
+        <input class="input mono" type="number" min="1" max="15" step="1" id="api_timeout_seconds" name="api_timeout_seconds"
+          value="{{ config.get('api_timeout_seconds', 5) }}">
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-title">Save changes</div>
+    <div class="field">
+      <div class="field-label">
+        <strong>Status</strong>
+        <span class="field-hint">Updated on {{ last_saved }}</span>
+      </div>
+      <div class="field-control">
+        <span id="lastSaved" class="field-hint">Last saved: {{ last_saved }}</span>
+      </div>
+    </div>
+    <div class="field">
+      <div class="field-label">
+        <strong>Apply settings</strong>
+        <span class="field-hint">Save updates to the display.</span>
+      </div>
+      <div class="field-control">
+        <button class="button button-primary" type="submit">Save settings</button>
+      </div>
+    </div>
+  </div>
+</form>
+{% endblock %}
+
+{% block scripts %}
+<script>
+  const lineSel = document.getElementById('selected_line');
+  const stationSel = document.getElementById('selected_station');
+  const destSel = document.getElementById('selected_destination');
+
+  async function loadStations(lineCode) {
+    stationSel.innerHTML = '';
+    destSel.innerHTML = '';
+    if (!lineCode) return;
+    const res = await fetch(`/api/stations?line=${encodeURIComponent(lineCode)}`);
+    const stations = await res.json();
+    for (const st of stations) {
+      const opt = document.createElement('option');
+      opt.value = st.code;
+      opt.textContent = st.name;
+      stationSel.appendChild(opt);
+    }
+    if (stationSel.value) {
+      await loadDirections(stationSel.value);
+    }
+  }
+
+  const lineEmoji = { RD: '🔴', OR: '🟠', YL: '🟡', GR: '🟢', BL: '🔵', SV: '⚫' };
+
+  async function loadDirections(stationCode) {
+    destSel.innerHTML = '';
+    if (!stationCode) return;
+    const res = await fetch(`/api/directions?station=${encodeURIComponent(stationCode)}`);
+    const dirs = await res.json();
+    for (const d of dirs) {
+      let name;
+      let lines;
+      if (typeof d === 'string') {
+        name = d;
+        lines = [];
+      } else {
+        name = d.name;
+        lines = Array.isArray(d.lines) ? d.lines : [];
       }
-      if (stationSel.value) {
-        await loadDirections(stationSel.value);
+      const emoji = lines.map(code => lineEmoji[code] || '⚪').join('');
+      const opt = document.createElement('option');
+      opt.value = name;
+      opt.textContent = (emoji ? emoji + ' ' : '') + name;
+      destSel.appendChild(opt);
+    }
+  }
+
+  lineSel.addEventListener('change', () => loadStations(lineSel.value));
+  stationSel.addEventListener('change', () => loadDirections(stationSel.value));
+
+  const settingsForm = document.getElementById('settingsForm');
+  const lastSaved = document.getElementById('lastSaved');
+  function markUnsaved() {
+    if (lastSaved) lastSaved.style.color = 'var(--danger)';
+  }
+  settingsForm.addEventListener('change', markUnsaved);
+
+  const filterByDestCheckbox = document.querySelector('input[name="filter_by_direction"]');
+  const filterByDirCheckbox = document.querySelector('input[name="filter_by_destination_direction"]');
+
+  if (filterByDestCheckbox && filterByDirCheckbox) {
+    filterByDestCheckbox.addEventListener('change', function () {
+      if (this.checked && filterByDirCheckbox.checked) {
+        filterByDirCheckbox.checked = false;
       }
-    }
+    });
 
-    const lineEmoji = { RD: '🔴', OR: '🟠', YL: '🟡', GR: '🟢', BL: '🔵', SV: '⚫' };
-
-    async function loadDirections(stationCode) {
-      destSel.innerHTML = '';
-      if (!stationCode) return;
-      const res = await fetch(`/api/directions?station=${encodeURIComponent(stationCode)}`);
-      const dirs = await res.json();
-      for (const d of dirs) {
-        let name;
-        let lines;
-        if (typeof d === 'string') {
-          name = d;
-          lines = [];
-        } else {
-          name = d.name;
-          lines = Array.isArray(d.lines) ? d.lines : [];
-        }
-        const emoji = lines.map(code => lineEmoji[code] || '⚪').join('');
-        const opt = document.createElement('option');
-        opt.value = name;
-        opt.textContent = (emoji ? emoji + ' ' : '') + name;
-        destSel.appendChild(opt);
+    filterByDirCheckbox.addEventListener('change', function () {
+      if (this.checked && filterByDestCheckbox.checked) {
+        filterByDestCheckbox.checked = false;
       }
-    }
-
-    lineSel.addEventListener('change', () => loadStations(lineSel.value));
-    stationSel.addEventListener('change', () => loadDirections(stationSel.value));
-
-    const settingsForm = document.getElementById('settingsForm');
-    const lastSaved = document.getElementById('lastSaved');
-    function markUnsaved() {
-      if (lastSaved) lastSaved.style.color = '#cc6666';
-    }
-    // Mark unsaved when any field changes
-    settingsForm.addEventListener('change', markUnsaved);
-
-    // Make filter checkboxes mutually exclusive
-    const filterByDestCheckbox = document.querySelector('input[name="filter_by_direction"]');
-    const filterByDirCheckbox = document.querySelector('input[name="filter_by_destination_direction"]');
-
-    if (filterByDestCheckbox && filterByDirCheckbox) {
-      filterByDestCheckbox.addEventListener('change', function () {
-        if (this.checked && filterByDirCheckbox.checked) {
-          filterByDirCheckbox.checked = false;
-        }
-      });
-
-      filterByDirCheckbox.addEventListener('change', function () {
-        if (this.checked && filterByDestCheckbox.checked) {
-          filterByDestCheckbox.checked = false;
-        }
-      });
-    }
-  </script>
-  {% include "_reboot_overlay.html" %}
-  {% include "_reboot_ui_script.html" %}
-</body>
-
-</html>
+    });
+  }
+</script>
+{% endblock %}

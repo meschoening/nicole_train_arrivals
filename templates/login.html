@@ -1,5 +1,5 @@
 <!doctype html>
-<html>
+<html lang="en" data-theme="light">
 
 <head>
   <meta charset="utf-8">
@@ -7,64 +7,128 @@
   <meta name="csrf-token" content="{{ csrf_token }}">
   <title>Sign In - {{ display_name }}</title>
   <style>
+    @font-face {
+      font-family: "Quicksand";
+      src: url("/api/font-file/Quicksand") format("truetype");
+      font-display: swap;
+    }
+
+    :root {
+      --font-body: "Quicksand", "Avenir Next", "Avenir", "Trebuchet MS", sans-serif;
+      --font-display: "Quicksand", "Avenir Next", "Avenir", "Trebuchet MS", sans-serif;
+      --bg: #f3f5f7;
+      --surface: #ffffff;
+      --surface-muted: #eff2f5;
+      --border: rgba(15, 23, 42, 0.12);
+      --text: #0f172a;
+      --text-muted: #6b7280;
+      --accent: #1b66ff;
+      --radius-md: 12px;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
     body {
-      font-family: sans-serif;
       margin: 0;
-      padding: 0;
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-family: var(--font-body);
+      background: var(--bg);
+      color: var(--text);
     }
 
-    .container {
-      max-width: 520px;
-      margin: 0 auto;
-      padding: 32px 24px;
+    body::before {
+      content: "";
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      background-image:
+        linear-gradient(90deg, rgba(15, 23, 42, 0.04) 1px, transparent 1px),
+        linear-gradient(0deg, rgba(15, 23, 42, 0.04) 1px, transparent 1px);
+      background-size: 40px 40px;
+      opacity: 0.35;
     }
 
-    .row {
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-md);
+      padding: 24px;
+      width: min(420px, 92vw);
+      position: relative;
+      z-index: 1;
+    }
+
+    .title {
+      font-family: var(--font-display);
+      font-size: 24px;
+      margin: 0 0 8px;
+    }
+
+    .subtitle {
+      color: var(--text-muted);
+      font-size: 13px;
+      margin-bottom: 20px;
+    }
+
+    .field {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
       margin-bottom: 12px;
     }
 
     label {
-      display: inline-block;
-      min-width: 120px;
-      font-weight: bold;
+      font-size: 12px;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
     }
 
-    input[type="text"],
-    input[type="password"] {
-      padding: 8px;
+    input {
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 12px 12px;
       font-size: 14px;
-      width: 260px;
     }
 
     button {
-      padding: 10px 16px;
-      font-weight: bold;
+      width: 100%;
+      padding: 12px 16px;
+      border-radius: 8px;
+      border: none;
+      background: var(--accent);
+      color: #fff;
+      font-weight: 600;
       cursor: pointer;
     }
 
-    .notice {
-      background: #fff3cd;
-      border: 1px solid #ffc107;
-      color: #856404;
-      padding: 10px 14px;
-      border-radius: 6px;
-      margin-bottom: 16px;
+    .notice,
+    .error {
+      padding: 12px 16px;
+      border-radius: 8px;
+      border: 1px solid var(--border);
+      font-size: 13px;
+      margin-bottom: 12px;
+      background: var(--surface-muted);
     }
 
     .error {
-      background: #f8d7da;
-      border: 1px solid #f5c6cb;
-      color: #721c24;
-      padding: 10px 14px;
-      border-radius: 6px;
-      margin-bottom: 16px;
+      border-color: rgba(192, 55, 43, 0.4);
+      background: rgba(192, 55, 43, 0.12);
+      color: #b42318;
     }
   </style>
 </head>
 
 <body>
-  <div class="container">
-    <h2>Nicole's Train Tracker: Sign In</h2>
+  <div class="card">
+    <h1 class="title">Nicole's Train Tracker</h1>
+    <div class="subtitle">Sign in to the settings console.</div>
 
     {% if initial_admin_password %}
     <div class="notice">
@@ -82,17 +146,15 @@
     <form method="post" action="/login">
       <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
       <input type="hidden" name="next" value="{{ next or '' }}">
-      <div class="row">
+      <div class="field">
         <label for="username">Username</label>
         <input type="text" id="username" name="username" autocomplete="username" required>
       </div>
-      <div class="row">
+      <div class="field">
         <label for="password">Password</label>
         <input type="password" id="password" name="password" autocomplete="current-password" required>
       </div>
-      <div class="row">
-        <button type="submit">Sign In</button>
-      </div>
+      <button type="submit">Sign in</button>
     </form>
   </div>
 </body>
