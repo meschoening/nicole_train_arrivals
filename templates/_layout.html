@@ -235,6 +235,9 @@
       flex-direction: column;
       gap: 4px;
       padding: 8px 0;
+      flex: 1;
+      min-height: 0;
+      overflow-y: auto;
     }
 
     .nav-item {
@@ -319,6 +322,18 @@
       display: flex;
       flex-direction: column;
       gap: 12px;
+      position: relative;
+    }
+
+    .sidebar-footer::before {
+      content: '';
+      position: absolute;
+      bottom: 100%;
+      left: 0;
+      right: 0;
+      height: 32px;
+      background: linear-gradient(to top, var(--bg-elevated), transparent);
+      pointer-events: none;
     }
 
     .user-card {
