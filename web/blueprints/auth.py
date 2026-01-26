@@ -37,11 +37,12 @@ def create_auth_blueprint(user_store, config_store, validate_csrf_fn, is_safe_ne
         username = request.form.get("username", "").strip()
         password = request.form.get("password", "")
 
-        ok, must_change = user_store.check_password(username, password)
-        if not ok:
+        user = user_store.verify_user(username, password)
+        if not user:
             return render_template("login.html", error="Invalid credentials"), 401
 
-        session["user"] = username
+        session["user"] = user.get("username", "")
+        must_change = bool(user.get("must_change_password", False))
         session["must_change_password"] = must_change
 
         if must_change:
@@ -54,7 +55,7 @@ def create_auth_blueprint(user_store, config_store, validate_csrf_fn, is_safe_ne
             )
 
         next_url = is_safe_next_fn(request.args.get("next"))
-        return redirect(next_url or url_for("settings_page"))
+        return redirect(next_url or url_for("index"))
 
     @bp.get("/logout")
     def logout():
@@ -86,17 +87,17 @@ def create_auth_blueprint(user_store, config_store, validate_csrf_fn, is_safe_ne
         username = session.get("user")
 
         # Verify current password
-        ok, _ = user_store.check_password(username, current_password)
-        if not ok:
+        user = user_store.verify_user(username, current_password)
+        if not user:
             return render_template(
                 "change_password.html", error="Current password is incorrect"
             ), 400
 
         # Validate new password
-        if len(new_password) < 6:
+        if len(new_password) < 8:
             return render_template(
                 "change_password.html",
-                error="New password must be at least 6 characters",
+                error="New password must be at least 8 characters",
             ), 400
 
         if new_password != confirm_password:
@@ -105,9 +106,10 @@ def create_auth_blueprint(user_store, config_store, validate_csrf_fn, is_safe_ne
             ), 400
 
         # Update password
-        if not user_store.set_password(username, new_password):
+        success, error = user_store.set_password(username, new_password)
+        if not success:
             return render_template(
-                "change_password.html", error="Failed to update password"
+                "change_password.html", error=error or "Failed to update password"
             ), 500
 
         session["must_change_password"] = False
@@ -118,7 +120,7 @@ def create_auth_blueprint(user_store, config_store, validate_csrf_fn, is_safe_ne
                 {"initial_admin_username": "", "initial_admin_password": ""}
             )
 
-        return redirect(url_for("settings_page"))
+        return redirect(url_for("index"))
 
     @bp.get("/users")
     def users():
@@ -138,8 +140,9 @@ def create_auth_blueprint(user_store, config_store, validate_csrf_fn, is_safe_ne
         if not username or not password:
             return jsonify({"error": "Username and password required"}), 400
 
-        if not user_store.add_user(username, password):
-            return jsonify({"error": "Failed to add user"}), 500
+        success, error = user_store.add_user(username, password)
+        if not success:
+            return jsonify({"error": error or "Failed to add user"}), 400
 
         return redirect(url_for("auth.users"))
 
@@ -154,8 +157,9 @@ def create_auth_blueprint(user_store, config_store, validate_csrf_fn, is_safe_ne
         if not username or not password:
             return jsonify({"error": "Username and password required"}), 400
 
-        if not user_store.set_password(username, password):
-            return jsonify({"error": "Failed to change password"}), 500
+        success, error = user_store.set_password(username, password)
+        if not success:
+            return jsonify({"error": error or "Failed to change password"}), 400
 
         return redirect(url_for("auth.users"))
 
@@ -170,8 +174,9 @@ def create_auth_blueprint(user_store, config_store, validate_csrf_fn, is_safe_ne
         if username == current:
             return jsonify({"error": "Cannot remove yourself"}), 400
 
-        if not user_store.remove_user(username):
-            return jsonify({"error": "Failed to remove user"}), 500
+        success, error = user_store.remove_user(username)
+        if not success:
+            return jsonify({"error": error or "Failed to remove user"}), 400
 
         return redirect(url_for("auth.users"))
 
@@ -187,11 +192,20 @@ def create_auth_blueprint(user_store, config_store, validate_csrf_fn, is_safe_ne
 
         data = request.get_json(silent=True) or {}
 
+        updates = {}
+
         # Handle sidebar collapsed preference
         sidebar_collapsed = data.get("sidebar_collapsed")
         if sidebar_collapsed is not None:
-            user_store.set_preference(username, "sidebar_collapsed", sidebar_collapsed)
+            updates["sidebar_collapsed"] = sidebar_collapsed
 
-        return jsonify({"ok": True})
+        if not updates:
+            return jsonify({"error": "No valid updates provided"}), 400
+
+        success, error, preferences = user_store.update_preferences(username, updates)
+        if not success:
+            return jsonify({"error": error or "Failed to update preferences"}), 400
+
+        return jsonify({"ok": True, "preferences": preferences})
 
     return bp
