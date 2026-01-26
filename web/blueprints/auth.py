@@ -194,10 +194,37 @@ def create_auth_blueprint(user_store, config_store, validate_csrf_fn, is_safe_ne
 
         updates = {}
 
+        # Handle theme preference
+        theme = data.get("theme")
+        if theme in ("light", "dark"):
+            updates["theme"] = theme
+
+        # Handle sidebar side preference
+        sidebar_side = data.get("sidebar_side")
+        if sidebar_side in ("left", "right"):
+            updates["sidebar_side"] = sidebar_side
+
         # Handle sidebar collapsed preference
         sidebar_collapsed = data.get("sidebar_collapsed")
-        if sidebar_collapsed is not None:
+        if isinstance(sidebar_collapsed, str):
+            sidebar_collapsed = sidebar_collapsed.strip().lower()
+            if sidebar_collapsed in ("true", "false"):
+                updates["sidebar_collapsed"] = sidebar_collapsed == "true"
+        elif isinstance(sidebar_collapsed, bool):
             updates["sidebar_collapsed"] = sidebar_collapsed
+
+        # Handle avatar preference
+        if "avatar_data_url" in data:
+            avatar_data_url = data.get("avatar_data_url")
+            # Validate avatar data URL
+            if avatar_data_url is not None and avatar_data_url != "":
+                if not isinstance(avatar_data_url, str):
+                    return jsonify({"error": "Avatar must be a string"}), 400
+                if not avatar_data_url.startswith("data:image/"):
+                    return jsonify({"error": "Avatar must be an image data URL"}), 400
+                if len(avatar_data_url) > 200_000:
+                    return jsonify({"error": "Avatar image is too large"}), 400
+            updates["avatar_data_url"] = avatar_data_url if avatar_data_url else ""
 
         if not updates:
             return jsonify({"error": "No valid updates provided"}), 400
@@ -206,6 +233,6 @@ def create_auth_blueprint(user_store, config_store, validate_csrf_fn, is_safe_ne
         if not success:
             return jsonify({"error": error or "Failed to update preferences"}), 400
 
-        return jsonify({"ok": True, "preferences": preferences})
+        return jsonify({"status": "saved", "preferences": preferences})
 
     return bp
