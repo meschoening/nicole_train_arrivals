@@ -15,7 +15,7 @@ import os
 import secrets
 import threading
 
-from flask import Flask, session, request, redirect, url_for, jsonify
+from flask import Flask, session, request, redirect, url_for, jsonify, render_template
 
 from services.config_store import ConfigStore
 from services.message_store import MessageStore
@@ -25,6 +25,7 @@ from services.update_service import UpdateServiceRunner
 
 from web.utils.ssl_utils import get_ssl_cert_paths
 from web.utils.git_utils import clear_update_state_if_rebooted
+from services.system_actions import run_command
 
 
 def get_current_user():
@@ -195,5 +196,45 @@ def create_app(data_handler, config_store=None):
         user_store, config_store, validate_csrf_token, is_safe_next
     )
     app.register_blueprint(auth_bp)
+
+    # Helper functions for index route
+    def get_commit_version():
+        """Get the latest git commit version info."""
+        cwd = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        try:
+            result = run_command(
+                ["git", "log", "-1", "--format=%h - %s (%ad)", "--date=format:%b %d, %Y %I:%M %p"],
+                cwd=cwd,
+                timeout_s=5,
+                log_label="git_latest_commit",
+            )
+            if result.ok and result.stdout.strip():
+                return result.stdout.strip()
+            return "Not available"
+        except Exception:
+            return "Not available"
+
+    def check_for_updates():
+        """Check if git updates are available."""
+        try:
+            configured_branch = config_store.get_str("git_branch", "main")
+            local_head, remote_head = update_service.get_heads(timeout=5, branch=configured_branch)
+            if not local_head or not remote_head:
+                return False
+            return local_head != remote_head
+        except Exception:
+            return False
+
+    @app.get("/")
+    def index():
+        return render_template(
+            "index.html",
+            device_ip=system_service.get_device_ip(),
+            tailscale_address=system_service.get_tailscale_address(),
+            commit_version=get_commit_version(),
+            ssl_enabled=ssl_enabled,
+            display_name=config_store.get_str("title_text", "Nicole's Train Tracker!"),
+            update_available=check_for_updates(),
+        )
 
     return app, ssl_context, ssl_enabled
