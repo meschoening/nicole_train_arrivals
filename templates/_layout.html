@@ -1297,7 +1297,7 @@
               select.dispatchEvent(new Event('change', { bubbles: true }));
               triggerLabel.textContent = option.textContent;
               wrapper.classList.remove('open');
-              if (parentCard) {
+              if (parentCard && !parentCard.querySelector('.select-wrap.open')) {
                 parentCard.classList.remove('has-dropdown-open');
               }
             });
@@ -1320,7 +1320,7 @@
         document.addEventListener('click', (event) => {
           if (!wrapper.contains(event.target)) {
             wrapper.classList.remove('open');
-            if (parentCard) {
+            if (parentCard && !parentCard.querySelector('.select-wrap.open')) {
               parentCard.classList.remove('has-dropdown-open');
             }
           }
