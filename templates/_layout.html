@@ -574,6 +574,11 @@
       padding: 16px;
     }
 
+    .card.has-dropdown-open {
+      position: relative;
+      z-index: 10;
+    }
+
     .card-title {
       font-size: 14px;
       font-weight: 600;
@@ -1273,6 +1278,8 @@
         wrapper.appendChild(trigger);
         wrapper.appendChild(menu);
 
+        const parentCard = wrapper.closest('.card');
+
         const syncOptions = () => {
           menu.innerHTML = '';
           const options = Array.from(select.options || []);
@@ -1290,6 +1297,9 @@
               select.dispatchEvent(new Event('change', { bubbles: true }));
               triggerLabel.textContent = option.textContent;
               wrapper.classList.remove('open');
+              if (parentCard) {
+                parentCard.classList.remove('has-dropdown-open');
+              }
             });
             menu.appendChild(optionButton);
           });
@@ -1301,12 +1311,18 @@
         observer.observe(select, { childList: true });
 
         trigger.addEventListener('click', () => {
-          wrapper.classList.toggle('open');
+          const isOpen = wrapper.classList.toggle('open');
+          if (parentCard) {
+            parentCard.classList.toggle('has-dropdown-open', isOpen);
+          }
         });
 
         document.addEventListener('click', (event) => {
           if (!wrapper.contains(event.target)) {
             wrapper.classList.remove('open');
+            if (parentCard) {
+              parentCard.classList.remove('has-dropdown-open');
+            }
           }
         });
 
