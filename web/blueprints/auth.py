@@ -26,6 +26,7 @@ def create_auth_blueprint(user_store, config_store, validate_csrf_fn, is_safe_ne
             "login.html",
             initial_username=initial_user,
             initial_password=initial_pass,
+            next=request.args.get("next"),
         )
 
     @bp.post("/login")
@@ -54,7 +55,7 @@ def create_auth_blueprint(user_store, config_store, validate_csrf_fn, is_safe_ne
                 {"initial_admin_username": "", "initial_admin_password": ""}
             )
 
-        next_url = is_safe_next_fn(request.args.get("next"))
+        next_url = is_safe_next_fn(request.form.get("next"))
         return redirect(next_url or url_for("index"))
 
     @bp.get("/logout")
@@ -137,8 +138,12 @@ def create_auth_blueprint(user_store, config_store, validate_csrf_fn, is_safe_ne
 
         username = request.form.get("username", "").strip()
         password = request.form.get("password", "")
+        confirm_password = request.form.get("confirm_password", "")
         if not username or not password:
             return jsonify({"error": "Username and password required"}), 400
+
+        if password != confirm_password:
+            return jsonify({"error": "Passwords do not match"}), 400
 
         success, error = user_store.add_user(username, password)
         if not success:
@@ -154,8 +159,12 @@ def create_auth_blueprint(user_store, config_store, validate_csrf_fn, is_safe_ne
 
         username = request.form.get("username", "").strip()
         password = request.form.get("password", "")
+        confirm_password = request.form.get("confirm_password", "")
         if not username or not password:
             return jsonify({"error": "Username and password required"}), 400
+
+        if password != confirm_password:
+            return jsonify({"error": "Passwords do not match"}), 400
 
         success, error = user_store.set_password(username, password)
         if not success:
