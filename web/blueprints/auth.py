@@ -32,15 +32,28 @@ def create_auth_blueprint(user_store, config_store, validate_csrf_fn, is_safe_ne
     @bp.post("/login")
     def login_submit():
         """Handle login form submission."""
+        initial_user = config_store.get_str("initial_admin_username", "")
+        initial_pass = config_store.get_str("initial_admin_password", "")
+        next_url = request.form.get("next")
+
+        def render_login_error(error, status):
+            return render_template(
+                "login.html",
+                error=error,
+                initial_admin_username=initial_user,
+                initial_admin_password=initial_pass,
+                next=next_url,
+            ), status
+
         if not validate_csrf_fn():
-            return render_template("login.html", error="Invalid request"), 400
+            return render_login_error("Invalid request", 400)
 
         username = request.form.get("username", "").strip()
         password = request.form.get("password", "")
 
         user = user_store.verify_user(username, password)
         if not user:
-            return render_template("login.html", error="Invalid credentials"), 401
+            return render_login_error("Invalid credentials", 401)
 
         session.clear()
         session["user"] = user.get("username", "")
@@ -56,8 +69,8 @@ def create_auth_blueprint(user_store, config_store, validate_csrf_fn, is_safe_ne
                 {"initial_admin_username": "", "initial_admin_password": ""}
             )
 
-        next_url = is_safe_next_fn(request.form.get("next"))
-        return redirect(next_url or url_for("index"))
+        safe_next = is_safe_next_fn(next_url)
+        return redirect(safe_next or url_for("index"))
 
     @bp.get("/logout")
     def logout():
@@ -131,24 +144,35 @@ def create_auth_blueprint(user_store, config_store, validate_csrf_fn, is_safe_ne
         current = session.get("user")
         return render_template("users.html", users=all_users, current_username=current)
 
+    def render_users_error(error, status=400):
+        """Render the users page with an error message."""
+        all_users = user_store.list_users()
+        current = session.get("user")
+        return render_template(
+            "users.html",
+            users=all_users,
+            current_username=current,
+            error=error,
+        ), status
+
     @bp.post("/users/add")
     def add_user():
         """Add a new user."""
         if not validate_csrf_fn():
-            return jsonify({"error": "Invalid request"}), 400
+            return render_users_error("Invalid request")
 
         username = request.form.get("username", "").strip()
         password = request.form.get("password", "")
         confirm_password = request.form.get("confirm_password", "")
         if not username or not password:
-            return jsonify({"error": "Username and password required"}), 400
+            return render_users_error("Username and password required")
 
         if password != confirm_password:
-            return jsonify({"error": "Passwords do not match"}), 400
+            return render_users_error("Passwords do not match")
 
         success, error = user_store.add_user(username, password)
         if not success:
-            return jsonify({"error": error or "Failed to add user"}), 400
+            return render_users_error(error or "Failed to add user")
 
         return redirect(url_for("auth.users"))
 
@@ -156,20 +180,20 @@ def create_auth_blueprint(user_store, config_store, validate_csrf_fn, is_safe_ne
     def change_user_password():
         """Change a user's password."""
         if not validate_csrf_fn():
-            return jsonify({"error": "Invalid request"}), 400
+            return render_users_error("Invalid request")
 
         username = request.form.get("username", "").strip()
         password = request.form.get("password", "")
         confirm_password = request.form.get("confirm_password", "")
         if not username or not password:
-            return jsonify({"error": "Username and password required"}), 400
+            return render_users_error("Username and password required")
 
         if password != confirm_password:
-            return jsonify({"error": "Passwords do not match"}), 400
+            return render_users_error("Passwords do not match")
 
         success, error = user_store.set_password(username, password)
         if not success:
-            return jsonify({"error": error or "Failed to change password"}), 400
+            return render_users_error(error or "Failed to change password")
 
         return redirect(url_for("auth.users"))
 
@@ -177,16 +201,16 @@ def create_auth_blueprint(user_store, config_store, validate_csrf_fn, is_safe_ne
     def remove_user():
         """Remove a user."""
         if not validate_csrf_fn():
-            return jsonify({"error": "Invalid request"}), 400
+            return render_users_error("Invalid request")
 
         username = request.form.get("username", "").strip()
         current = session.get("user")
         if username == current:
-            return jsonify({"error": "Cannot remove yourself"}), 400
+            return render_users_error("Cannot remove yourself")
 
         success, error = user_store.remove_user(username)
         if not success:
-            return jsonify({"error": error or "Failed to remove user"}), 400
+            return render_users_error(error or "Failed to remove user")
 
         return redirect(url_for("auth.users"))
 
