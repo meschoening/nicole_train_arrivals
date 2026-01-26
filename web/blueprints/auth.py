@@ -24,8 +24,8 @@ def create_auth_blueprint(user_store, config_store, validate_csrf_fn, is_safe_ne
         initial_pass = config_store.get_str("initial_admin_password", "")
         return render_template(
             "login.html",
-            initial_username=initial_user,
-            initial_password=initial_pass,
+            initial_admin_username=initial_user,
+            initial_admin_password=initial_pass,
             next=request.args.get("next"),
         )
 
@@ -42,6 +42,7 @@ def create_auth_blueprint(user_store, config_store, validate_csrf_fn, is_safe_ne
         if not user:
             return render_template("login.html", error="Invalid credentials"), 401
 
+        session.clear()
         session["user"] = user.get("username", "")
         must_change = bool(user.get("must_change_password", False))
         session["must_change_password"] = must_change
@@ -128,7 +129,7 @@ def create_auth_blueprint(user_store, config_store, validate_csrf_fn, is_safe_ne
         """Render the user management page."""
         all_users = user_store.list_users()
         current = session.get("user")
-        return render_template("users.html", users=all_users, current_user=current)
+        return render_template("users.html", users=all_users, current_username=current)
 
     @bp.post("/users/add")
     def add_user():
