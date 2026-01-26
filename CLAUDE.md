@@ -73,9 +73,11 @@ python3 -c "import wifi_setup"
 - Prefer module-level helper functions over duplicating subprocess logic
 - Avoid leading underscores in helper method names
 
-## Commits
+## Commits and PRs
 
 Short, sentence-case messages without prefixes (e.g., "Update README", "Clean for delivery"). Keep messages concise. Do not include Claude attribution (Co-Authored-By) in commit or PR messages. If addressing items from `CODE_REVIEW.md`, update that section to yellow status with an update note.
+
+For PRs, keep the body simple with just a summary of changes. Do not include test plan sections or Claude attribution.
 
 ## Configuration Files
 

@@ -374,6 +374,7 @@
       branchSelect.innerHTML = '';
 
       if (data.success && data.branches && data.branches.length > 0) {
+        const fragment = document.createDocumentFragment();
         data.branches.forEach(branch => {
           const option = document.createElement('option');
           option.value = branch;
@@ -381,14 +382,17 @@
           if (branch === currentBranch) {
             option.selected = true;
           }
-          branchSelect.appendChild(option);
+          fragment.appendChild(option);
         });
+        branchSelect.appendChild(fragment);
         updateSwitchButton();
       } else {
         branchSelect.innerHTML = '<option value="">No branches found</option>';
       }
+      branchSelect.dispatchEvent(new Event('change'));
     } catch (e) {
       branchSelect.innerHTML = '<option value="">Error loading branches</option>';
+      branchSelect.dispatchEvent(new Event('change'));
       branchStatusEl.textContent = 'Error loading branches: ' + e.message;
       branchStatusEl.style.color = 'var(--danger)';
     }
