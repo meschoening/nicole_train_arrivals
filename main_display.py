@@ -234,7 +234,7 @@ class MainWindow(QMainWindow):
     
     def eventFilter(self, obj, event):
         """Event filter to handle hover events on IP button and clicks outside shutdown popout"""
-        if obj == self.ip_button:
+        if hasattr(self, 'ip_button') and obj == self.ip_button:
             if event.type() == QEvent.Enter:
                 self.show_ip_popout()
             elif event.type() == QEvent.Leave:
